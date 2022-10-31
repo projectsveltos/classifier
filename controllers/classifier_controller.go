@@ -79,13 +79,16 @@ type ClassifierReconciler struct {
 
 	// key: Classifier; value: set of CAPI Clusters matched
 	ClassifierMap map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set
+
+	// Contains list of all Classifier with at least one conflict
+	ClassifierSet libsveltosset.Set
 }
 
 //+kubebuilder:rbac:groups=classify.projectsveltos.io,resources=classifiers,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=classify.projectsveltos.io,resources=classifiers/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=classify.projectsveltos.io,resources=classifiers/finalizers,verbs=update
 //+kubebuilder:rbac:groups=classify.projectsveltos.io,resources=classifierreports,verbs=get;list;watch
-// +kubebuilder:rbac:groups=lib.projectsveltos.io,resources=debuggingconfigurations,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=debuggingconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;watch;list;update
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters/status,verbs=get;watch;list
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;watch;list
@@ -166,6 +169,12 @@ func (r *ClassifierReconciler) reconcileDelete(
 		return reconcile.Result{}, err
 	}
 
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	classifierInfo := libsveltosv1alpha1.PolicyRef{Kind: classifyv1alpha1.ClassifierKind, Name: classifierScope.Name()}
+	r.ClassifierSet.Erase(&classifierInfo)
+
 	f := getHandlersForFeature(classifyv1alpha1.FeatureClassifier)
 	err = r.undeployClassifier(ctx, classifierScope, f, logger)
 	if err != nil {
@@ -243,6 +252,15 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := c.Watch(&source.Kind{Type: &classifyv1alpha1.ClassifierReport{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifierReport),
 		ClassifierReportPredicate(klogr.New().WithValues("predicate", "classifierreportpredicate")),
+	); err != nil {
+		return err
+	}
+
+	// When Classifier changes, according to ClassifierPredicates,
+	// all Classifier with at least one conflict needs to be reconciled
+	if err := c.Watch(&source.Kind{Type: &classifyv1alpha1.Classifier{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifier),
+		ClassifierPredicate(klogr.New().WithValues("predicate", "classifiepredicate")),
 	); err != nil {
 		return err
 	}
@@ -408,11 +426,25 @@ func (r *ClassifierReconciler) updateMatchingClustersAndRegistrations(ctx contex
 				ManagedLabels:   managed,
 				UnManagedLabels: unmanaged,
 			}
+
+		r.updateClassififierSet(classifierScope.Name(), len(unmanaged) > 0)
 	}
 
 	classifierScope.SetMachingClusterStatuses(matchingClusterStatus)
 
 	return nil
+}
+
+func (r *ClassifierReconciler) updateClassififierSet(classifierName string, hasUnManaged bool) {
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	classifierInfo := libsveltosv1alpha1.PolicyRef{Kind: classifyv1alpha1.ClassifierKind, Name: classifierName}
+	if hasUnManaged {
+		r.ClassifierSet.Insert(&classifierInfo)
+	} else {
+		r.ClassifierSet.Erase(&classifierInfo)
+	}
 }
 
 // updateLabelsOnMatchingClusters set labels on all matching clusters (only for clusters

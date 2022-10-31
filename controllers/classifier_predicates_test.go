@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -371,6 +372,91 @@ var _ = Describe("Classifier Predicates: ClassifierReportPredicate", func() {
 		}
 
 		result := reportPredicate.Update(e)
+		Expect(result).To(BeFalse())
+	})
+})
+
+var _ = Describe("Classifier Predicates: ClassifierPredicate", func() {
+	var logger logr.Logger
+	var classifier *classifyv1alpha1.Classifier
+
+	BeforeEach(func() {
+		logger = klogr.New()
+		classifier = &classifyv1alpha1.Classifier{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+		}
+	})
+
+	It("Create does not reprocesses", func() {
+		classifierPredicate := controllers.ClassifierPredicate(logger)
+
+		e := event.CreateEvent{
+			Object: classifier,
+		}
+
+		result := classifierPredicate.Create(e)
+		Expect(result).To(BeFalse())
+	})
+	It("Delete does reprocess ", func() {
+		classifierPredicate := controllers.ClassifierPredicate(logger)
+
+		e := event.DeleteEvent{
+			Object: classifier,
+		}
+
+		result := classifierPredicate.Delete(e)
+		Expect(result).To(BeTrue())
+	})
+	It("Update reprocesses when Status.MatchinClusterStatuses changes", func() {
+		classifierPredicate := controllers.ClassifierPredicate(logger)
+
+		classifier.Status.MachingClusterStatuses = []classifyv1alpha1.MachingClusterStatus{
+			{
+				ClusterRef:    corev1.ObjectReference{Namespace: randomString(), Name: randomString()},
+				ManagedLabels: []string{randomString(), randomString()},
+			},
+		}
+
+		oldClassifier := &classifyv1alpha1.Classifier{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: classifier.Name,
+			},
+		}
+		oldClassifier.Status.MachingClusterStatuses = nil
+
+		e := event.UpdateEvent{
+			ObjectNew: classifier,
+			ObjectOld: oldClassifier,
+		}
+
+		result := classifierPredicate.Update(e)
+		Expect(result).To(BeTrue())
+	})
+	It("Update does not reprocess when Status.MatchinClusterStatuses does not change", func() {
+		classifierPredicate := controllers.ClassifierPredicate(logger)
+
+		classifier.Status.MachingClusterStatuses = []classifyv1alpha1.MachingClusterStatus{
+			{
+				ClusterRef:    corev1.ObjectReference{Namespace: randomString(), Name: randomString()},
+				ManagedLabels: []string{randomString(), randomString()},
+			},
+		}
+
+		oldClassifier := &classifyv1alpha1.Classifier{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: classifier.Name,
+			},
+		}
+		oldClassifier.Status.MachingClusterStatuses = classifier.Status.MachingClusterStatuses
+
+		e := event.UpdateEvent{
+			ObjectNew: classifier,
+			ObjectOld: oldClassifier,
+		}
+
+		result := classifierPredicate.Update(e)
 		Expect(result).To(BeFalse())
 	})
 })

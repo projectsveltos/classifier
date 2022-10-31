@@ -123,13 +123,46 @@ func (r *ClassifierReconciler) requeueClassifierForClassifierReport(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	// Get all ClusterProfile previously matching this cluster and reconcile those
 	requests := make([]ctrl.Request, 1)
 
 	requests[0] = ctrl.Request{
 		NamespacedName: client.ObjectKey{
 			Name: report.Spec.ClassifierName,
 		},
+	}
+
+	return requests
+}
+
+func (r *ClassifierReconciler) requeueClassifierForClassifier(
+	o client.Object,
+) []reconcile.Request {
+
+	classifier := o.(*classifyv1alpha1.Classifier)
+	logger := klogr.New().WithValues(
+		"objectMapper",
+		"requeueClassifierForClassifier",
+		"classifier",
+		classifier.Name,
+	)
+
+	logger.V(logs.LogDebug).Info("reacting to Classifier change")
+
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	// Get all Classifier with at least one conflict
+	requests := make([]ctrl.Request, r.ClassifierSet.Len())
+
+	classifierWithConflicts := r.ClassifierSet.Items()
+
+	for i := range classifierWithConflicts {
+		cName := classifierWithConflicts[i].Name
+		requests[i] = ctrl.Request{
+			NamespacedName: client.ObjectKey{
+				Name: cName,
+			},
+		}
 	}
 
 	return requests

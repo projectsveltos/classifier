@@ -17,6 +17,8 @@ limitations under the License.
 package controllers
 
 import (
+	"reflect"
+
 	"github.com/go-logr/logr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -215,7 +217,7 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 			)
 
 			log.V(logs.LogVerbose).Info(
-				"Classifier did match expected conditions.  Will attempt to reconcile associated Classifiers.")
+				"ClassifierReport did match expected conditions.  Will attempt to reconcile associated Classifiers.")
 			return true
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
@@ -226,7 +228,7 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 			)
 
 			log.V(logs.LogVerbose).Info(
-				"Classifier did match expected conditions.  Will attempt to reconcile associated Classifiers.")
+				"ClassifierReport did match expected conditions.  Will attempt to reconcile associated Classifiers.")
 			return true
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
@@ -237,7 +239,71 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 			)
 
 			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
+				"ClassifierReport did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
+			return false
+		},
+	}
+}
+
+// ClassifierPredicate predicates for Classifier. ClassifierReconciler watches Classifier events
+// and react to those by reconciling itself based on following predicates
+func ClassifierPredicate(logger logr.Logger) predicate.Funcs {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			newClassifer := e.ObjectNew.(*classifyv1alpha1.Classifier)
+			oldClassifier := e.ObjectOld.(*classifyv1alpha1.Classifier)
+			log := logger.WithValues("predicate", "updateEvent",
+				"name", newClassifer.Name,
+			)
+
+			if oldClassifier == nil {
+				log.V(logs.LogVerbose).Info("Old Classifier is nil. Reconcile Classifier")
+				return true
+			}
+
+			// return true if Classifier.Status has changed
+			if !reflect.DeepEqual(oldClassifier.Status.MachingClusterStatuses, newClassifer.Status.MachingClusterStatuses) {
+				log.V(logs.LogVerbose).Info(
+					"Classifier Status.MachingClusterStatuses changed. Will attempt to reconcile associated Classifiers.")
+				return true
+			}
+
+			// otherwise, return false
+			log.V(logs.LogVerbose).Info(
+				"ClassifierReport did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
+			return false
+		},
+		CreateFunc: func(e event.CreateEvent) bool {
+			classifier := e.Object.(*classifyv1alpha1.Classifier)
+			log := logger.WithValues("predicate", "createEvent",
+				"namespace", classifier.Namespace,
+				"name", classifier.Name,
+			)
+
+			log.V(logs.LogVerbose).Info(
+				"Classifier did not match expected conditions.  Will attempt to reconcile associated Classifiers.")
+			return false
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			classifier := e.Object.(*classifyv1alpha1.Classifier)
+			log := logger.WithValues("predicate", "createEvent",
+				"namespace", classifier.Namespace,
+				"name", classifier.Name,
+			)
+
+			log.V(logs.LogVerbose).Info(
+				"Classifier did match expected conditions.  Will attempt to reconcile associated Classifiers.")
+			return true
+		},
+		GenericFunc: func(e event.GenericEvent) bool {
+			classifier := e.Object.(*classifyv1alpha1.Classifier)
+			log := logger.WithValues("predicate", "createEvent",
+				"namespace", classifier.Namespace,
+				"name", classifier.Name,
+			)
+
+			log.V(logs.LogVerbose).Info(
+				"Classifier did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
 			return false
 		},
 	}
