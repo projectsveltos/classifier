@@ -121,7 +121,25 @@ spec:
               kubernetesVersion:
                 description: KubernetesVersion allows to classify based on current
                   kubernetes version
-                type: string
+                properties:
+                  comparison:
+                    description: Comparison indicate how to compare cluster kubernetes
+                      version with the specified version
+                    enum:
+                    - Equal
+                    - NotEqual
+                    - GreaterThan
+                    - LessThan
+                    - GreaterThanOrEqualTo
+                    - LessThanOrEqualTo
+                    type: string
+                  version:
+                    description: Version is the kubernetes version
+                    type: string
+                required:
+                - comparison
+                - version
+                type: object
             required:
             - classifierLabels
             type: object

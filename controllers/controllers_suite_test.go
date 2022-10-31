@@ -161,8 +161,11 @@ func getClassifierInstance(name string) *classifyv1alpha1.Classifier {
 			Name: name,
 		},
 		Spec: classifyv1alpha1.ClassifierSpec{
-			KubernetesVersion: "v1.25.2",
-			ClassifierLabels:  classifierLabels,
+			KubernetesVersion: classifyv1alpha1.KubernetesVersion{
+				Version:    "1.25.2",
+				Comparison: string(classifyv1alpha1.ComparisonEqual),
+			},
+			ClassifierLabels: classifierLabels,
 		},
 	}
 }

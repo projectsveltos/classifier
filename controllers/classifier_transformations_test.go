@@ -51,7 +51,10 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 				Name: randomString(),
 			},
 			Spec: classifyv1alpha1.ClassifierSpec{
-				KubernetesVersion: "v1.24.0",
+				KubernetesVersion: classifyv1alpha1.KubernetesVersion{
+					Version:    "1.24.0",
+					Comparison: string(classifyv1alpha1.ComparisonEqual),
+				},
 				ClassifierLabels: []classifyv1alpha1.ClassifierLabel{
 					{Key: randomString(), Value: randomString()},
 				},
@@ -63,7 +66,10 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 				Name: randomString(),
 			},
 			Spec: classifyv1alpha1.ClassifierSpec{
-				KubernetesVersion: "v1.24.0",
+				KubernetesVersion: classifyv1alpha1.KubernetesVersion{
+					Version:    "1.24.0",
+					Comparison: string(classifyv1alpha1.ComparisonEqual),
+				},
 				ClassifierLabels: []classifyv1alpha1.ClassifierLabel{
 					{Key: randomString(), Value: randomString()},
 				},

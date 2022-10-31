@@ -56,8 +56,11 @@ func getClassifier(namePrefix string, clusterLabels map[string]string) *classify
 			Name: namePrefix + randomString(),
 		},
 		Spec: classifyv1alpha1.ClassifierSpec{
-			ClassifierLabels:  labels,
-			KubernetesVersion: "v1.25.2",
+			ClassifierLabels: labels,
+			KubernetesVersion: classifyv1alpha1.KubernetesVersion{
+				Version:    "1.25.0",
+				Comparison: string(classifyv1alpha1.ComparisonGreaterThanOrEqualTo),
+			},
 		},
 	}
 
