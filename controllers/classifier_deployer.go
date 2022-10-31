@@ -146,16 +146,16 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 	if len(clusterInfo) != 0 {
 		matchingClusterStatuses := make([]classifyv1alpha1.MachingClusterStatus, len(clusterInfo))
 		for i := range clusterInfo {
-			matchingClusterStatuses = append(matchingClusterStatuses,
-				classifyv1alpha1.MachingClusterStatus{
-					ClusterRef: clusterInfo[i].Cluster,
-				},
-			)
+			matchingClusterStatuses[i] = classifyv1alpha1.MachingClusterStatus{
+				ClusterRef: clusterInfo[i].Cluster,
+			}
 		}
 		classifierScope.SetMachingClusterStatuses(matchingClusterStatuses)
 		return fmt.Errorf("still in the process of removing Classifier from %d clusters",
 			len(clusterInfo))
 	}
+
+	classifierScope.SetClusterInfo(clusterInfo)
 
 	return nil
 }
@@ -220,31 +220,45 @@ func getClassifierAndCAPIClusterClient(ctx context.Context, clusterNamespace, cl
 func deployClassifierInCluster(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
 	logger logr.Logger) error {
+
+	logger = logger.WithValues("classifier", applicant)
+	logger.V(logs.LogDebug).Info("deploy classifier CRD and instance")
+
 	// Deploy Classifier CRD and the Classifier instance
 	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
 	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get CAPI cluster rest config")
 		return err
 	}
 
 	// Get Classifier that requested this
 	classifier, remoteClient, err := getClassifierAndCAPIClusterClient(ctx, clusterNamespace, clusterName, applicant, c, logger)
 	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get classifier and CAPI cluster client")
 		return err
 	}
 
-	logger = logger.WithValues("classifier", classifier.Name)
-
+	logger.V(logs.LogDebug).Info("deploy classifier CRD")
 	// Deploy Classifier CRD
 	err = deployClassifierCRD(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
 
+	toDeployClassifier := &classifyv1alpha1.Classifier{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: classifier.Name,
+		},
+		Spec: classifier.Spec,
+	}
+	logger.V(logs.LogDebug).Info("deploy classifier instance")
 	// Deploy Classifier instance
-	err = deployClassifierInstance(ctx, remoteClient, classifier, logger)
+	err = deployClassifierInstance(ctx, remoteClient, toDeployClassifier, logger)
 	if err != nil {
 		return err
 	}
+
+	logger.V(logs.LogDebug).Info("successuflly deployed classifier CRD and instance")
 	return nil
 }
 
@@ -253,17 +267,43 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
 	logger logr.Logger) error {
 
-	// Get Classifier that requested this
-	classifier, remoteClient, err := getClassifierAndCAPIClusterClient(ctx, clusterNamespace, clusterName, applicant, c, logger)
+	logger = logger.WithValues("classifier", applicant)
+	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName))
+	logger.V(logs.LogDebug).Info("Undeploy classifier")
+
+	// Get CAPI Cluster
+	cluster := &clusterv1.Cluster{}
+	if err := c.Get(ctx,
+		types.NamespacedName{Namespace: clusterNamespace, Name: clusterName},
+		cluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.V(logs.LogDebug).Info("cluster not found. nothing to clean up")
+			return nil
+		}
+		return err
+	}
+
+	if !cluster.DeletionTimestamp.IsZero() {
+		logger.V(logs.LogInfo).Info("cluster is marked for deletion. Nothing to do.")
+		return nil
+	}
+
+	s, err := InitScheme()
 	if err != nil {
 		return err
 	}
 
-	logger = logger.WithValues("classifier", classifier.Name)
-	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName))
+	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, logger, c, s,
+		clusterNamespace, clusterName)
+	if err != nil {
+		logger.V(logs.LogDebug).Error(err, "failed to get cluster client")
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("Undeploy classifier from cluster")
 
 	currentClassifier := &classifyv1alpha1.Classifier{}
-	err = remoteClient.Get(ctx, types.NamespacedName{Name: classifier.Name}, currentClassifier)
+	err = remoteClient.Get(ctx, types.NamespacedName{Name: applicant}, currentClassifier)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.V(logs.LogInfo).Info("classifier not found")
@@ -273,6 +313,7 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
+	logger.V(logs.LogDebug).Info("remove classifier instance")
 	return remoteClient.Delete(ctx, currentClassifier)
 }
 
@@ -297,21 +338,21 @@ func (r *ClassifierReconciler) convertResultStatus(result deployer.Result) *clas
 	return nil
 }
 
-// getClassifierInClusterHash returns the hash of the Classifier that was deployed in a given
+// getClassifierInClusterHashAndStatus returns the hash of the Classifier that was deployed in a given
 // Cluster (if ever deployed)
-func (r *ClassifierReconciler) getClassifierInClusterHash(classifier *classifyv1alpha1.Classifier,
-	cluster *clusterv1.Cluster) []byte {
+func (r *ClassifierReconciler) getClassifierInClusterHashAndStatus(classifier *classifyv1alpha1.Classifier,
+	cluster *clusterv1.Cluster) ([]byte, *classifyv1alpha1.ClassifierFeatureStatus) {
 
 	for i := range classifier.Status.ClusterInfo {
 		cInfo := &classifier.Status.ClusterInfo[i]
 		if cInfo.Cluster.Namespace == cluster.Namespace &&
 			cInfo.Cluster.Name == cluster.Name {
 
-			return cInfo.Hash
+			return cInfo.Hash, &cInfo.Status
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 // removeClassifier removes Classifier instance from cluster
@@ -404,7 +445,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 	}
 
 	// Get the Classifier hash when Classifier was last deployed in this cluster (if ever)
-	hash := r.getClassifierInClusterHash(classifier, cluster)
+	hash, currentStatus := r.getClassifierInClusterHashAndStatus(classifier, cluster)
 	isConfigSame := reflect.DeepEqual(hash, currentHash)
 	if !isConfigSame {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("Classifier has changed. Current hash %s. Previous hash %s",
@@ -439,7 +480,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 		if *status == classifyv1alpha1.ClassifierStatusProvisioning {
 			return clusterInfo, fmt.Errorf("classifier is still being provisioned")
 		}
-	} else if isConfigSame {
+	} else if isConfigSame && currentStatus != nil && *currentStatus == classifyv1alpha1.ClassifierStatusProvisioned {
 		logger.V(logs.LogInfo).Info("already deployed")
 		s := classifyv1alpha1.ClassifierStatusProvisioned
 		status = &s

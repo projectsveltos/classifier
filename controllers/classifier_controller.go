@@ -93,6 +93,7 @@ type ClassifierReconciler struct {
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters/status,verbs=get;watch;list
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;watch;list
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines/status,verbs=get;watch;list
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -328,7 +329,6 @@ func (r *ClassifierReconciler) getListOfClusters(ctx context.Context, classifier
 		}
 
 		matching = append(matching, corev1.ObjectReference{
-			Kind:      cluster.Kind,
 			Namespace: cluster.Namespace,
 			Name:      cluster.Name,
 		})
@@ -342,22 +342,26 @@ func (r *ClassifierReconciler) getListOfClusters(ctx context.Context, classifier
 func (r *ClassifierReconciler) updateClusterInfo(ctx context.Context, classifierScope *scope.ClassifierScope) error {
 	classifier := classifierScope.Classifier
 
+	getClusterID := func(cluster corev1.ObjectReference) string {
+		return fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name)
+	}
+
 	matchingCluster, err := r.getListOfClusters(ctx, classifierScope)
 	if err != nil {
 		return err
 	}
 
 	// Build Map for all Clusters with an entry in Classifier.Status.ClusterInfo
-	clusterMap := make(map[corev1.ObjectReference]bool)
+	clusterMap := make(map[string]bool)
 	for i := range classifier.Status.ClusterInfo {
 		c := &classifier.Status.ClusterInfo[i]
-		clusterMap[c.Cluster] = true
+		clusterMap[getClusterID(c.Cluster)] = true
 	}
 
 	newClusterInfo := make([]classifyv1alpha1.ClusterInfo, 0)
 	for i := range matchingCluster {
 		c := &matchingCluster[i]
-		if _, ok := clusterMap[*c]; !ok {
+		if _, ok := clusterMap[getClusterID(*c)]; !ok {
 			newClusterInfo = append(newClusterInfo, classifyv1alpha1.ClusterInfo{
 				Cluster: *c,
 			})

@@ -1,5 +1,5 @@
 # Adds namespace to all resources.
-namespace: classifier-system
+namespace: projectsveltos
 
 # Value of this field is prepended to the
 # names of all resources, e.g. a deployment named
@@ -29,6 +29,8 @@ patchesStrategicMerge:
 # If you want your controller-manager to expose the /metrics
 # endpoint w/o any authn/z, please comment the following line.
 - manager_auth_proxy_patch.yaml
+- manager_image_patch.yaml
+- manager_pull_policy.yaml
 
 # Mount the controller config file for loading manager configurations
 # through a ComponentConfig type
