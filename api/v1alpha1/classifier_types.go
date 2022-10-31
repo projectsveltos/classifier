@@ -106,13 +106,34 @@ type DeployedResource struct {
 	LabelFilters []LabelFilter `json:"labelFilters,omitempty"`
 }
 
+type KubernetesComparison string
+
+// Define the Action constants.
+const (
+	ComparisonEqual                KubernetesComparison = "Equal"
+	ComparisoNotEqual              KubernetesComparison = "NotEqual"
+	ComparisonGreaterThan          KubernetesComparison = "GreaterThan"
+	ComparisonLessThan             KubernetesComparison = "LessThan"
+	ComparisonGreaterThanOrEqualTo KubernetesComparison = "GreaterThanOrEqualTo"
+	ComparisonLessThanOrEqualTo    KubernetesComparison = "LessThanOrEqualTo"
+)
+
+type KubernetesVersion struct {
+	// Version is the kubernetes version
+	Version string `json:"version"`
+
+	// Comparison indicate how to compare cluster kubernetes version with the specified version
+	// +kubebuilder:validation:Enum=Equal;NotEqual;GreaterThan;LessThan;GreaterThanOrEqualTo;LessThanOrEqualTo
+	Comparison string `json:"comparison"`
+}
+
 // ClassifierSpec defines the desired state of Classifier
 type ClassifierSpec struct {
 	// DeployedResources allows to classify based on current deployed resources
 	DeployedResources []DeployedResource `json:"deployedResources,omitempty"`
 
 	// KubernetesVersion allows to classify based on current kubernetes version
-	KubernetesVersion string `json:"kubernetesVersion,omitempty"`
+	KubernetesVersion KubernetesVersion `json:"kubernetesVersion,omitempty"`
 
 	// ClassifierLabels is set of labels, key,value pair, that will be added to each
 	// cluster matching Classifier instance
