@@ -158,6 +158,11 @@ func (r *ClassifierReconciler) requeueClassifierForClassifier(
 
 	for i := range classifierWithConflicts {
 		cName := classifierWithConflicts[i].Name
+
+		if cName == classifier.Name {
+			continue
+		}
+
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
 				Name: cName,
