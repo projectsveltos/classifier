@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	classifyv1alpha1 "github.com/projectsveltos/classifier/api/v1alpha1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 const (
@@ -44,22 +44,22 @@ func randomString() string {
 	return util.RandomString(length)
 }
 
-func getClassifier(namePrefix string, clusterLabels map[string]string) *classifyv1alpha1.Classifier {
-	labels := make([]classifyv1alpha1.ClassifierLabel, 0)
+func getClassifier(namePrefix string, clusterLabels map[string]string) *libsveltosv1alpha1.Classifier {
+	labels := make([]libsveltosv1alpha1.ClassifierLabel, 0)
 
 	for k := range clusterLabels {
-		labels = append(labels, classifyv1alpha1.ClassifierLabel{Key: k, Value: clusterLabels[k]})
+		labels = append(labels, libsveltosv1alpha1.ClassifierLabel{Key: k, Value: clusterLabels[k]})
 	}
 
-	classifier := &classifyv1alpha1.Classifier{
+	classifier := &libsveltosv1alpha1.Classifier{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namePrefix + randomString(),
 		},
-		Spec: classifyv1alpha1.ClassifierSpec{
+		Spec: libsveltosv1alpha1.ClassifierSpec{
 			ClassifierLabels: labels,
-			KubernetesVersion: classifyv1alpha1.KubernetesVersion{
+			KubernetesVersion: libsveltosv1alpha1.KubernetesVersion{
 				Version:    "1.25.0",
-				Comparison: string(classifyv1alpha1.ComparisonGreaterThanOrEqualTo),
+				Comparison: string(libsveltosv1alpha1.ComparisonGreaterThanOrEqualTo),
 			},
 		},
 	}

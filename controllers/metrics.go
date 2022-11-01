@@ -23,7 +23,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	classifyv1alpha1 "github.com/projectsveltos/classifier/api/v1alpha1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -83,7 +83,7 @@ func logCollectorError(err error, logger logr.Logger) {
 func programDuration(elapsed time.Duration, clusterNamespace, clusterName, featureID string,
 	logger logr.Logger) {
 
-	if featureID == string(classifyv1alpha1.FeatureClassifier) {
+	if featureID == string(libsveltosv1alpha1.FeatureClassifier) {
 		programClassifierDurationHistogram.Observe(elapsed.Seconds())
 		clusterHistogram := newClassifierHistogram(clusterNamespace, clusterName, logger)
 		if clusterHistogram != nil {

@@ -23,7 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	classifyv1alpha1 "github.com/projectsveltos/classifier/api/v1alpha1"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
@@ -108,7 +107,7 @@ func (r *ClassifierReconciler) requeueClassifierForClassifierReport(
 	o client.Object,
 ) []reconcile.Request {
 
-	report := o.(*classifyv1alpha1.ClassifierReport)
+	report := o.(*libsveltosv1alpha1.ClassifierReport)
 	logger := klogr.New().WithValues(
 		"objectMapper",
 		"requeueClassifierForClassifierReport",
@@ -138,7 +137,7 @@ func (r *ClassifierReconciler) requeueClassifierForClassifier(
 	o client.Object,
 ) []reconcile.Request {
 
-	classifier := o.(*classifyv1alpha1.Classifier)
+	classifier := o.(*libsveltosv1alpha1.Classifier)
 	logger := klogr.New().WithValues(
 		"objectMapper",
 		"requeueClassifierForClassifier",

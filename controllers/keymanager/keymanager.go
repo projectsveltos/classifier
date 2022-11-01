@@ -23,7 +23,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	classifyv1alpha1 "github.com/projectsveltos/classifier/api/v1alpha1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 // Multiple Classifier instances can be deployed in a CAPI Cluster and a cluster can then match multiple
@@ -94,7 +94,7 @@ func GetKeyManagerInstance(ctx context.Context, c client.Client) (*instance, err
 // RegisterClassifierForLabels registers Classifier as one requestor to manage all Spec.ClassifierLabels in
 // all CAPI clusters currently matching this Classifier.
 // Only first Classifier registering for a given label in a given CAPI Cluster is given the manager role.
-func (m *instance) RegisterClassifierForLabels(classifier *classifyv1alpha1.Classifier,
+func (m *instance) RegisterClassifierForLabels(classifier *libsveltosv1alpha1.Classifier,
 	clusterNamespace, clusterName string) {
 
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName)
@@ -114,14 +114,14 @@ func (m *instance) RegisterClassifierForLabels(classifier *classifyv1alpha1.Clas
 // It considers all the labels (keys) the provided classifier is currently registered.
 // Any label (key), not referenced anymore by classifier, for which classifier is currently
 // registered, is considered stale and removed.
-func (m *instance) RemoveStaleRegistrations(classifier *classifyv1alpha1.Classifier,
+func (m *instance) RemoveStaleRegistrations(classifier *libsveltosv1alpha1.Classifier,
 	clusterNamespace, clusterName string) {
 
 	m.cleanRegistrations(classifier, clusterNamespace, clusterName, false)
 }
 
 // RemoveAllRegistrations removes all registrations for a classifier.
-func (m *instance) RemoveAllRegistrations(classifier *classifyv1alpha1.Classifier,
+func (m *instance) RemoveAllRegistrations(classifier *libsveltosv1alpha1.Classifier,
 	clusterNamespace, clusterName string) {
 
 	m.cleanRegistrations(classifier, clusterNamespace, clusterName, true)
@@ -130,7 +130,7 @@ func (m *instance) RemoveAllRegistrations(classifier *classifyv1alpha1.Classifie
 // cleanRegistrations removes Classifier's registrations.
 // If removeAll is set to true, all registrations are removed. Otherwise only registration for
 // labels (keys) not referenced anymore are.
-func (m *instance) cleanRegistrations(classifier *classifyv1alpha1.Classifier,
+func (m *instance) cleanRegistrations(classifier *libsveltosv1alpha1.Classifier,
 	clusterNamespace, clusterName string, removeAll bool) {
 
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName)
@@ -170,7 +170,7 @@ func (m *instance) cleanRegistrations(classifier *classifyv1alpha1.Classifier,
 
 // CanManageLabel returns true if a Classifier can manage a given label key.
 // Only the first Classifier registered for a given label key in a given cluster can manage it.
-func (m *instance) CanManageLabel(classifier *classifyv1alpha1.Classifier,
+func (m *instance) CanManageLabel(classifier *libsveltosv1alpha1.Classifier,
 	clusterNamespace, clusterName, labelKey string) bool {
 
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName)
@@ -319,7 +319,7 @@ func (m *instance) rebuildRegistrations(ctx context.Context, c client.Client) er
 	m.chartMux.Lock()
 	defer m.chartMux.Unlock()
 
-	classifierList := &classifyv1alpha1.ClassifierList{}
+	classifierList := &libsveltosv1alpha1.ClassifierList{}
 	err := c.List(ctx, classifierList)
 	if err != nil {
 		return err
@@ -339,7 +339,7 @@ func (m *instance) rebuildRegistrations(ctx context.Context, c client.Client) er
 }
 
 // addManagers walks Classifier's status and registers it for each label currently managed
-func (m *instance) addManagers(classifier *classifyv1alpha1.Classifier) {
+func (m *instance) addManagers(classifier *libsveltosv1alpha1.Classifier) {
 	classifierKey := m.getClassifierKey(classifier.Name)
 
 	for i := range classifier.Status.MachingClusterStatuses {
@@ -361,7 +361,7 @@ func (m *instance) addManagedLabelsInCluster(classifierKey, clusterKey string, m
 
 // addNonManagers walks Classifier's status and registers it for each labels currently not managed
 // (not managed because other Classifier is)
-func (m *instance) addNonManagers(classifier *classifyv1alpha1.Classifier) {
+func (m *instance) addNonManagers(classifier *libsveltosv1alpha1.Classifier) {
 	classifierKey := m.getClassifierKey(classifier.Name)
 
 	for i := range classifier.Status.MachingClusterStatuses {
@@ -373,7 +373,7 @@ func (m *instance) addNonManagers(classifier *classifyv1alpha1.Classifier) {
 	}
 }
 
-func (m *instance) buildSliceOfUnManagedLabels(unManaged []classifyv1alpha1.UnManagedLabel) []string {
+func (m *instance) buildSliceOfUnManagedLabels(unManaged []libsveltosv1alpha1.UnManagedLabel) []string {
 	result := make([]string, len(unManaged))
 	for i := range unManaged {
 		result[i] = unManaged[i].Key

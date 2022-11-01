@@ -27,8 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	classifyv1alpha1 "github.com/projectsveltos/classifier/api/v1alpha1"
 	"github.com/projectsveltos/classifier/pkg/scope"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 const (
@@ -38,11 +38,11 @@ const (
 )
 
 var _ = Describe("ClassifierScope", func() {
-	var classifier *classifyv1alpha1.Classifier
+	var classifier *libsveltosv1alpha1.Classifier
 	var c client.Client
 
 	BeforeEach(func() {
-		classifier = &classifyv1alpha1.Classifier{
+		classifier = &libsveltosv1alpha1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: classifierNamePrefix + randomString(),
 			},
@@ -103,18 +103,18 @@ var _ = Describe("ClassifierScope", func() {
 		clusterNamespace := randomString()
 		clusterName := randomString()
 		hash := []byte(randomString())
-		clusterInfo := classifyv1alpha1.ClusterInfo{
+		clusterInfo := libsveltosv1alpha1.ClusterInfo{
 			Cluster: corev1.ObjectReference{Namespace: clusterNamespace, Name: clusterName},
-			Status:  classifyv1alpha1.ClassifierStatusProvisioned,
+			Status:  libsveltosv1alpha1.ClassifierStatusProvisioned,
 			Hash:    hash,
 		}
-		scope.SetClusterInfo([]classifyv1alpha1.ClusterInfo{clusterInfo})
+		scope.SetClusterInfo([]libsveltosv1alpha1.ClusterInfo{clusterInfo})
 		Expect(classifier.Status.ClusterInfo).ToNot(BeNil())
 		Expect(len(classifier.Status.ClusterInfo)).To(Equal(1))
 		Expect(classifier.Status.ClusterInfo[0].Cluster.Namespace).To(Equal(clusterNamespace))
 		Expect(classifier.Status.ClusterInfo[0].Cluster.Name).To(Equal(clusterName))
 		Expect(classifier.Status.ClusterInfo[0].Hash).To(Equal(hash))
-		Expect(classifier.Status.ClusterInfo[0].Status).To(Equal(classifyv1alpha1.ClassifierStatusProvisioned))
+		Expect(classifier.Status.ClusterInfo[0].Status).To(Equal(libsveltosv1alpha1.ClassifierStatusProvisioned))
 	})
 
 	It("SetMatchingClusters sets Classifier.Status.MatchingCluster", func() {
@@ -129,14 +129,14 @@ var _ = Describe("ClassifierScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		failureMessage := randomString()
-		machingClusterStatuses := []classifyv1alpha1.MachingClusterStatus{
+		machingClusterStatuses := []libsveltosv1alpha1.MachingClusterStatus{
 			{
 				ClusterRef: corev1.ObjectReference{
 					Namespace: "t-" + randomString(),
 					Name:      "c-" + randomString(),
 				},
 				ManagedLabels: []string{randomString(), randomString()},
-				UnManagedLabels: []classifyv1alpha1.UnManagedLabel{
+				UnManagedLabels: []libsveltosv1alpha1.UnManagedLabel{
 					{Key: randomString(), FailureMessage: &failureMessage},
 				},
 			},

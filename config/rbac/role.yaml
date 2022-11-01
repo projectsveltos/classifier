@@ -14,40 +14,6 @@ rules:
   - list
   - watch
 - apiGroups:
-  - classify.projectsveltos.io
-  resources:
-  - classifierreports
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - classify.projectsveltos.io
-  resources:
-  - classifiers
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - classify.projectsveltos.io
-  resources:
-  - classifiers/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - classify.projectsveltos.io
-  resources:
-  - classifiers/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - cluster.x-k8s.io
   resources:
   - clusters
@@ -80,6 +46,40 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - classifierreports
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - classifiers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - classifiers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - classifiers/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - lib.projectsveltos.io
   resources:

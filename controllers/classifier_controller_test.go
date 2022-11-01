@@ -35,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	classifyv1alpha1 "github.com/projectsveltos/classifier/api/v1alpha1"
 	"github.com/projectsveltos/classifier/controllers"
 	"github.com/projectsveltos/classifier/controllers/keymanager"
 	"github.com/projectsveltos/classifier/pkg/scope"
@@ -45,7 +44,7 @@ import (
 )
 
 var _ = Describe("ClusterProfile: Reconciler", func() {
-	var classifier *classifyv1alpha1.Classifier
+	var classifier *libsveltosv1alpha1.Classifier
 
 	BeforeEach(func() {
 		classifier = getClassifierInstance(randomString())
@@ -74,19 +73,19 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		currentClassifier := &classifyv1alpha1.Classifier{}
+		currentClassifier := &libsveltosv1alpha1.Classifier{}
 		err = c.Get(context.TODO(), classifierName, currentClassifier)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(
 			controllerutil.ContainsFinalizer(
 				currentClassifier,
-				classifyv1alpha1.ClassifierFinalizer,
+				libsveltosv1alpha1.ClassifierFinalizer,
 			),
 		).Should(BeTrue())
 	})
 
 	It("Remove finalizer", func() {
-		Expect(controllerutil.AddFinalizer(classifier, classifyv1alpha1.ClassifierFinalizer)).To(BeTrue())
+		Expect(controllerutil.AddFinalizer(classifier, libsveltosv1alpha1.ClassifierFinalizer)).To(BeTrue())
 
 		cluster := &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -106,16 +105,16 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Name: classifier.Name,
 		}
 
-		currentClassifier := &classifyv1alpha1.Classifier{}
+		currentClassifier := &libsveltosv1alpha1.Classifier{}
 
 		Expect(c.Get(context.TODO(), classifierName, currentClassifier)).To(Succeed())
 		Expect(c.Delete(context.TODO(), currentClassifier)).To(Succeed())
 
 		Expect(c.Get(context.TODO(), classifierName, currentClassifier)).To(Succeed())
-		currentClassifier.Status.ClusterInfo = []classifyv1alpha1.ClusterInfo{
+		currentClassifier.Status.ClusterInfo = []libsveltosv1alpha1.ClusterInfo{
 			{
 				Cluster: corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
-				Status:  classifyv1alpha1.ClassifierStatusProvisioned,
+				Status:  libsveltosv1alpha1.ClassifierStatusProvisioned,
 				Hash:    []byte(randomString()),
 			},
 		}
@@ -123,7 +122,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		Expect(c.Status().Update(context.TODO(), currentClassifier)).To(Succeed())
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
-		Expect(dep.RegisterFeatureID(classifyv1alpha1.FeatureClassifier)).To(Succeed())
+		Expect(dep.RegisterFeatureID(libsveltosv1alpha1.FeatureClassifier)).To(Succeed())
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
@@ -143,11 +142,11 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 
 		err = c.Get(context.TODO(), classifierName, currentClassifier)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(controllerutil.ContainsFinalizer(currentClassifier, classifyv1alpha1.ClassifierFinalizer)).To(BeTrue())
+		Expect(controllerutil.ContainsFinalizer(currentClassifier, libsveltosv1alpha1.ClassifierFinalizer)).To(BeTrue())
 
 		Expect(c.Get(context.TODO(), classifierName, currentClassifier)).To(Succeed())
 
-		currentClassifier.Status.ClusterInfo = []classifyv1alpha1.ClusterInfo{}
+		currentClassifier.Status.ClusterInfo = []libsveltosv1alpha1.ClusterInfo{}
 		Expect(c.Status().Update(context.TODO(), currentClassifier)).To(Succeed())
 
 		// Because Classifier is currently deployed nowhere (Status.ClusterInfo is set
@@ -251,7 +250,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		classifierReport0 := getClassifierReport(classifier.Name, clusterNamespace, clusterName)
 
 		// Create a second classifier with same ClassifierLabels as first classifier
-		classifier1 := &classifyv1alpha1.Classifier{
+		classifier1 := &libsveltosv1alpha1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
@@ -320,7 +319,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			managedLabels = append(managedLabels, classifier.Spec.ClassifierLabels[i].Key)
 		}
 
-		classifier.Status.MachingClusterStatuses = []classifyv1alpha1.MachingClusterStatus{
+		classifier.Status.MachingClusterStatuses = []libsveltosv1alpha1.MachingClusterStatus{
 			{
 				ClusterRef:    corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
 				ManagedLabels: managedLabels,
@@ -381,10 +380,10 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		label := randomString()
 		clusterNamespace := randomString()
 		clusterName := randomString()
-		classifier.Spec.ClassifierLabels = []classifyv1alpha1.ClassifierLabel{
+		classifier.Spec.ClassifierLabels = []libsveltosv1alpha1.ClassifierLabel{
 			{Key: label, Value: randomString()},
 		}
-		classifier.Status.MachingClusterStatuses = []classifyv1alpha1.MachingClusterStatus{
+		classifier.Status.MachingClusterStatuses = []libsveltosv1alpha1.MachingClusterStatus{
 			{
 				ClusterRef:    corev1.ObjectReference{Namespace: clusterNamespace, Name: clusterName},
 				ManagedLabels: []string{label},
@@ -425,7 +424,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 })
 
 var _ = Describe("ClassifierReconciler: requeue methods", func() {
-	var classifier *classifyv1alpha1.Classifier
+	var classifier *libsveltosv1alpha1.Classifier
 	var cluster *clusterv1.Cluster
 	var namespace string
 
@@ -472,7 +471,7 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 		}
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
-		Expect(dep.RegisterFeatureID(classifyv1alpha1.FeatureClassifier)).To(Succeed())
+		Expect(dep.RegisterFeatureID(libsveltosv1alpha1.FeatureClassifier)).To(Succeed())
 
 		clusterProfileReconciler := getClassifierReconciler(testEnv.Client, dep)
 		_, err := clusterProfileReconciler.Reconcile(context.TODO(), ctrl.Request{
@@ -525,7 +524,7 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 		}
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
-		Expect(dep.RegisterFeatureID(classifyv1alpha1.FeatureClassifier)).To(Succeed())
+		Expect(dep.RegisterFeatureID(libsveltosv1alpha1.FeatureClassifier)).To(Succeed())
 
 		clusterProfileReconciler := getClassifierReconciler(testEnv.Client, dep)
 		_, err := clusterProfileReconciler.Reconcile(context.TODO(), ctrl.Request{
