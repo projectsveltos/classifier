@@ -50,7 +50,7 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 				Name: randomString(),
 			},
 			Spec: libsveltosv1alpha1.ClassifierSpec{
-				KubernetesVersion: libsveltosv1alpha1.KubernetesVersion{
+				KubernetesVersion: &libsveltosv1alpha1.KubernetesVersion{
 					Version:    "1.24.0",
 					Comparison: string(libsveltosv1alpha1.ComparisonEqual),
 				},
@@ -65,7 +65,7 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 				Name: randomString(),
 			},
 			Spec: libsveltosv1alpha1.ClassifierSpec{
-				KubernetesVersion: libsveltosv1alpha1.KubernetesVersion{
+				KubernetesVersion: &libsveltosv1alpha1.KubernetesVersion{
 					Version:    "1.24.0",
 					Comparison: string(libsveltosv1alpha1.ComparisonEqual),
 				},

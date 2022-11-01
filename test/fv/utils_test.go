@@ -57,7 +57,7 @@ func getClassifier(namePrefix string, clusterLabels map[string]string) *libsvelt
 		},
 		Spec: libsveltosv1alpha1.ClassifierSpec{
 			ClassifierLabels: labels,
-			KubernetesVersion: libsveltosv1alpha1.KubernetesVersion{
+			KubernetesVersion: &libsveltosv1alpha1.KubernetesVersion{
 				Version:    "1.25.0",
 				Comparison: string(libsveltosv1alpha1.ComparisonGreaterThanOrEqualTo),
 			},
