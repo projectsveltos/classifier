@@ -1,4 +1,4 @@
-module github.com/projectsveltos/libsveltos/hack/tools
+module github.com/projectsveltos/classifier/hack/tools
 
 go 1.19
 
