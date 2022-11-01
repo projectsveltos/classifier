@@ -23,6 +23,7 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 
+	"github.com/spf13/pflag"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
@@ -34,7 +35,6 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
-	"github.com/spf13/pflag"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -98,7 +98,7 @@ func main() {
 	controllers.RegisterFeatures(d, setupLog)
 
 	logsettings.RegisterForLogSettings(ctx,
-		libsveltosv1alpha1.ComponentSveltosManager, ctrl.Log.WithName("log-setter"),
+		libsveltosv1alpha1.ComponentClassifier, ctrl.Log.WithName("log-setter"),
 		ctrl.GetConfigOrDie())
 
 	if err = (&controllers.ClassifierReconciler{
