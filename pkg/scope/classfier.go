@@ -24,14 +24,14 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	classifyv1alpha1 "github.com/projectsveltos/classifier/api/v1alpha1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 // ClassifierScopeParams defines the input parameters used to create a new Classifier Scope.
 type ClassifierScopeParams struct {
 	Client         client.Client
 	Logger         logr.Logger
-	Classifier     *classifyv1alpha1.Classifier
+	Classifier     *libsveltosv1alpha1.Classifier
 	ControllerName string
 }
 
@@ -63,7 +63,7 @@ type ClassifierScope struct {
 	logr.Logger
 	client         client.Client
 	patchHelper    *patch.Helper
-	Classifier     *classifyv1alpha1.Classifier
+	Classifier     *libsveltosv1alpha1.Classifier
 	controllerName string
 }
 
@@ -92,11 +92,11 @@ func (s *ClassifierScope) ControllerName() string {
 }
 
 // SetMatchingClusterRefs sets the feature status.
-func (s *ClassifierScope) SetMachingClusterStatuses(matchingClusters []classifyv1alpha1.MachingClusterStatus) {
+func (s *ClassifierScope) SetMachingClusterStatuses(matchingClusters []libsveltosv1alpha1.MachingClusterStatus) {
 	s.Classifier.Status.MachingClusterStatuses = matchingClusters
 }
 
 // SetMatchingClusterRefs sets the feature status.
-func (s *ClassifierScope) SetClusterInfo(clusterInfo []classifyv1alpha1.ClusterInfo) {
+func (s *ClassifierScope) SetClusterInfo(clusterInfo []libsveltosv1alpha1.ClusterInfo) {
 	s.Classifier.Status.ClusterInfo = clusterInfo
 }

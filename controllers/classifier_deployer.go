@@ -33,17 +33,17 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	classifyv1alpha1 "github.com/projectsveltos/classifier/api/v1alpha1"
-	"github.com/projectsveltos/classifier/controllers/crd"
 	"github.com/projectsveltos/classifier/pkg/scope"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
-type getCurrentHash func(classifier *classifyv1alpha1.Classifier) []byte
+type getCurrentHash func(classifier *libsveltosv1alpha1.Classifier) []byte
 
 type feature struct {
 	id          string
@@ -75,7 +75,7 @@ func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierS
 
 	var errorSeen error
 	allDeployed := true
-	clusterInfo := make([]classifyv1alpha1.ClusterInfo, 0)
+	clusterInfo := make([]libsveltosv1alpha1.ClusterInfo, 0)
 	for i := range clusters {
 		c := clusters[i]
 		cInfo, err := r.processClassifier(ctx, classifierScope, c, f, logger)
@@ -84,7 +84,7 @@ func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierS
 		}
 		if cInfo != nil {
 			clusterInfo = append(clusterInfo, *cInfo)
-			if cInfo.Status != classifyv1alpha1.ClassifierStatusProvisioned {
+			if cInfo.Status != libsveltosv1alpha1.ClassifierStatusProvisioned {
 				allDeployed = false
 			}
 		}
@@ -129,24 +129,24 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 		clusters = append(clusters, tmpCluster)
 	}
 
-	clusterInfo := make([]classifyv1alpha1.ClusterInfo, 0)
+	clusterInfo := make([]libsveltosv1alpha1.ClusterInfo, 0)
 	for i := range clusters {
 		c := clusters[i]
 		err := r.removeClassifier(ctx, classifierScope, c, f, logger)
 		if err != nil {
 			failureMessage := err.Error()
-			clusterInfo = append(clusterInfo, classifyv1alpha1.ClusterInfo{
+			clusterInfo = append(clusterInfo, libsveltosv1alpha1.ClusterInfo{
 				Cluster:        corev1.ObjectReference{Namespace: c.Namespace, Name: c.Name},
-				Status:         classifyv1alpha1.ClassifierStatusRemoving,
+				Status:         libsveltosv1alpha1.ClassifierStatusRemoving,
 				FailureMessage: &failureMessage,
 			})
 		}
 	}
 
 	if len(clusterInfo) != 0 {
-		matchingClusterStatuses := make([]classifyv1alpha1.MachingClusterStatus, len(clusterInfo))
+		matchingClusterStatuses := make([]libsveltosv1alpha1.MachingClusterStatus, len(clusterInfo))
 		for i := range clusterInfo {
-			matchingClusterStatuses[i] = classifyv1alpha1.MachingClusterStatus{
+			matchingClusterStatuses[i] = libsveltosv1alpha1.MachingClusterStatus{
 				ClusterRef: clusterInfo[i].Cluster,
 			}
 		}
@@ -161,7 +161,7 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 }
 
 // classifierHash returns the Classifier hash
-func classifierHash(classifier *classifyv1alpha1.Classifier) []byte {
+func classifierHash(classifier *libsveltosv1alpha1.Classifier) []byte {
 	h := sha256.New()
 	var config string
 	config += render.AsCode(classifier.Spec)
@@ -174,10 +174,10 @@ func classifierHash(classifier *classifyv1alpha1.Classifier) []byte {
 // Returns an err if Classifier or associated CAPI Cluster are marked for deletion, or if an
 // error occurs while getting resources.
 func getClassifierAndCAPIClusterClient(ctx context.Context, clusterNamespace, clusterName, classifierName string,
-	c client.Client, logger logr.Logger) (*classifyv1alpha1.Classifier, client.Client, error) {
+	c client.Client, logger logr.Logger) (*libsveltosv1alpha1.Classifier, client.Client, error) {
 
 	// Get Classifier that requested this
-	classifier := &classifyv1alpha1.Classifier{}
+	classifier := &libsveltosv1alpha1.Classifier{}
 	if err := c.Get(ctx,
 		types.NamespacedName{Name: classifierName}, classifier); err != nil {
 		return nil, nil, err
@@ -245,7 +245,14 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
-	toDeployClassifier := &classifyv1alpha1.Classifier{
+	logger.V(logs.LogDebug).Info("deploy classifierReport CRD")
+	// Deploy Classifier CRD
+	err = deployClassifierReportCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
+	toDeployClassifier := &libsveltosv1alpha1.Classifier{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: classifier.Name,
 		},
@@ -302,7 +309,7 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 
 	logger.V(logs.LogDebug).Info("Undeploy classifier from cluster")
 
-	currentClassifier := &classifyv1alpha1.Classifier{}
+	currentClassifier := &libsveltosv1alpha1.Classifier{}
 	err = remoteClient.Get(ctx, types.NamespacedName{Name: applicant}, currentClassifier)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -317,19 +324,19 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 	return remoteClient.Delete(ctx, currentClassifier)
 }
 
-func (r *ClassifierReconciler) convertResultStatus(result deployer.Result) *classifyv1alpha1.ClassifierFeatureStatus {
+func (r *ClassifierReconciler) convertResultStatus(result deployer.Result) *libsveltosv1alpha1.ClassifierFeatureStatus {
 	switch result.ResultStatus {
 	case deployer.Deployed:
-		s := classifyv1alpha1.ClassifierStatusProvisioned
+		s := libsveltosv1alpha1.ClassifierStatusProvisioned
 		return &s
 	case deployer.Failed:
-		s := classifyv1alpha1.ClassifierStatusFailed
+		s := libsveltosv1alpha1.ClassifierStatusFailed
 		return &s
 	case deployer.InProgress:
-		s := classifyv1alpha1.ClassifierStatusProvisioning
+		s := libsveltosv1alpha1.ClassifierStatusProvisioning
 		return &s
 	case deployer.Removed:
-		s := classifyv1alpha1.ClassifierStatusRemoved
+		s := libsveltosv1alpha1.ClassifierStatusRemoved
 		return &s
 	case deployer.Unavailable:
 		return nil
@@ -340,8 +347,8 @@ func (r *ClassifierReconciler) convertResultStatus(result deployer.Result) *clas
 
 // getClassifierInClusterHashAndStatus returns the hash of the Classifier that was deployed in a given
 // Cluster (if ever deployed)
-func (r *ClassifierReconciler) getClassifierInClusterHashAndStatus(classifier *classifyv1alpha1.Classifier,
-	cluster *clusterv1.Cluster) ([]byte, *classifyv1alpha1.ClassifierFeatureStatus) {
+func (r *ClassifierReconciler) getClassifierInClusterHashAndStatus(classifier *libsveltosv1alpha1.Classifier,
+	cluster *clusterv1.Cluster) ([]byte, *libsveltosv1alpha1.ClassifierFeatureStatus) {
 
 	for i := range classifier.Status.ClusterInfo {
 		cInfo := &classifier.Status.ClusterInfo[i]
@@ -385,10 +392,10 @@ func (r *ClassifierReconciler) removeClassifier(ctx context.Context, classifierS
 	status := r.convertResultStatus(result)
 
 	if status != nil {
-		if *status == classifyv1alpha1.ClassifierStatusProvisioning {
+		if *status == libsveltosv1alpha1.ClassifierStatusProvisioning {
 			return fmt.Errorf("feature is still being removed")
 		}
-		if *status == classifyv1alpha1.ClassifierStatusRemoved {
+		if *status == libsveltosv1alpha1.ClassifierStatusRemoved {
 			return nil
 		}
 	} else {
@@ -407,7 +414,7 @@ func (r *ClassifierReconciler) removeClassifier(ctx context.Context, classifierS
 // processClassifier detect whether it is needed to deploy Classifier in current passed cluster.
 func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifierScope *scope.ClassifierScope,
 	cluster *clusterv1.Cluster, f feature, logger logr.Logger,
-) (*classifyv1alpha1.ClusterInfo, error) {
+) (*libsveltosv1alpha1.ClusterInfo, error) {
 
 	// Get Classifier Spec hash (at this very precise moment)
 	currentHash := f.currentHash(classifierScope.Classifier)
@@ -452,7 +459,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 			string(currentHash), string(hash)))
 	}
 
-	var status *classifyv1alpha1.ClassifierFeatureStatus
+	var status *libsveltosv1alpha1.ClassifierFeatureStatus
 	var result deployer.Result
 
 	if isConfigSame {
@@ -467,26 +474,26 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 		if result.Err != nil {
 			errorMessage = result.Err.Error()
 		}
-		clusterInfo := &classifyv1alpha1.ClusterInfo{
+		clusterInfo := &libsveltosv1alpha1.ClusterInfo{
 			Cluster:        corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
 			Status:         *status,
 			Hash:           currentHash,
 			FailureMessage: &errorMessage,
 		}
 
-		if *status == classifyv1alpha1.ClassifierStatusProvisioned {
+		if *status == libsveltosv1alpha1.ClassifierStatusProvisioned {
 			return clusterInfo, nil
 		}
-		if *status == classifyv1alpha1.ClassifierStatusProvisioning {
+		if *status == libsveltosv1alpha1.ClassifierStatusProvisioning {
 			return clusterInfo, fmt.Errorf("classifier is still being provisioned")
 		}
-	} else if isConfigSame && currentStatus != nil && *currentStatus == classifyv1alpha1.ClassifierStatusProvisioned {
+	} else if isConfigSame && currentStatus != nil && *currentStatus == libsveltosv1alpha1.ClassifierStatusProvisioned {
 		logger.V(logs.LogInfo).Info("already deployed")
-		s := classifyv1alpha1.ClassifierStatusProvisioned
+		s := libsveltosv1alpha1.ClassifierStatusProvisioned
 		status = &s
 	} else {
 		logger.V(logs.LogInfo).Info("no result is available. queue job and mark status as provisioning")
-		s := classifyv1alpha1.ClassifierStatusProvisioning
+		s := libsveltosv1alpha1.ClassifierStatusProvisioning
 		status = &s
 		// Getting here means either Classifier failed to be deployed or Classifier has changed.
 		// Classifier must be (re)deployed.
@@ -496,7 +503,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 		}
 	}
 
-	clusterInfo := &classifyv1alpha1.ClusterInfo{
+	clusterInfo := &libsveltosv1alpha1.ClusterInfo{
 		Cluster:        corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
 		Status:         *status,
 		Hash:           currentHash,
@@ -534,10 +541,39 @@ func deployClassifierCRD(ctx context.Context, remoteRestConfig *rest.Config,
 	return nil
 }
 
-func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
-	classifier *classifyv1alpha1.Classifier, logger logr.Logger) error {
+// deployClassifierReportCRD deploys ClassifierReport CRD in remote cluster
+func deployClassifierReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
+	logger logr.Logger) error {
 
-	currentClassifier := &classifyv1alpha1.Classifier{}
+	classifierReportCRD, err := utils.GetUnstructured(crd.GetClassifierReportCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get ClassifierReport CRD unstructured: %v",
+			err))
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, classifierReportCRD)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+		return err
+	}
+
+	options := metav1.ApplyOptions{
+		FieldManager: "application/apply-patch",
+	}
+	_, err = dr.Apply(ctx, classifierReportCRD.GetName(), classifierReportCRD, options)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply ClassifierReport CRD: %v", err))
+		return err
+	}
+
+	return nil
+}
+
+func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
+	classifier *libsveltosv1alpha1.Classifier, logger logr.Logger) error {
+
+	currentClassifier := &libsveltosv1alpha1.Classifier{}
 	err := remoteClient.Get(ctx, types.NamespacedName{Name: classifier.Name}, currentClassifier)
 	if err != nil {
 		if apierrors.IsNotFound(err) {

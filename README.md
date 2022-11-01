@@ -8,7 +8,7 @@ Classifier currently supports following classification criterias:
 For instance, posting this Classifier instance will have match any Cluster whose Kubernetes version is greater than or equal to "v1.25.0"
 
 ```
-apiVersion: classify.projectsveltos.io/v1alpha1
+apiVersion: lib.projectsveltos.io/v1alpha1
 kind: Classifier
 metadata:
   name: kubernetes-v1.25
@@ -28,10 +28,23 @@ Assumptions are:
 2. Sveltos manager is deployed.
 
 
+Apply needed CRDs:
+1. Classifier CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/classifier/dev/config/crd/bases/
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
 ```
 
+2. ClassifierReport CRD
+```
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
+```
+
+3. DebuggingConfiguration CRD
+```
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
+```
+
+Finally install classifier controller
 ```
 kubectl create -f  https://raw.githubusercontent.com/projectsveltos/classifier/dev/manifest/manifest.yaml
 ```

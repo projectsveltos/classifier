@@ -31,8 +31,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	classifyv1alpha1 "github.com/projectsveltos/classifier/api/v1alpha1"
 	"github.com/projectsveltos/classifier/controllers/keymanager"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 const (
@@ -40,7 +40,7 @@ const (
 )
 
 var _ = Describe("Chart manager", func() {
-	var classifier *classifyv1alpha1.Classifier
+	var classifier *libsveltosv1alpha1.Classifier
 	var cluster *clusterv1.Cluster
 	var c client.Client
 	var scheme *runtime.Scheme
@@ -48,12 +48,12 @@ var _ = Describe("Chart manager", func() {
 	BeforeEach(func() {
 		scheme = setupScheme()
 
-		classifier = &classifyv1alpha1.Classifier{
+		classifier = &libsveltosv1alpha1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: classifyv1alpha1.ClassifierSpec{
-				ClassifierLabels: []classifyv1alpha1.ClassifierLabel{
+			Spec: libsveltosv1alpha1.ClassifierSpec{
+				ClassifierLabels: []libsveltosv1alpha1.ClassifierLabel{
 					{Key: randomString(), Value: randomString()},
 					{Key: randomString(), Value: randomString()},
 				},
@@ -100,7 +100,7 @@ var _ = Describe("Chart manager", func() {
 
 		manager.RegisterClassifierForLabels(classifier, cluster.Namespace, cluster.Name)
 
-		tmpClassifier := &classifyv1alpha1.Classifier{
+		tmpClassifier := &libsveltosv1alpha1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: classifier.Name + randomString(),
 			},
@@ -124,7 +124,7 @@ var _ = Describe("Chart manager", func() {
 
 		manager.RegisterClassifierForLabels(classifier, cluster.Namespace, cluster.Name)
 
-		oldLabels := make([]classifyv1alpha1.ClassifierLabel, 0)
+		oldLabels := make([]libsveltosv1alpha1.ClassifierLabel, 0)
 		for i := range classifier.Spec.ClassifierLabels {
 			labelKey := &classifier.Spec.ClassifierLabels[i].Key
 			By(fmt.Sprintf("Verifying Classifier %s manages label (key) %s",
@@ -157,14 +157,14 @@ var _ = Describe("Chart manager", func() {
 
 		manager.RegisterClassifierForLabels(classifier, cluster.Namespace, cluster.Name)
 
-		tmpClassifier := &classifyv1alpha1.Classifier{
+		tmpClassifier := &libsveltosv1alpha1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: classifier.Name + randomString(),
 			},
 			Spec: classifier.Spec,
 		}
 
-		newLabel := classifyv1alpha1.ClassifierLabel{Key: randomString(), Value: randomString()}
+		newLabel := libsveltosv1alpha1.ClassifierLabel{Key: randomString(), Value: randomString()}
 		tmpClassifier.Spec.ClassifierLabels = append(tmpClassifier.Spec.ClassifierLabels, newLabel)
 
 		manager.RegisterClassifierForLabels(tmpClassifier, cluster.Namespace, cluster.Name)
@@ -190,7 +190,7 @@ var _ = Describe("Chart manager", func() {
 
 			manager.RegisterClassifierForLabels(classifier, cluster.Namespace, cluster.Name)
 
-			tmpClassifier1 := &classifyv1alpha1.Classifier{
+			tmpClassifier1 := &libsveltosv1alpha1.Classifier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: classifier.Name + randomString(),
 				},
@@ -199,7 +199,7 @@ var _ = Describe("Chart manager", func() {
 			manager.RegisterClassifierForLabels(tmpClassifier1, cluster.Namespace, cluster.Name)
 			defer removeSubscriptions(c, tmpClassifier1, cluster)
 
-			tmpClassifier2 := &classifyv1alpha1.Classifier{
+			tmpClassifier2 := &libsveltosv1alpha1.Classifier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: classifier.Name + randomString(),
 				},
@@ -218,29 +218,29 @@ var _ = Describe("Chart manager", func() {
 		Expect(len(classifier.Spec.ClassifierLabels)).Should(BeNumerically(">=", 2))
 
 		// Mark classifier as manager for one release
-		classifier.Status = classifyv1alpha1.ClassifierStatus{
-			MachingClusterStatuses: []classifyv1alpha1.MachingClusterStatus{
+		classifier.Status = libsveltosv1alpha1.ClassifierStatus{
+			MachingClusterStatuses: []libsveltosv1alpha1.MachingClusterStatus{
 				{
 					ClusterRef:      corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
 					ManagedLabels:   []string{classifier.Spec.ClassifierLabels[0].Key},
-					UnManagedLabels: []classifyv1alpha1.UnManagedLabel{{Key: classifier.Spec.ClassifierLabels[1].Key}},
+					UnManagedLabels: []libsveltosv1alpha1.UnManagedLabel{{Key: classifier.Spec.ClassifierLabels[1].Key}},
 				},
 			},
 		}
 		Expect(c.Status().Update(context.TODO(), classifier)).To(Succeed())
 
 		// Mark tmpClassifier as manager for classifier.Spec.ClassifierLabels[1]
-		tmpClassifier := &classifyv1alpha1.Classifier{
+		tmpClassifier := &libsveltosv1alpha1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: classifier.Name + randomString(),
 			},
 			Spec: classifier.Spec,
-			Status: classifyv1alpha1.ClassifierStatus{
-				MachingClusterStatuses: []classifyv1alpha1.MachingClusterStatus{
+			Status: libsveltosv1alpha1.ClassifierStatus{
+				MachingClusterStatuses: []libsveltosv1alpha1.MachingClusterStatus{
 					{
 						ClusterRef:      corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
 						ManagedLabels:   []string{classifier.Spec.ClassifierLabels[1].Key},
-						UnManagedLabels: []classifyv1alpha1.UnManagedLabel{{Key: classifier.Spec.ClassifierLabels[0].Key}},
+						UnManagedLabels: []libsveltosv1alpha1.UnManagedLabel{{Key: classifier.Spec.ClassifierLabels[0].Key}},
 					},
 				},
 			},
@@ -266,7 +266,7 @@ var _ = Describe("Chart manager", func() {
 	})
 })
 
-func removeSubscriptions(c client.Client, classifier *classifyv1alpha1.Classifier, cluster *clusterv1.Cluster) {
+func removeSubscriptions(c client.Client, classifier *libsveltosv1alpha1.Classifier, cluster *clusterv1.Cluster) {
 	manager, err := keymanager.GetKeyManagerInstance(context.TODO(), c)
 	Expect(err).To(BeNil())
 
@@ -276,7 +276,7 @@ func removeSubscriptions(c client.Client, classifier *classifyv1alpha1.Classifie
 
 func setupScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
-	Expect(classifyv1alpha1.AddToScheme(s)).To(Succeed())
+	Expect(libsveltosv1alpha1.AddToScheme(s)).To(Succeed())
 	Expect(clusterv1.AddToScheme(s)).To(Succeed())
 	Expect(clientgoscheme.AddToScheme(s)).To(Succeed())
 	return s

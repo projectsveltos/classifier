@@ -1,6 +1,0 @@
-apiVersion: classify.projectsveltos.io/v1alpha1
-kind: ClassifierReport
-metadata:
-  name: classifierreport-sample
-spec:
-  # TODO(user): Add fields here

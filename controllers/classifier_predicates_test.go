@@ -27,8 +27,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
-	classifyv1alpha1 "github.com/projectsveltos/classifier/api/v1alpha1"
 	"github.com/projectsveltos/classifier/controllers"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 var _ = Describe("Classifier Predicates: ClusterPredicates", func() {
@@ -299,11 +299,11 @@ var _ = Describe("Classifier Predicates: MachinePredicates", func() {
 
 var _ = Describe("Classifier Predicates: ClassifierReportPredicate", func() {
 	var logger logr.Logger
-	var report *classifyv1alpha1.ClassifierReport
+	var report *libsveltosv1alpha1.ClassifierReport
 
 	BeforeEach(func() {
 		logger = klogr.New()
-		report = &classifyv1alpha1.ClassifierReport{
+		report = &libsveltosv1alpha1.ClassifierReport{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: "predicates" + randomString(),
@@ -336,7 +336,7 @@ var _ = Describe("Classifier Predicates: ClassifierReportPredicate", func() {
 
 		report.Spec.Match = true
 
-		oldReport := &classifyv1alpha1.ClassifierReport{
+		oldReport := &libsveltosv1alpha1.ClassifierReport{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      report.Name,
 				Namespace: report.Namespace,
@@ -358,7 +358,7 @@ var _ = Describe("Classifier Predicates: ClassifierReportPredicate", func() {
 		report.Spec.Match = true
 		report.Labels = map[string]string{randomString(): randomString()}
 
-		oldReport := &classifyv1alpha1.ClassifierReport{
+		oldReport := &libsveltosv1alpha1.ClassifierReport{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      report.Name,
 				Namespace: report.Namespace,
@@ -378,11 +378,11 @@ var _ = Describe("Classifier Predicates: ClassifierReportPredicate", func() {
 
 var _ = Describe("Classifier Predicates: ClassifierPredicate", func() {
 	var logger logr.Logger
-	var classifier *classifyv1alpha1.Classifier
+	var classifier *libsveltosv1alpha1.Classifier
 
 	BeforeEach(func() {
 		logger = klogr.New()
-		classifier = &classifyv1alpha1.Classifier{
+		classifier = &libsveltosv1alpha1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
@@ -412,14 +412,14 @@ var _ = Describe("Classifier Predicates: ClassifierPredicate", func() {
 	It("Update reprocesses when Status.MatchinClusterStatuses changes", func() {
 		classifierPredicate := controllers.ClassifierPredicate(logger)
 
-		classifier.Status.MachingClusterStatuses = []classifyv1alpha1.MachingClusterStatus{
+		classifier.Status.MachingClusterStatuses = []libsveltosv1alpha1.MachingClusterStatus{
 			{
 				ClusterRef:    corev1.ObjectReference{Namespace: randomString(), Name: randomString()},
 				ManagedLabels: []string{randomString(), randomString()},
 			},
 		}
 
-		oldClassifier := &classifyv1alpha1.Classifier{
+		oldClassifier := &libsveltosv1alpha1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: classifier.Name,
 			},
@@ -437,14 +437,14 @@ var _ = Describe("Classifier Predicates: ClassifierPredicate", func() {
 	It("Update does not reprocess when Status.MatchinClusterStatuses does not change", func() {
 		classifierPredicate := controllers.ClassifierPredicate(logger)
 
-		classifier.Status.MachingClusterStatuses = []classifyv1alpha1.MachingClusterStatus{
+		classifier.Status.MachingClusterStatuses = []libsveltosv1alpha1.MachingClusterStatus{
 			{
 				ClusterRef:    corev1.ObjectReference{Namespace: randomString(), Name: randomString()},
 				ManagedLabels: []string{randomString(), randomString()},
 			},
 		}
 
-		oldClassifier := &classifyv1alpha1.Classifier{
+		oldClassifier := &libsveltosv1alpha1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: classifier.Name,
 			},

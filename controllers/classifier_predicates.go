@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	classifyv1alpha1 "github.com/projectsveltos/classifier/api/v1alpha1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -185,8 +185,8 @@ func MachinePredicates(logger logr.Logger) predicate.Funcs {
 func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			newReport := e.ObjectNew.(*classifyv1alpha1.ClassifierReport)
-			oldReport := e.ObjectOld.(*classifyv1alpha1.ClassifierReport)
+			newReport := e.ObjectNew.(*libsveltosv1alpha1.ClassifierReport)
+			oldReport := e.ObjectOld.(*libsveltosv1alpha1.ClassifierReport)
 			log := logger.WithValues("predicate", "updateEvent",
 				"namespace", newReport.Namespace,
 				"name", newReport.Name,
@@ -210,7 +210,7 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 			return false
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
-			report := e.Object.(*classifyv1alpha1.ClassifierReport)
+			report := e.Object.(*libsveltosv1alpha1.ClassifierReport)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", report.Namespace,
 				"name", report.Name,
@@ -221,7 +221,7 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 			return true
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			report := e.Object.(*classifyv1alpha1.ClassifierReport)
+			report := e.Object.(*libsveltosv1alpha1.ClassifierReport)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", report.Namespace,
 				"name", report.Name,
@@ -232,7 +232,7 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 			return true
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
-			report := e.Object.(*classifyv1alpha1.ClassifierReport)
+			report := e.Object.(*libsveltosv1alpha1.ClassifierReport)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", report.Namespace,
 				"name", report.Name,
@@ -250,8 +250,8 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 func ClassifierPredicate(logger logr.Logger) predicate.Funcs {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			newClassifer := e.ObjectNew.(*classifyv1alpha1.Classifier)
-			oldClassifier := e.ObjectOld.(*classifyv1alpha1.Classifier)
+			newClassifer := e.ObjectNew.(*libsveltosv1alpha1.Classifier)
+			oldClassifier := e.ObjectOld.(*libsveltosv1alpha1.Classifier)
 			log := logger.WithValues("predicate", "updateEvent",
 				"name", newClassifer.Name,
 			)
@@ -274,7 +274,7 @@ func ClassifierPredicate(logger logr.Logger) predicate.Funcs {
 			return false
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
-			classifier := e.Object.(*classifyv1alpha1.Classifier)
+			classifier := e.Object.(*libsveltosv1alpha1.Classifier)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", classifier.Namespace,
 				"name", classifier.Name,
@@ -285,7 +285,7 @@ func ClassifierPredicate(logger logr.Logger) predicate.Funcs {
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			classifier := e.Object.(*classifyv1alpha1.Classifier)
+			classifier := e.Object.(*libsveltosv1alpha1.Classifier)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", classifier.Namespace,
 				"name", classifier.Name,
@@ -296,7 +296,7 @@ func ClassifierPredicate(logger logr.Logger) predicate.Funcs {
 			return true
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
-			classifier := e.Object.(*classifyv1alpha1.Classifier)
+			classifier := e.Object.(*libsveltosv1alpha1.Classifier)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", classifier.Namespace,
 				"name", classifier.Name,

@@ -24,12 +24,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/cluster-api/util"
 
-	classifyv1alpha1 "github.com/projectsveltos/classifier/api/v1alpha1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 func setupScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
-	Expect(classifyv1alpha1.AddToScheme(scheme)).To(Succeed())
+	Expect(libsveltosv1alpha1.AddToScheme(scheme)).To(Succeed())
 	return scheme
 }
 

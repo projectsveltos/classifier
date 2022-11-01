@@ -1,6 +1,0 @@
-apiVersion: classify.projectsveltos.io/v1alpha1
-kind: Classifier
-metadata:
-  name: classifier-sample
-spec:
-  # TODO(user): Add fields here
