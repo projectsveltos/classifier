@@ -2,13 +2,13 @@ apiVersion: v1
 kind: Namespace
 metadata:
   labels:
-    control-plane: controller-manager
+    control-plane: classifier
   name: projectsveltos
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: classifier-controller-manager
+  name: classifier-manager
   namespace: projectsveltos
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -178,7 +178,7 @@ roleRef:
   name: classifier-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: classifier-controller-manager
+  name: classifier-manager
   namespace: projectsveltos
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -191,7 +191,7 @@ roleRef:
   name: classifier-manager-role
 subjects:
 - kind: ServiceAccount
-  name: classifier-controller-manager
+  name: classifier-manager
   namespace: projectsveltos
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -204,7 +204,7 @@ roleRef:
   name: classifier-proxy-role
 subjects:
 - kind: ServiceAccount
-  name: classifier-controller-manager
+  name: classifier-manager
   namespace: projectsveltos
 ---
 apiVersion: v1
@@ -240,8 +240,8 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    control-plane: controller-manager
-  name: classifier-controller-manager-metrics-service
+    control-plane: classifier
+  name: classifier-manager-metrics-service
   namespace: projectsveltos
 spec:
   ports:
@@ -250,26 +250,26 @@ spec:
     protocol: TCP
     targetPort: https
   selector:
-    control-plane: controller-manager
+    control-plane: classifier
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    control-plane: controller-manager
-  name: classifier-controller-manager
+    control-plane: classifier
+  name: classifier-manager
   namespace: projectsveltos
 spec:
   replicas: 1
   selector:
     matchLabels:
-      control-plane: controller-manager
+      control-plane: classifier
   template:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: manager
       labels:
-        control-plane: controller-manager
+        control-plane: classifier
     spec:
       containers:
       - args:
@@ -329,5 +329,5 @@ spec:
             - ALL
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: classifier-controller-manager
+      serviceAccountName: classifier-manager
       terminationGracePeriodSeconds: 10
