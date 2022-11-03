@@ -293,10 +293,10 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
 
-	# Install projectsveltos controller-manager components
+	# Install projectsveltos classifier components
 	@echo 'Install projectsveltos classifier components'
 	cd config/manager && ../../$(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) | $(KUBECTL) apply -f-
 
-	@echo "Waiting for projectsveltos controller-manager to be available..."
-	$(KUBECTL) wait --for=condition=Available deployment/classifier-controller-manager -n projectsveltos --timeout=$(TIMEOUT)
+	@echo "Waiting for projectsveltos classifier to be available..."
+	$(KUBECTL) wait --for=condition=Available deployment/classifier-manager -n projectsveltos --timeout=$(TIMEOUT)

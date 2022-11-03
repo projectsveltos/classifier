@@ -168,9 +168,11 @@ func getClassifierInstance(name string) *libsveltosv1alpha1.Classifier {
 			Name: name,
 		},
 		Spec: libsveltosv1alpha1.ClassifierSpec{
-			KubernetesVersion: &libsveltosv1alpha1.KubernetesVersion{
-				Version:    "1.25.2",
-				Comparison: string(libsveltosv1alpha1.ComparisonEqual),
+			KubernetesVersionConstraints: []libsveltosv1alpha1.KubernetesVersionConstraint{
+				{
+					Version:    "1.25.2",
+					Comparison: string(libsveltosv1alpha1.ComparisonEqual),
+				},
 			},
 			ClassifierLabels: classifierLabels,
 		},
