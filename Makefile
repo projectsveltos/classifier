@@ -91,7 +91,7 @@ $(CLUSTERCTL): $(TOOLS_DIR)/go.mod ## Build clusterctl binary
 	mkdir -p $(HOME)/.cluster-api # create cluster api init directory, if not present
 
 .PHONY: tools
-tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(SETUP_ENVTEST) $(GOIMPORTS) $(GINKGO)  ## build all tools
+tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(SETUP_ENVTEST) $(GOIMPORTS) $(GINKGO) ## build all tools
 
 .PHONY: clean
 clean: ## Remove all built tools
@@ -205,8 +205,13 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 
 ##@ Build
 
+classifier-agent:
+	@echo "Downloading classifier agent yaml"
+	curl -L https://raw.githubusercontent.com/projectsveltos/classifier-agent/dev/manifest/manifest.yaml -o ./pkg/agent/classifier-agent.yaml
+	cd pkg/agent; go generate
+
 .PHONY: build
-build: generate fmt vet ## Build manager binary.
+build: classifier-agent generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
 
 .PHONY: run

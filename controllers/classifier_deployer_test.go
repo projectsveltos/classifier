@@ -21,10 +21,11 @@ import (
 	"crypto/sha256"
 	"reflect"
 
-	"github.com/gdexlab/go-render/render"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/gdexlab/go-render/render"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -346,6 +347,18 @@ var _ = Describe("Classifier Deployer", func() {
 		key := deployer.GetKey(cluster.Namespace, cluster.Name,
 			classifier.Name, libsveltosv1alpha1.FeatureClassifier, true)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
+	})
+
+	It("deployClassifierAgent deploys classifier agent", func() {
+		Expect(controllers.DeployClassifierAgent(ctx, testEnv.Config, klogr.New())).To(Succeed())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			currentClassifierAgent := &appsv1.Deployment{}
+			return testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: "projectsveltos", Name: "classifier-agent-manager"},
+				currentClassifierAgent)
+		}, timeout, pollingInterval).Should(BeNil())
 	})
 })
 

@@ -209,12 +209,16 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		clusterNamespace := randomString()
 		clusterName := randomString()
 		classifierReport0 := getClassifierReport(classifier.Name, clusterNamespace, clusterName)
-		classifierReport1 := getClassifierReport(randomString(), randomString(), randomString())
+		classifierReport0.Spec.Match = true
+		classifierReport1 := getClassifierReport(classifier.Name, randomString(), randomString())
+		classifierReport1.Spec.Match = false
+		classifierReport2 := getClassifierReport(randomString(), randomString(), randomString())
 
 		initObjects := []client.Object{
 			classifier,
 			classifierReport0,
 			classifierReport1,
+			classifierReport2,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
@@ -248,6 +252,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		clusterNamespace := randomString()
 		clusterName := randomString()
 		classifierReport0 := getClassifierReport(classifier.Name, clusterNamespace, clusterName)
+		classifierReport0.Spec.Match = true
 
 		// Create a second classifier with same ClassifierLabels as first classifier
 		classifier1 := &libsveltosv1alpha1.Classifier{
@@ -258,6 +263,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		}
 		// Have cluster be a match for this second classifier (so to have a conflict)
 		classifierReport1 := getClassifierReport(classifier1.Name, clusterNamespace, clusterName)
+		classifierReport1.Spec.Match = true
 
 		initObjects := []client.Object{
 			classifier,

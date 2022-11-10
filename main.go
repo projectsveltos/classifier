@@ -30,11 +30,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
-	"github.com/projectsveltos/classifier/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+
+	"github.com/projectsveltos/classifier/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -45,11 +46,13 @@ var (
 	probeAddr            string
 	concurrentReconciles int
 	workers              int
+	reportMode           controllers.ReportMode
 )
 
 const (
 	defaultReconcilers = 10
 	defaultWorkers     = 10
+	defaulReportMode   = int(controllers.CollectFromManagementCluster)
 )
 
 func main() {
@@ -108,8 +111,16 @@ func main() {
 		ClusterMap:           make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
 		ClassifierMap:        make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
 		Deployer:             d,
+		ClassifierReportMode: reportMode,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Classifier")
+		os.Exit(1)
+	}
+	if err = (&controllers.ClusterReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Cluster")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
@@ -124,6 +135,14 @@ func main() {
 }
 
 func initFlags(fs *pflag.FlagSet) {
+	var tmpReportMode int
+	fs.IntVar(
+		&tmpReportMode,
+		"reportMode",
+		defaulReportMode,
+		"Indicates how ClassifierReport needs to be collected")
+	reportMode = controllers.ReportMode(tmpReportMode)
+
 	fs.StringVar(&metricsAddr,
 		"metrics-bind-address",
 		":8080",

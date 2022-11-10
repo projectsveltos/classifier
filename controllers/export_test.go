@@ -17,12 +17,18 @@ limitations under the License.
 package controllers
 
 var (
-	DeployClassifierCRD           = deployClassifierCRD
-	DeployClassifierReportCRD     = deployClassifierReportCRD
-	DeployClassifierInstance      = deployClassifierInstance
-	ClassifierHash                = classifierHash
-	DeployClassifierInCluster     = deployClassifierInCluster
-	UndeployClassifierFromCluster = undeployClassifierFromCluster
+	DeployClassifierCRD                 = deployClassifierCRD
+	DeployClassifierReportCRD           = deployClassifierReportCRD
+	DeployClassifierInstance            = deployClassifierInstance
+	DeployClassifierAgent               = deployClassifierAgent
+	ClassifierHash                      = classifierHash
+	DeployClassifierInCluster           = deployClassifierInCluster
+	UndeployClassifierFromCluster       = undeployClassifierFromCluster
+	RemoveClassifierReports             = removeClassifierReports
+	RemoveClusterClassifierReports      = removeClusterClassifierReports
+	CollectClassifierReportsFromCluster = collectClassifierReportsFromCluster
+	GetClassifierReportName             = getClassifierReportName
+	GetClusterInfo                      = getClusterInfo
 
 	GetHandlersForFeature = getHandlersForFeature
 
@@ -42,4 +48,8 @@ var (
 
 var (
 	CreatFeatureHandlerMaps = creatFeatureHandlerMaps
+)
+
+const (
+	ClassifierReportClusterLabel = classifierReportClusterLabel
 )

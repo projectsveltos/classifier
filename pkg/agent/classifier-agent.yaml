@@ -2,19 +2,19 @@ apiVersion: v1
 kind: Namespace
 metadata:
   labels:
-    control-plane: classifier
+    control-plane: classifier-agent
   name: projectsveltos
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: classifier-manager
+  name: classifier-agent-manager
   namespace: projectsveltos
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: classifier-leader-election-role
+  name: classifier-agent-leader-election-role
   namespace: projectsveltos
 rules:
 - apiGroups:
@@ -53,75 +53,16 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: classifier-manager-role
+  name: classifier-agent-manager-role
 rules:
 - apiGroups:
-  - ""
+  - '*'
   resources:
-  - secrets
+  - '*'
   verbs:
   - get
   - list
   - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
-  - clusters
-  verbs:
-  - get
-  - list
-  - update
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
-  - clusters/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
-  - machines
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
-  - machines/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io.projectsveltos.io
-  resources:
-  - clusters
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io.projectsveltos.io
-  resources:
-  - clusters/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - cluster.x-k8s.io.projectsveltos.io
-  resources:
-  - clusters/status
-  verbs:
-  - get
-  - patch
-  - update
 - apiGroups:
   - lib.projectsveltos.io
   resources:
@@ -131,8 +72,16 @@ rules:
   - delete
   - get
   - list
+  - patch
   - update
-  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - classifierreports/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - lib.projectsveltos.io
   resources:
@@ -160,18 +109,36 @@ rules:
   - patch
   - update
 - apiGroups:
-  - lib.projectsveltos.io
+  - projectsveltos.io
   resources:
-  - debuggingconfigurations
+  - nodes
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
+- apiGroups:
+  - projectsveltos.io
+  resources:
+  - nodes/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - projectsveltos.io
+  resources:
+  - nodes/status
+  verbs:
+  - get
+  - patch
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: classifier-metrics-reader
+  name: classifier-agent-metrics-reader
 rules:
 - nonResourceURLs:
   - /metrics
@@ -181,7 +148,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: classifier-proxy-role
+  name: classifier-agent-proxy-role
 rules:
 - apiGroups:
   - authentication.k8s.io
@@ -199,41 +166,41 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: classifier-leader-election-rolebinding
+  name: classifier-agent-leader-election-rolebinding
   namespace: projectsveltos
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: classifier-leader-election-role
+  name: classifier-agent-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: classifier-manager
+  name: classifier-agent-manager
   namespace: projectsveltos
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: classifier-manager-rolebinding
+  name: classifier-agent-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: classifier-manager-role
+  name: classifier-agent-manager-role
 subjects:
 - kind: ServiceAccount
-  name: classifier-manager
+  name: classifier-agent-manager
   namespace: projectsveltos
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: classifier-proxy-rolebinding
+  name: classifier-agent-proxy-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: classifier-proxy-role
+  name: classifier-agent-proxy-role
 subjects:
 - kind: ServiceAccount
-  name: classifier-manager
+  name: classifier-agent-manager
   namespace: projectsveltos
 ---
 apiVersion: v1
@@ -249,7 +216,7 @@ data:
       port: 9443
     leaderElection:
       leaderElect: true
-      resourceName: 1aea9208.projectsveltos.io
+      resourceName: e8afc439.projectsveltos.io
     # leaderElectionReleaseOnCancel defines if the leader should step down volume
     # when the Manager ends. This requires the binary to immediately end when the
     # Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -262,15 +229,15 @@ data:
     # leaderElectionReleaseOnCancel: true
 kind: ConfigMap
 metadata:
-  name: classifier-manager-config
+  name: classifier-agent-manager-config
   namespace: projectsveltos
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
-    control-plane: classifier
-  name: classifier-manager-metrics-service
+    control-plane: classifier-agent
+  name: classifier-agent-manager-metrics-service
   namespace: projectsveltos
 spec:
   ports:
@@ -279,35 +246,36 @@ spec:
     protocol: TCP
     targetPort: https
   selector:
-    control-plane: classifier
+    control-plane: classifier-agent
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    control-plane: classifier
-  name: classifier-manager
+    control-plane: classifier-agent
+  name: classifier-agent-manager
   namespace: projectsveltos
 spec:
   replicas: 1
   selector:
     matchLabels:
-      control-plane: classifier
+      control-plane: classifier-agent
   template:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: manager
       labels:
-        control-plane: classifier
+        control-plane: classifier-agent
     spec:
       containers:
       - args:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
+        - --v=5
         command:
         - /manager
-        image: gianlucam76/classifier-amd64:dev
+        image: gianlucam76/classifier-agent-manager-amd64:dev
         livenessProbe:
           httpGet:
             path: /healthz
@@ -326,8 +294,8 @@ spec:
             cpu: 500m
             memory: 128Mi
           requests:
-            cpu: 500m
-            memory: 128Mi
+            cpu: 10m
+            memory: 64Mi
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -358,5 +326,5 @@ spec:
             - ALL
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: classifier-manager
+      serviceAccountName: classifier-agent-manager
       terminationGracePeriodSeconds: 10

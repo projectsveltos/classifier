@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
@@ -33,6 +34,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectsveltos/classifier/pkg/agent"
 	"github.com/projectsveltos/classifier/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -109,7 +111,6 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 
 	classifier := classifierScope.Classifier
 
-	logger = logger.WithValues("classifier", classifier.Name)
 	logger.V(logs.LogDebug).Info("request to undeploy")
 
 	clusters := make([]*clusterv1.Cluster, 0)
@@ -248,6 +249,13 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 	logger.V(logs.LogDebug).Info("deploy classifierReport CRD")
 	// Deploy Classifier CRD
 	err = deployClassifierReportCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("Deploying classifier agent")
+	// Deploy ClassifierAgent
+	err = deployClassifierAgent(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
@@ -586,4 +594,39 @@ func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 	currentClassifier.Spec = classifier.Spec
 
 	return remoteClient.Update(ctx, currentClassifier)
+}
+
+func deployClassifierAgent(ctx context.Context, remoteRestConfig *rest.Config,
+	logger logr.Logger) error {
+
+	agentYAML := string(agent.GetClassifierAgentYAML())
+
+	const separator = "---"
+	elements := strings.Split(agentYAML, separator)
+	for i := range elements {
+		policy, err := utils.GetUnstructured([]byte(elements[i]))
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse classifier agent yaml: %v", err))
+			return err
+		}
+
+		dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, policy)
+		if err != nil {
+			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+			return err
+		}
+
+		options := metav1.ApplyOptions{
+			FieldManager: "application/apply-patch",
+		}
+
+		_, err = dr.Apply(ctx, policy.GetName(), policy, options)
+		if err != nil {
+			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply policy Kind: %s Name: %s: %v",
+				policy.GetKind(), policy.GetName(), err))
+			return err
+		}
+	}
+
+	return nil
 }

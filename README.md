@@ -16,9 +16,9 @@ spec:
   classifierLabels:
   - key: k8s-version
     value: v1.25
-    kubernetesVersion:
-      comparison: GreaterThanOrEqualTo
-      version: 1.25.0
+  kubernetesVersion:
+    comparison: GreaterThanOrEqualTo
+    version: 1.25.0
 ```
 
 ## Install Sveltos classifier on any local or remote Kubernetes cluster.
