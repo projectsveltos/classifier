@@ -46,6 +46,21 @@ import (
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
+type ReportMode int
+
+const (
+	// Default mode. In this mode, Classifier running
+	// in the management cluster periodically collect
+	// ClassifierReport from CAPI clusters
+	CollectFromManagementCluster ReportMode = 0
+
+	// In this mode, classifier agent sends ClassifierReport
+	// to management cluster.
+	// ClassifierAgent is provided with Kubeconfig to access
+	// management cluster and can only update ClassifierReport
+	AgentSendReportsNoGateway = 1
+)
+
 const (
 	// deleteRequeueAfter is how long to wait before checking again to see if the cluster still has
 	// children during deletion.
@@ -62,6 +77,7 @@ type ClassifierReconciler struct {
 	Scheme               *runtime.Scheme
 	Deployer             deployer.DeployerInterface
 	ConcurrentReconciles int
+	ClassifierReportMode ReportMode
 	// use a Mutex to update in-memory structure as MaxConcurrentReconciles is higher than one
 	Mux sync.Mutex
 	// key: CAPI Cluster namespace/name; value: set of all Classifiers deployed int the Cluster
@@ -86,7 +102,7 @@ type ClassifierReconciler struct {
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=classifiers,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=classifiers/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=classifiers/finalizers,verbs=update
-//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=classifierreports,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=classifierreports,verbs=get;list;watch;create;update;delete
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=debuggingconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;watch;list;update
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters/status,verbs=get;watch;list
@@ -116,7 +132,7 @@ func (r *ClassifierReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		logger.Error(err, "Failed to fetch Classifier")
 		return reconcile.Result{}, errors.Wrapf(
 			err,
-			"Failed to fetch ClusterProfile %s",
+			"Failed to fetch Classifier %s",
 			req.NamespacedName,
 		)
 	}
@@ -179,6 +195,12 @@ func (r *ClassifierReconciler) reconcileDelete(
 	err = r.undeployClassifier(ctx, classifierScope, f, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to undeploy")
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+	}
+
+	err = removeClassifierReports(ctx, r.Client, classifierScope.Classifier, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to remove classifierReports")
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
 
@@ -272,6 +294,10 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		ClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
 	); err != nil {
 		return err
+	}
+
+	if r.ClassifierReportMode == CollectFromManagementCluster {
+		go collectClassifierReports(mgr.GetClient(), mgr.GetLogger())
 	}
 
 	// When cluster-api machine changes, according to ClusterPredicates,
@@ -399,8 +425,12 @@ func (r *ClassifierReconciler) updateMatchingClustersAndRegistrations(ctx contex
 	currentMatchingClusters := make(map[corev1.ObjectReference]bool)
 	for i := range classifierReportList.Items {
 		report := &classifierReportList.Items[i]
-		cluster := corev1.ObjectReference{Namespace: report.Spec.ClusterNamespace, Name: report.Spec.ClusterName}
-		currentMatchingClusters[cluster] = true
+		if report.Spec.Match {
+			cluster := corev1.ObjectReference{Namespace: report.Spec.ClusterNamespace, Name: report.Spec.ClusterName}
+			l := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
+			l.V(logs.LogDebug).Info("is a match")
+			currentMatchingClusters[cluster] = true
+		}
 	}
 
 	// create map of old matching clusters
@@ -462,7 +492,7 @@ func (r *ClassifierReconciler) updateLabelsOnMatchingClusters(ctx context.Contex
 		ref := classifierScope.Classifier.Status.MachingClusterStatuses[i].ClusterRef
 		err := r.Get(ctx, types.NamespacedName{Namespace: ref.Namespace, Name: ref.Name}, cluster)
 		if err != nil {
-			logger.V(logs.LogInfo).Error(err, "failed to get cluster")
+			logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to get cluster %s/%s", ref.Namespace, ref.Name))
 			return err
 		}
 
@@ -601,8 +631,10 @@ func (r *ClassifierReconciler) classifyLabels(ctx context.Context, classifier *l
 	for i := range classifier.Spec.ClassifierLabels {
 		label := &classifier.Spec.ClassifierLabels[i]
 		if manager.CanManageLabel(classifier, cluster.Namespace, cluster.Name, label.Key) {
+			logger.V(logs.LogDebug).Info(fmt.Sprintf("classifier can manage label %s", label.Key))
 			managed = append(managed, label.Key)
 		} else {
+			logger.V(logs.LogDebug).Info(fmt.Sprintf("classifier cannot manage label %s", label.Key))
 			tmpUnManaged := libsveltosv1alpha1.UnManagedLabel{Key: label.Key}
 			currentManager, err := manager.GetManagerForKey(cluster.Namespace, cluster.Name, label.Key)
 			if err != nil {
