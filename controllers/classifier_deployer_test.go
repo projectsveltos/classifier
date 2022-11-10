@@ -45,7 +45,7 @@ import (
 var _ = Describe("Classifier Deployer", func() {
 	It("classifierHash returns Classifier hash", func() {
 		classifier := getClassifierInstance(randomString())
-		classifier.Spec.DeployedResources = []libsveltosv1alpha1.DeployedResource{
+		classifier.Spec.DeployedResourceConstraints = []libsveltosv1alpha1.DeployedResourceConstraint{
 			{
 				Namespace: randomString(),
 				Group:     randomString(),
