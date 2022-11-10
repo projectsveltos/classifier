@@ -5,7 +5,7 @@ Classifier currently supports following classification criterias:
 1. Kubernetes version
 2. Kubernetes resources
 
-For instance, posting this Classifier instance will have match any Cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.15.0
+For instance, posting this Classifier instance will have match any Cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.25.0"
 
 ```
 apiVersion: lib.projectsveltos.io/v1alpha1
