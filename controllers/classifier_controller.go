@@ -637,7 +637,7 @@ func (r *ClassifierReconciler) classifyLabels(ctx context.Context, classifier *l
 			logger.V(logs.LogDebug).Info(fmt.Sprintf("classifier cannot manage label %s", label.Key))
 			tmpUnManaged := libsveltosv1alpha1.UnManagedLabel{Key: label.Key}
 			currentManager, err := manager.GetManagerForKey(cluster.Namespace, cluster.Name, label.Key)
-			if err != nil {
+			if err == nil {
 				failureMessage := fmt.Sprintf("classifier %s currently manage this", currentManager)
 				tmpUnManaged.FailureMessage = &failureMessage
 			}
