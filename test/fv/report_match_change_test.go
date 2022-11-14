@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,14 +30,21 @@ import (
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
-var _ = Describe("Classifier: deployment", func() {
+var _ = Describe("Classifier: update cluster labels", func() {
 	const (
-		namePrefix = "deploy-"
+		namePrefix = "labels-"
 	)
 
-	It("Deploy Classifier instance in CAPI clusters", Label("FV"), func() {
+	It("Cluster labels are updated when classifier starts matching", Label("FV"), func() {
 		clusterLabels := map[string]string{randomString(): randomString(), randomString(): randomString()}
 		classifier := getClassifier(namePrefix, clusterLabels)
+		// Cluster won't be a match for this Cassifier
+		classifier.Spec.KubernetesVersionConstraints = []libsveltosv1alpha1.KubernetesVersionConstraint{
+			{
+				Version:    "1.25.0",
+				Comparison: string(libsveltosv1alpha1.ComparisonLessThan),
+			},
+		}
 
 		Byf("Creating classifier instance %s in the management cluster", classifier.Name)
 		Expect(k8sClient.Create(context.TODO(), classifier)).To(Succeed())
@@ -53,13 +61,6 @@ var _ = Describe("Classifier: deployment", func() {
 				types.NamespacedName{Name: "classifiers.lib.projectsveltos.io"}, classifierCRD)
 		}, timeout, pollingInterval).Should(BeNil())
 
-		Byf("Verifying ClassifierReport CRD is installed in the workload cluster")
-		Eventually(func() error {
-			classifierReportCRD := &apiextensionsv1.CustomResourceDefinition{}
-			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: "classifierreports.lib.projectsveltos.io"}, classifierReportCRD)
-		}, timeout, pollingInterval).Should(BeNil())
-
 		Byf("Verifying Classifier instance is deployed in the workload cluster")
 		Eventually(func() error {
 			currentClassifier := &libsveltosv1alpha1.Classifier{}
@@ -67,8 +68,47 @@ var _ = Describe("Classifier: deployment", func() {
 				types.NamespacedName{Name: classifier.Name}, currentClassifier)
 		}, timeout, pollingInterval).Should(BeNil())
 
-		Byf("Deleting classifier instance %s in the management cluster", classifier.Name)
+		verifyClassifierReport(classifier.Name, false)
+
+		Byf("Verifying cluster labels are not set by Classifier %s", classifier.Name)
+		Consistently(func() bool {
+			currentCuster := &clusterv1.Cluster{}
+			err := k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
+				currentCuster)
+			if err != nil {
+				return false
+			}
+			if currentCuster.Labels == nil {
+				return true
+			}
+			for i := range classifier.Spec.ClassifierLabels {
+				cLabel := classifier.Spec.ClassifierLabels[i]
+				_, ok := currentCuster.Labels[cLabel.Key]
+				if ok {
+					return false
+				}
+			}
+			return true
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Byf("Change Classifier %s Kubernetes constraints so that cluster is a match", classifier.Name)
 		currentClassifier := &libsveltosv1alpha1.Classifier{}
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
+		currentClassifier.Spec.KubernetesVersionConstraints = []libsveltosv1alpha1.KubernetesVersionConstraint{
+			{
+				Version:    "1.25.0",
+				Comparison: string(libsveltosv1alpha1.ComparisonGreaterThanOrEqualTo),
+			},
+		}
+		Expect(k8sClient.Update(context.TODO(), currentClassifier)).To(Succeed())
+
+		verifyClassifierReport(classifier.Name, true)
+
+		verifyClusterLabels(classifier)
+
+		Byf("Deleting classifier instance %s in the management cluster", classifier.Name)
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
 		Expect(k8sClient.Delete(context.TODO(), currentClassifier)).To(Succeed())
@@ -89,7 +129,9 @@ var _ = Describe("Classifier: deployment", func() {
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 
+		Byf("Verifying Cluster labels are not updated because of Classifier being deleted")
+		verifyClusterLabels(classifier)
+
 		removeLabels(classifier)
 	})
-
 })
