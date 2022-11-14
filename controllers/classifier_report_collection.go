@@ -156,6 +156,10 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 
 	for i := range classifierReportList.Items {
 		cr := &classifierReportList.Items[i]
+		if !cr.DeletionTimestamp.IsZero() {
+			// ignore deleted ClassifierReport
+			continue
+		}
 		l := logger.WithValues("classifierReport", cr.Name)
 		err = updateClassifierReport(ctx, c, cluster, cr, l)
 		if err != nil {
@@ -182,10 +186,22 @@ func updateClassifierReport(ctx context.Context, c client.Client, cluster *clust
 		return errors.New(msg)
 	}
 
+	// Verify Classifier still exists
+	currentClassifier := libsveltosv1alpha1.Classifier{}
+	err := c.Get(ctx, types.NamespacedName{Name: classifierName}, &currentClassifier)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+	}
+	if !currentClassifier.DeletionTimestamp.IsZero() {
+		return nil
+	}
+
 	classifierReportName := getClassifierReportName(classifierName, cluster.Name)
 
 	currentClassifierReport := &libsveltosv1alpha1.ClassifierReport{}
-	err := c.Get(ctx,
+	err = c.Get(ctx,
 		types.NamespacedName{Namespace: cluster.Namespace, Name: classifierReportName},
 		currentClassifierReport)
 	if err != nil {

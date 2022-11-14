@@ -199,6 +199,9 @@ var _ = Describe("Classifier Predicates: MachinePredicates", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamMachineNamePrefix + randomString(),
 				Namespace: "predicates" + randomString(),
+				Labels: map[string]string{
+					clusterv1.MachineControlPlaneLabelName: "ok",
+				},
 			},
 		}
 	})

@@ -28,7 +28,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -261,6 +260,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&libsveltosv1alpha1.Classifier{}).
+		WithEventFilter(ifNewDeletedOrSpecChange(mgr.GetLogger())).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
@@ -273,7 +273,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// one Classifier needs to be reconciled
 	if err := c.Watch(&source.Kind{Type: &libsveltosv1alpha1.ClassifierReport{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifierReport),
-		ClassifierReportPredicate(klogr.New().WithValues("predicate", "classifierreportpredicate")),
+		ClassifierReportPredicate(mgr.GetLogger().WithValues("predicate", "classifierreportpredicate")),
 	); err != nil {
 		return err
 	}
@@ -282,7 +282,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// all Classifier with at least one conflict needs to be reconciled
 	if err := c.Watch(&source.Kind{Type: &libsveltosv1alpha1.Classifier{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifier),
-		ClassifierPredicate(klogr.New().WithValues("predicate", "classifiepredicate")),
+		ClassifierPredicate(mgr.GetLogger().WithValues("predicate", "classifiepredicate")),
 	); err != nil {
 		return err
 	}
@@ -291,7 +291,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// one or more ClusterProfiles need to be reconciled.
 	if err := c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForCluster),
-		ClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
+		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
 	); err != nil {
 		return err
 	}
@@ -304,7 +304,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// one or more ClusterProfiles need to be reconciled.
 	return c.Watch(&source.Kind{Type: &clusterv1.Machine{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForMachine),
-		MachinePredicates(klogr.New().WithValues("predicate", "machinepredicate")),
+		MachinePredicates(mgr.GetLogger().WithValues("predicate", "machinepredicate")),
 	)
 }
 
@@ -496,9 +496,12 @@ func (r *ClassifierReconciler) updateLabelsOnMatchingClusters(ctx context.Contex
 			return err
 		}
 
-		err = r.updateLabelsOnCluster(ctx, classifierScope, cluster, logger)
+		l := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
+		l.V(logs.LogDebug).Info("update labels on cluster")
+		err = r.updateLabelsOnCluster(ctx, classifierScope, cluster, l)
 		if err != nil {
-			logger.V(logs.LogDebug).Error(err, "failed to update labels on cluster")
+			l.V(logs.LogDebug).Error(err, "failed to update labels on cluster")
+			return err
 		}
 	}
 
@@ -518,8 +521,11 @@ func (r *ClassifierReconciler) updateLabelsOnCluster(ctx context.Context,
 		label := classifierScope.Classifier.Spec.ClassifierLabels[i]
 		if manager.CanManageLabel(classifierScope.Classifier, cluster.Namespace, cluster.Name, label.Key) {
 			cluster.Labels[label.Key] = label.Value
+		} else {
+			l := logger.WithValues("label", label.Key)
+			l.V(logs.LogInfo).Info("cannot manage label")
+			// Issues is already reported
 		}
-		// Issues is already reported
 	}
 
 	return r.Update(ctx, cluster)

@@ -17,12 +17,17 @@ limitations under the License.
 package fv_test
 
 import (
+	"context"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/retry"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -81,4 +86,69 @@ func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 		return nil, err
 	}
 	return client.New(restConfig, client.Options{Scheme: scheme})
+}
+
+func verifyClassifierReport(classifierName string, isMatch bool) {
+	Byf("Verifing ClassifierReport for Classifier %s", classifierName)
+	Eventually(func() bool {
+		classifierReportName := getClassifierReportName(classifierName, kindWorkloadCluster.Name)
+		currentClassifierReport := &libsveltosv1alpha1.ClassifierReport{}
+		err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: classifierReportName},
+			currentClassifierReport)
+		return err == nil && currentClassifierReport.Spec.Match == isMatch
+	}, timeout, pollingInterval).Should(BeTrue())
+}
+
+func verifyClusterLabels(classifier *libsveltosv1alpha1.Classifier) {
+	Byf("Verifying Cluster labels are updated")
+	Eventually(func() bool {
+		currentCuster := &clusterv1.Cluster{}
+		err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
+			currentCuster)
+		if err != nil {
+			return false
+		}
+		if currentCuster.Labels == nil {
+			return false
+		}
+		for i := range classifier.Spec.ClassifierLabels {
+			cLabel := classifier.Spec.ClassifierLabels[i]
+			v, ok := currentCuster.Labels[cLabel.Key]
+			if !ok {
+				return false
+			}
+			if v != cLabel.Value {
+				return false
+			}
+		}
+		return true
+	}, timeout, pollingInterval).Should(BeTrue())
+}
+
+func getClassifierReportName(classifierName, clusterName string) string {
+	return fmt.Sprintf("%s--%s", classifierName, clusterName)
+}
+
+func removeLabels(classifier *libsveltosv1alpha1.Classifier) {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentCluster := &clusterv1.Cluster{}
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
+			currentCluster)).To(Succeed())
+
+		currentLabels := currentCluster.Labels
+		if currentLabels == nil {
+			return nil
+		}
+
+		for i := range classifier.Spec.ClassifierLabels {
+			cLabel := classifier.Spec.ClassifierLabels[i]
+			delete(currentCluster.Labels, cLabel.Key)
+		}
+
+		return k8sClient.Update(context.TODO(), currentCluster)
+	})
+	Expect(err).To(BeNil())
 }
