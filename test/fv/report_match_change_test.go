@@ -73,7 +73,7 @@ var _ = Describe("Classifier: update cluster labels", func() {
 		Byf("Verifying cluster labels are not set by Classifier %s", classifier.Name)
 		Consistently(func() bool {
 			currentCuster := &clusterv1.Cluster{}
-			err := k8sClient.Get(context.TODO(),
+			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
 				currentCuster)
 			if err != nil {
