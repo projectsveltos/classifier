@@ -1,4 +1,12 @@
+[![CI](https://github.com/projectsveltos/classifier/actions/workflows/main.yaml/badge.svg)](https://github.com/projectsveltos/classifier/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/projectsveltos/classifier)](https://goreportcard.com/report/github.com/projectsveltos/classifier)
+[![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q)
+[![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)
+
 # classifier
+
+<img src="https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.0/logos/logo.png" width="200">
+
 Sveltos Classifier can be used to dynamically classify a cluster based on its run time configuration(Kubernetes version, deployed resources and more).
 
 Classifier currently supports following classification criterias:
@@ -115,20 +123,20 @@ Assumptions are:
 Apply needed CRDs:
 1. Classifier CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.0/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
 ```
 
 2. ClassifierReport CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.0/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
 ```
 
 3. DebuggingConfiguration CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.0/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
 ```
 
 Finally install classifier controller
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/classifier/dev/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.0/manifest/manifest.yaml
 ```
