@@ -293,7 +293,7 @@ spec:
         - --v=5
         command:
         - /manager
-        image: gianlucam76/classifier-agent-manager-amd64:dev
+        image: gianlucam76/classifier-agent-manager-amd64:v0.2.0
         livenessProbe:
           httpGet:
             path: /healthz
