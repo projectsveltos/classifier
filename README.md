@@ -33,6 +33,10 @@ spec:
 
 When a cluster is a match for a Classifier instances, all classifierLabels will be automatically added to the Cluster instance.
 
+## Sveltos Classifier in action
+
+![Sveltos Classifier in action](https://github.com/projectsveltos/demos/blob/main/classifier/classifier.gif)
+
 ## A simple use case: upgrade helm charts automatically when Kubernetes cluster is upgraded
 Suppose you are managing several Kubernetes clusters with different versions.
 And you want to deploy:
