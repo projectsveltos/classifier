@@ -7,13 +7,13 @@
 
 <img src="https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.0/logos/logo.png" width="200">
 
-Sveltos Classifier can be used to dynamically classify a cluster based on its run time configuration(Kubernetes version, deployed resources and more).
+Sveltos Classifier is an optional componet of the Sveltos project and it is used to dynamically classify a cluster based on its run time configuration (Kubernetes version, deployed resources and more).
 
-Classifier currently supports following classification criterias:
+Classifier currently supports the following classification criterias:
 1. Kubernetes version
 2. Kubernetes resources
 
-For instance, posting this Classifier instance will have match any Cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.25.0"
+For instance, this Classifier instance will match any cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.25.0"
 
 ```
 apiVersion: lib.projectsveltos.io/v1alpha1
@@ -112,7 +112,7 @@ spec:
     version: 1.25.0
 ```
 
-Because of above configuration:
+With the above configuration:
 1. Any cluster with a Kubernetes version v1.24.x will get label _gatekeeper:v3.9_ added and because of that Gatekeeper 3.9.0 helm chart will be deployed;
 2. Any cluster with a Kubernetes version v1.25.x will get label _gatekeeper:v3.10_ added and because of that Gatekeeper 3.10.0 helm chart will be deployed;
 3. As soon a cluster is upgraded from Kubernetes version v1.24.x to v1.25.x, Gatekeeper helm chart will be automatically upgraded from 3.9.0 to 3.10.0
