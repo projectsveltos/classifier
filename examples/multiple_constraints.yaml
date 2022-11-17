@@ -1,0 +1,28 @@
+# Following Classifier will match any Cluster whose
+# Kubernetes version is >= v1.24.0 and < v1.25.0
+apiVersion: lib.projectsveltos.io/v1alpha1
+kind: Classifier
+metadata:
+  name: multiple-constraints
+spec:
+  classifierLabels:
+  - key: constraints
+    value: multiple
+  kubernetesVersionConstraints:
+  - comparison: GreaterThanOrEqualTo
+    version: 1.25.0
+  deployedResourceConstraints:
+  - group: ""
+    version: v1
+    kind: Namespace
+    minCount: 10
+    maxCount: 20
+    labelFilters:
+    - key: dep
+      value: department
+      operation: Equal
+  - group: ""
+    version: v1
+    kind: Service
+    minCount: 10
+    maxCount: 20
