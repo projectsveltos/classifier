@@ -1,0 +1,16 @@
+# This Classifier will match any Cluster with
+# number of Namespaces >=10 and <=20
+apiVersion: lib.projectsveltos.io/v1alpha1
+kind: Classifier
+metadata:
+  name: large-ns
+spec:
+  classifierLabels:
+  - key: env
+    value: large
+  deployedResourceConstraints:
+  - group: ""
+    version: v1
+    kind: Namespace
+    minCount: 10
+    maxCount: 20

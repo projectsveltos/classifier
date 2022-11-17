@@ -13,7 +13,7 @@ Classifier currently supports following classification criterias:
 1. Kubernetes version
 2. Kubernetes resources
 
-For instance, posting this Classifier instance will have match any Cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.25.0"
+For instance, posting this Classifier instance will match any Cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.25.0"
 
 ```
 apiVersion: lib.projectsveltos.io/v1alpha1
@@ -32,6 +32,8 @@ spec:
 ```
 
 When a cluster is a match for a Classifier instances, all classifierLabels will be automatically added to the Cluster instance.
+
+Refer to [examples](./examples/) for more complex examples.
 
 ## Sveltos Classifier in action
 
