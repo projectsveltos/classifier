@@ -5,15 +5,16 @@
 
 # classifier
 
-<img src="https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.0/logos/logo.png" width="200">
+<img src="https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.1/logos/logo.png" width="200">
 
-Sveltos Classifier can be used to dynamically classify a cluster based on its run time configuration(Kubernetes version, deployed resources and more).
+Sveltos Classifier is an optional componet of the Sveltos project and it is used to dynamically classify a cluster based on its runtime configuration (Kubernetes version, deployed resources and more).
 
-Classifier currently supports following classification criterias:
+Classifier currently supports the following classification criterias:
 1. Kubernetes version
 2. Kubernetes resources
 
-For instance, posting this Classifier instance will have match any Cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.25.0"
+
+For instance, this Classifier instance will match any cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.25.0"
 
 ```
 apiVersion: lib.projectsveltos.io/v1alpha1
@@ -32,6 +33,12 @@ spec:
 ```
 
 When a cluster is a match for a Classifier instances, all classifierLabels will be automatically added to the Cluster instance.
+
+Refer to [examples](./examples/) for more complex examples.
+
+## Sveltos Classifier in action
+
+![Sveltos Classifier in action](https://github.com/projectsveltos/demos/blob/main/classifier/classifier.gif)
 
 ## A simple use case: upgrade helm charts automatically when Kubernetes cluster is upgraded
 Suppose you are managing several Kubernetes clusters with different versions.
@@ -108,7 +115,7 @@ spec:
     version: 1.25.0
 ```
 
-Because of above configuration:
+With the above configuration:
 1. Any cluster with a Kubernetes version v1.24.x will get label _gatekeeper:v3.9_ added and because of that Gatekeeper 3.9.0 helm chart will be deployed;
 2. Any cluster with a Kubernetes version v1.25.x will get label _gatekeeper:v3.10_ added and because of that Gatekeeper 3.10.0 helm chart will be deployed;
 3. As soon a cluster is upgraded from Kubernetes version v1.24.x to v1.25.x, Gatekeeper helm chart will be automatically upgraded from 3.9.0 to 3.10.0
@@ -123,20 +130,20 @@ Assumptions are:
 Apply needed CRDs:
 1. Classifier CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.0/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
 ```
 
 2. ClassifierReport CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.0/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
 ```
 
 3. DebuggingConfiguration CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.0/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
 ```
 
 Finally install classifier controller
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.0/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.1/manifest/manifest.yaml
 ```
