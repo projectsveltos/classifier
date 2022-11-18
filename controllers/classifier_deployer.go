@@ -531,7 +531,7 @@ func deployClassifierCRD(ctx context.Context, remoteRestConfig *rest.Config,
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, classifierCRD)
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, classifierCRD.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -560,7 +560,7 @@ func deployClassifierReportCRD(ctx context.Context, remoteRestConfig *rest.Confi
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, classifierReportCRD)
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, classifierReportCRD.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -610,7 +610,7 @@ func deployClassifierAgent(ctx context.Context, remoteRestConfig *rest.Config,
 			return err
 		}
 
-		dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, policy)
+		dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 			return err

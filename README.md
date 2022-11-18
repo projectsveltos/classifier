@@ -5,7 +5,7 @@
 
 # classifier
 
-<img src="https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.0/logos/logo.png" width="200">
+<img src="https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.1/logos/logo.png" width="200">
 
 Sveltos Classifier is an optional componet of the Sveltos project and it is used to dynamically classify a cluster based on its runtime configuration (Kubernetes version, deployed resources and more).
 
@@ -130,20 +130,20 @@ Assumptions are:
 Apply needed CRDs:
 1. Classifier CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.0/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
 ```
 
 2. ClassifierReport CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.0/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
 ```
 
 3. DebuggingConfiguration CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.0/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
 ```
 
 Finally install classifier controller
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.0/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.1/manifest/manifest.yaml
 ```
