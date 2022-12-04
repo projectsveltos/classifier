@@ -141,7 +141,7 @@ var _ = Describe("Classifier Deployer", func() {
 		// Just verify result is success (testEnv is used to simulate both management and workload cluster and because
 		// classifier is expected in the management cluster, above line is required
 		Expect(controllers.DeployClassifierInCluster(context.TODO(), testEnv.Client, cluster.Namespace, cluster.Name,
-			classifier.Name, libsveltosv1alpha1.FeatureClassifier, klogr.New())).To(Succeed())
+			classifier.Name, libsveltosv1alpha1.FeatureClassifier, deployer.Options{}, klogr.New())).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -162,7 +162,7 @@ var _ = Describe("Classifier Deployer", func() {
 		cluster := prepareCluster()
 
 		f := controllers.GetHandlersForFeature(libsveltosv1alpha1.FeatureClassifier)
-		clusterInfo, err := controllers.ProcessClassifier(classifierReconciler, context.TODO(), classifierScope,
+		clusterInfo, err := controllers.ProcessClassifier(classifierReconciler, context.TODO(), classifierScope, "",
 			cluster, f, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(clusterInfo).ToNot(BeNil())
@@ -210,7 +210,7 @@ var _ = Describe("Classifier Deployer", func() {
 		classifierScope := getClassifierScope(testEnv.Client, klogr.New(), classifier)
 
 		f := controllers.GetHandlersForFeature(libsveltosv1alpha1.FeatureClassifier)
-		clusterInfo, err := controllers.ProcessClassifier(classifierReconciler, context.TODO(), classifierScope,
+		clusterInfo, err := controllers.ProcessClassifier(classifierReconciler, context.TODO(), classifierScope, "",
 			cluster, f, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(clusterInfo).ToNot(BeNil())
@@ -293,7 +293,7 @@ var _ = Describe("Classifier Deployer", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		err := controllers.UndeployClassifierFromCluster(context.TODO(), testEnv, cluster.Namespace,
-			cluster.Name, classifier.Name, libsveltosv1alpha1.FeatureClassifier, klogr.New())
+			cluster.Name, classifier.Name, libsveltosv1alpha1.FeatureClassifier, deployer.Options{}, klogr.New())
 		Expect(err).To(BeNil())
 
 		// Eventual loop so testEnv Cache is synced
@@ -350,7 +350,8 @@ var _ = Describe("Classifier Deployer", func() {
 	})
 
 	It("deployClassifierAgent deploys classifier agent", func() {
-		Expect(controllers.DeployClassifierAgent(ctx, testEnv.Config, klogr.New())).To(Succeed())
+		Expect(controllers.DeployClassifierAgent(ctx, testEnv.Config,
+			randomString(), randomString(), "do-not-send-reports", klogr.New())).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -359,6 +360,100 @@ var _ = Describe("Classifier Deployer", func() {
 				types.NamespacedName{Namespace: "projectsveltos", Name: "classifier-agent-manager"},
 				currentClassifierAgent)
 		}, timeout, pollingInterval).Should(BeNil())
+	})
+
+	It("createAccessRequest creates AccessRequest instance", func() {
+		classifier := getClassifierInstance(randomString())
+
+		clusterNamespace := randomString()
+		clusterName := randomString()
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterNamespace,
+			},
+		}
+
+		initObjects := []client.Object{classifier, ns}
+
+		options := deployer.Options{
+			HandlerOptions: map[string]string{controllers.Controlplaneendpoint: "http://192.168.10.1:443"},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		Expect(controllers.CreateAccessRequest(ctx, c, clusterNamespace, clusterName, options)).To(Succeed())
+
+		accessRequest := &libsveltosv1alpha1.AccessRequest{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterNamespace, Name: clusterName},
+			accessRequest)).To(Succeed())
+	})
+
+	It("getKubeconfigFromAccessRequest returns Kubeconfig contained in the AccessRequest Secret", func() {
+		classifier := getClassifierInstance(randomString())
+
+		clusterNamespace := randomString()
+		clusterName := randomString()
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterNamespace,
+			},
+		}
+
+		kubeconfig := []byte(randomString())
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+			Data: map[string][]byte{
+				"kubeconfig": kubeconfig,
+			},
+		}
+
+		accessRequest := libsveltosv1alpha1.AccessRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterName,
+				Namespace: clusterNamespace,
+			},
+			Status: libsveltosv1alpha1.AccessRequestStatus{
+				SecretRef: &corev1.ObjectReference{
+					Namespace: secret.Namespace,
+					Name:      secret.Name,
+				},
+			},
+		}
+
+		initObjects := []client.Object{classifier, secret, ns, &accessRequest}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		currentKubeconfig, err := controllers.GetKubeconfigFromAccessRequest(context.TODO(), c,
+			clusterNamespace, clusterName, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(currentKubeconfig).ToNot(BeNil())
+		Expect(reflect.DeepEqual(currentKubeconfig, kubeconfig)).To(BeTrue())
+	})
+
+	It("updateSecretWithAccessManagementKubeconfig creates a secret containing kubeconfig to access management cluster", func() {
+		classifier := getClassifierInstance(randomString())
+		Expect(testEnv.Create(context.TODO(), classifier)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
+
+		kubeconfig := []byte(randomString())
+
+		cluster := prepareCluster()
+
+		Expect(controllers.UpdateSecretWithAccessManagementKubeconfig(context.TODO(), testEnv.Client, cluster.Namespace, cluster.Name,
+			classifier.Name, kubeconfig, klogr.New())).To(BeNil())
+
+		Eventually(func() bool {
+			secret := &corev1.Secret{}
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: libsveltosv1alpha1.ClassifierSecretNamespace, Name: libsveltosv1alpha1.ClassifierSecretName},
+				secret)
+			return err == nil
+		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })
 

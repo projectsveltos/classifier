@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/gdexlab/go-render/render"
@@ -80,7 +81,11 @@ func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierS
 	clusterInfo := make([]libsveltosv1alpha1.ClusterInfo, 0)
 	for i := range clusters {
 		c := clusters[i]
-		cInfo, err := r.processClassifier(ctx, classifierScope, c, f, logger)
+		if !c.DeletionTimestamp.IsZero() {
+			logger.V(logs.LogDebug).Info("Cluster is being deleted")
+			continue
+		}
+		cInfo, err := r.processClassifier(ctx, classifierScope, r.ControlPlaneEndpoint, c, f, logger)
 		if err != nil {
 			errorSeen = err
 		}
@@ -218,24 +223,150 @@ func getClassifierAndCAPIClusterClient(ctx context.Context, clusterNamespace, cl
 	return classifier, clusterClient, nil
 }
 
-func deployClassifierInCluster(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName, applicant, featureID string,
+func createAccessRequest(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string, options deployer.Options) error {
+	// Currently there is one AccessRequest per cluster for all classifier-agents
+	// deployed in such cluster
+
+	missingControlPlaneMessage := "controlplane endpoint is missing"
+	if options.HandlerOptions == nil {
+		return fmt.Errorf("%s", missingControlPlaneMessage)
+	}
+	cpEndpoint, ok := options.HandlerOptions[controlplaneendpoint]
+	if !ok {
+		return fmt.Errorf("%s", missingControlPlaneMessage)
+	}
+
+	// the format of this is already validated in main.
+	// Format is ^https://[0-9a-zA-Z][0-9a-zA-Z-.]+[0-9a-zA-Z]:\d+$`
+	info := strings.Split(cpEndpoint, ":")
+	port, _ := strconv.ParseInt(info[2], 10, 32)
+
+	accessRequest := &libsveltosv1alpha1.AccessRequest{}
+	err := c.Get(ctx,
+		types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, accessRequest)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			accessRequest.Namespace = clusterNamespace
+			accessRequest.Name = clusterName
+			accessRequest.Labels = map[string]string{
+				accessRequestClassifierLabel: "ok",
+			}
+			accessRequest.Spec = libsveltosv1alpha1.AccessRequestSpec{
+				Namespace: clusterNamespace,
+				Name:      clusterName,
+				Type:      libsveltosv1alpha1.ClassifierAgentRequest,
+				ControlPlaneEndpoint: clusterv1.APIEndpoint{
+					Host: fmt.Sprintf("%s:%s", info[0], info[1]),
+					Port: int32(port),
+				},
+			}
+			return c.Create(ctx, accessRequest)
+		}
+		return err
+	}
+
+	return nil
+}
+
+// getKubeconfigFromAccessRequest gets the Kubeconfig from AccessRequest
+func getKubeconfigFromAccessRequest(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string, logger logr.Logger) ([]byte, error) {
+
+	accessRequest := &libsveltosv1alpha1.AccessRequest{}
+	err := c.Get(ctx,
+		types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, accessRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	if accessRequest.Status.SecretRef == nil {
+		logger.V(logs.LogDebug).Info("accessRequest.Status.SecretRef still not set")
+		return nil, nil
+	}
+
+	secret := &corev1.Secret{}
+	key := client.ObjectKey{
+		Namespace: accessRequest.Status.SecretRef.Namespace,
+		Name:      accessRequest.Status.SecretRef.Name,
+	}
+
+	if err := c.Get(ctx, key, secret); err != nil {
+		return nil, err
+	}
+
+	for _, contents := range secret.Data {
+		return contents, nil
+	}
+
+	logger.V(logs.LogDebug).Info("secret does not contain kubeconfig yet")
+	return nil, nil
+}
+
+func createSecretNamespace(ctx context.Context, c client.Client) error {
+	ns := &corev1.Namespace{}
+	err := c.Get(ctx, types.NamespacedName{Name: libsveltosv1alpha1.ClassifierSecretNamespace}, ns)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			ns.Name = libsveltosv1alpha1.ClassifierSecretNamespace
+			return c.Create(ctx, ns)
+		}
+		return err
+	}
+	return nil
+}
+
+// updateSecretWithAccessManagementKubeconfig creates (or updates) secret in the managed cluster
+// containing the Kubeconfig for classifier-agent to access management cluster
+func updateSecretWithAccessManagementKubeconfig(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName, applicant string, kubeconfig []byte,
 	logger logr.Logger) error {
 
-	logger = logger.WithValues("classifier", applicant)
-	logger.V(logs.LogDebug).Info("deploy classifier CRD and instance")
+	// Get Classifier that requested this
+	_, remoteClient, err := getClassifierAndCAPIClusterClient(ctx, clusterNamespace, clusterName, applicant, c, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get classifier and CAPI cluster client")
+		return err
+	}
+
+	err = createSecretNamespace(ctx, remoteClient)
+	if err != nil {
+		return err
+	}
+
+	secret := &corev1.Secret{}
+	key := client.ObjectKey{
+		Namespace: libsveltosv1alpha1.ClassifierSecretNamespace,
+		Name:      libsveltosv1alpha1.ClassifierSecretName,
+	}
+
+	dataKey := "kubeconfig"
+	err = remoteClient.Get(ctx, key, secret)
+	if err != nil {
+		secret.Namespace = libsveltosv1alpha1.ClassifierSecretNamespace
+		secret.Name = libsveltosv1alpha1.ClassifierSecretName
+		secret.Data = map[string][]byte{
+			dataKey: kubeconfig,
+		}
+		return remoteClient.Create(ctx, secret)
+	}
+
+	currentKubeconfig, ok := secret.Data[dataKey]
+	if ok && reflect.DeepEqual(currentKubeconfig, kubeconfig) {
+		return nil
+	}
+
+	secret.Data[dataKey] = kubeconfig
+	return remoteClient.Update(ctx, secret)
+}
+
+func deployCRDs(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string, logger logr.Logger) error {
 
 	// Deploy Classifier CRD and the Classifier instance
 	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get CAPI cluster rest config")
-		return err
-	}
-
-	// Get Classifier that requested this
-	classifier, remoteClient, err := getClassifierAndCAPIClusterClient(ctx, clusterNamespace, clusterName, applicant, c, logger)
-	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to get classifier and CAPI cluster client")
 		return err
 	}
 
@@ -253,22 +384,108 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
-	logger.V(logs.LogDebug).Info("Deploying classifier agent")
-	// Deploy ClassifierAgent
-	err = deployClassifierAgent(ctx, remoteRestConfig, logger)
+	return nil
+}
+
+// deployClassifierWithKubeconfigInCluster does following things in order:
+// - create (if one does not exist already) AccessRequest
+// - get Kubeconfig to access management cluster from AccessRequest
+// - create/update secret in the managed cluster with kubeconfig to access management cluster
+// - deploy classifier-agent
+func deployClassifierWithKubeconfigInCluster(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName, applicant, featureID string, options deployer.Options,
+	logger logr.Logger) error {
+
+	logger = logger.WithValues("classifier", applicant)
+	logger.V(logs.LogDebug).Info("deploy classifier: send reports mode")
+
+	if err := createAccessRequest(ctx, c, clusterNamespace, clusterName, options); err != nil {
+		return err
+	}
+
+	kubeconfig, err := getKubeconfigFromAccessRequest(ctx, c, clusterNamespace, clusterName, logger)
 	if err != nil {
 		return err
 	}
 
-	toDeployClassifier := &libsveltosv1alpha1.Classifier{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: classifier.Name,
-		},
-		Spec: classifier.Spec,
+	if kubeconfig == nil {
+		return fmt.Errorf("accessRequest kubeconfig not present yet")
 	}
-	logger.V(logs.LogDebug).Info("deploy classifier instance")
+
+	err = updateSecretWithAccessManagementKubeconfig(ctx, c, clusterNamespace, clusterName, applicant, kubeconfig, logger)
+	if err != nil {
+		return err
+	}
+
+	err = deployCRDs(ctx, c, clusterNamespace, clusterName, logger)
+	if err != nil {
+		return err
+	}
+
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get CAPI cluster rest config")
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("Deploying classifier agent")
+	// Deploy ClassifierAgent
+	err = deployClassifierAgent(ctx, remoteRestConfig, clusterNamespace, clusterName, "send-reports", logger)
+	if err != nil {
+		return err
+	}
+
+	// Get Classifier that requested this
+	classifier, remoteClient, err := getClassifierAndCAPIClusterClient(ctx, clusterNamespace, clusterName, applicant, c, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get classifier and CAPI cluster client")
+		return err
+	}
+
 	// Deploy Classifier instance
-	err = deployClassifierInstance(ctx, remoteClient, toDeployClassifier, logger)
+	err = deployClassifierInstance(ctx, remoteClient, classifier, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("successuflly deployed classifier CRD and instance")
+	return nil
+}
+
+func deployClassifierInCluster(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName, applicant, featureID string, options deployer.Options,
+	logger logr.Logger) error {
+
+	logger = logger.WithValues("classifier", applicant)
+	logger.V(logs.LogDebug).Info("deploy classifier: do not send reports mode")
+
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get CAPI cluster rest config")
+		return err
+	}
+
+	err = deployCRDs(ctx, c, clusterNamespace, clusterName, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("Deploying classifier agent")
+	// Deploy ClassifierAgent
+	err = deployClassifierAgent(ctx, remoteRestConfig, clusterNamespace, clusterName, "do-not-send-reports", logger)
+	if err != nil {
+		return err
+	}
+
+	// Get Classifier that requested this
+	classifier, remoteClient, err := getClassifierAndCAPIClusterClient(ctx, clusterNamespace, clusterName, applicant, c, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get classifier and CAPI cluster client")
+		return err
+	}
+
+	// Deploy Classifier instance
+	err = deployClassifierInstance(ctx, remoteClient, classifier, logger)
 	if err != nil {
 		return err
 	}
@@ -279,7 +496,7 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 
 // undeployClassifierFromCluster deletes Classifier instance from CAPI cluster
 func undeployClassifierFromCluster(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName, applicant, featureID string,
+	clusterNamespace, clusterName, applicant, featureID string, options deployer.Options,
 	logger logr.Logger) error {
 
 	logger = logger.WithValues("classifier", applicant)
@@ -412,42 +629,80 @@ func (r *ClassifierReconciler) removeClassifier(ctx context.Context, classifierS
 
 	logger.V(logs.LogDebug).Info("queueing request to un-deploy")
 	if err := r.Deployer.Deploy(ctx, cluster.Namespace, cluster.Name,
-		classifier.Name, f.id, true, undeployClassifierFromCluster, programDuration); err != nil {
+		classifier.Name, f.id, true, undeployClassifierFromCluster, programDuration, deployer.Options{}); err != nil {
 		return err
 	}
 
 	return fmt.Errorf("cleanup request is queued")
 }
 
-// processClassifier detect whether it is needed to deploy Classifier in current passed cluster.
-func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifierScope *scope.ClassifierScope,
-	cluster *clusterv1.Cluster, f feature, logger logr.Logger,
-) (*libsveltosv1alpha1.ClusterInfo, error) {
-
-	// Get Classifier Spec hash (at this very precise moment)
-	currentHash := f.currentHash(classifierScope.Classifier)
-
-	classifier := classifierScope.Classifier
+// canProceed returns true if cluster is ready to be programmed and it is not paused.
+func (r *ClassifierReconciler) canProceed(ctx context.Context, classifierScope *scope.ClassifierScope,
+	cluster *clusterv1.Cluster, logger logr.Logger) (bool, error) {
 
 	logger = logger.WithValues("clusterNamespace", cluster.Namespace, "clusterName", cluster.Name)
-	if annotations.IsPaused(cluster, classifier) {
+	if annotations.IsPaused(cluster, classifierScope.Classifier) {
 		logger.V(logs.LogDebug).Info("Cluster is paused")
-		return nil, nil
+		return false, nil
 	}
 
 	ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, r.Client,
 		&corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name}, classifierScope.Logger)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
 
 	if !ready {
 		logger.V(logs.LogInfo).Info("Cluster is not ready yet")
-		return nil, nil
+		return false, nil
 	}
 
-	if !cluster.DeletionTimestamp.IsZero() {
-		logger.V(logs.LogDebug).Info("Cluster is being deleted")
+	return true, nil
+}
+
+// getCurrentHash gets current hash.
+// It considers Classifier and if mode is ClassifierReportMode == AgentSendReportsNoGateway also
+// the kubeconfig to access management cluster
+func (r *ClassifierReconciler) getCurrentHash(ctx context.Context, classifierScope *scope.ClassifierScope,
+	cpEndpoint string, cluster *clusterv1.Cluster, f feature, logger logr.Logger) ([]byte, error) {
+	// Get Classifier Spec hash (at this very precise moment)
+	currentHash := f.currentHash(classifierScope.Classifier)
+	var kubeconfig []byte
+	var err error
+	if r.ClassifierReportMode == AgentSendReportsNoGateway {
+		kubeconfig, err = getKubeconfigFromAccessRequest(ctx, r.Client, cluster.Namespace, cluster.Name, logger)
+		if err != nil && !apierrors.IsNotFound(err) {
+			return nil, err
+		}
+		if kubeconfig != nil {
+			h := sha256.New()
+			config := string(currentHash)
+			config += string(kubeconfig)
+			config += cpEndpoint
+			h.Write([]byte(config))
+			currentHash = h.Sum(nil)
+		}
+	}
+	return currentHash, nil
+}
+
+// processClassifier detect whether it is needed to deploy Classifier in current passed cluster.
+func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifierScope *scope.ClassifierScope,
+	cpEndpoint string, cluster *clusterv1.Cluster, f feature, logger logr.Logger,
+) (*libsveltosv1alpha1.ClusterInfo, error) {
+
+	// Get Classifier Spec hash (at this very precise moment)
+	currentHash, err := r.getCurrentHash(ctx, classifierScope, cpEndpoint, cluster, f, logger)
+	if err != nil {
+		return nil, err
+	}
+	classifier := classifierScope.Classifier
+
+	var proceed bool
+	proceed, err = r.canProceed(ctx, classifierScope, cluster, logger)
+	if err != nil {
+		return nil, err
+	} else if !proceed {
 		return nil, nil
 	}
 
@@ -471,7 +726,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 	var result deployer.Result
 
 	if isConfigSame {
-		logger.V(logs.LogInfo).Info("classifier hash has not changed")
+		logger.V(logs.LogInfo).Info("classifier and kubeconfig have has not changed")
 		result = r.Deployer.GetResult(ctx, cluster.Namespace, cluster.Name, classifier.Name, f.id, false)
 		status = r.convertResultStatus(result)
 	}
@@ -503,10 +758,18 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 		logger.V(logs.LogInfo).Info("no result is available. queue job and mark status as provisioning")
 		s := libsveltosv1alpha1.ClassifierStatusProvisioning
 		status = &s
+
+		options := deployer.Options{}
+		var handler deployer.RequestHandler
+		handler = deployClassifierInCluster
+		if r.ClassifierReportMode == AgentSendReportsNoGateway {
+			handler = deployClassifierWithKubeconfigInCluster
+			options.HandlerOptions = map[string]string{controlplaneendpoint: r.ControlPlaneEndpoint}
+		}
 		// Getting here means either Classifier failed to be deployed or Classifier has changed.
 		// Classifier must be (re)deployed.
 		if err := r.Deployer.Deploy(ctx, cluster.Namespace, cluster.Name,
-			classifier.Name, f.id, false, deployClassifierInCluster, programDuration); err != nil {
+			classifier.Name, f.id, false, handler, programDuration, options); err != nil {
 			return nil, err
 		}
 	}
@@ -581,12 +844,19 @@ func deployClassifierReportCRD(ctx context.Context, remoteRestConfig *rest.Confi
 func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 	classifier *libsveltosv1alpha1.Classifier, logger logr.Logger) error {
 
+	logger.V(logs.LogDebug).Info("deploy classifier instance")
 	currentClassifier := &libsveltosv1alpha1.Classifier{}
 	err := remoteClient.Get(ctx, types.NamespacedName{Name: classifier.Name}, currentClassifier)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.V(logsettings.LogDebug).Info("classifier instance not present. creating it.")
-			return remoteClient.Create(ctx, classifier)
+			toDeployClassifier := &libsveltosv1alpha1.Classifier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: classifier.Name,
+				},
+				Spec: classifier.Spec,
+			}
+			return remoteClient.Create(ctx, toDeployClassifier)
 		}
 		return err
 	}
@@ -597,9 +867,16 @@ func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 }
 
 func deployClassifierAgent(ctx context.Context, remoteRestConfig *rest.Config,
-	logger logr.Logger) error {
+	clusterNamespace, clusterName, mode string, logger logr.Logger) error {
 
 	agentYAML := string(agent.GetClassifierAgentYAML())
+
+	if mode != "do-not-send-reports" {
+		agentYAML = strings.ReplaceAll(agentYAML, "do-not-send-reports", "send-reports")
+	}
+
+	agentYAML = strings.ReplaceAll(agentYAML, "cluster-namespace=", fmt.Sprintf("cluster-namespace=%s", clusterNamespace))
+	agentYAML = strings.ReplaceAll(agentYAML, "cluster-name=", fmt.Sprintf("cluster-name=%s", clusterName))
 
 	const separator = "---"
 	elements := strings.Split(agentYAML, separator)

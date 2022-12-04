@@ -38,6 +38,33 @@ const (
 	classifierReportClusterLabel = "projectsveltos.io/cluster"
 )
 
+// removeAccessRequest removes AccessRequest generated for ClassifierAgent
+func removeAccessRequest(ctx context.Context, c client.Client, logger logr.Logger) error {
+	accessRequestList := &libsveltosv1alpha1.AccessRequestList{}
+
+	listOptions := []client.ListOption{
+		client.MatchingLabels{
+			accessRequestClassifierLabel: "ok",
+		},
+	}
+
+	err := c.List(ctx, accessRequestList, listOptions...)
+	if err != nil {
+		return err
+	}
+
+	for i := range accessRequestList.Items {
+		ar := &accessRequestList.Items[i]
+		err = c.Delete(ctx, ar)
+		if err != nil {
+			return err
+		}
+	}
+
+	logger.V(logs.LogDebug).Info("remove AccessRequest for ClassifierAgents")
+	return nil
+}
+
 // removeClassifierReports deletes all ClassifierReport corresponding to Classifier instance
 func removeClassifierReports(ctx context.Context, c client.Client, classifier *libsveltosv1alpha1.Classifier,
 	logger logr.Logger) error {
@@ -198,7 +225,7 @@ func updateClassifierReport(ctx context.Context, c client.Client, cluster *clust
 		return nil
 	}
 
-	classifierReportName := getClassifierReportName(classifierName, cluster.Name)
+	classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifierName, cluster.Name)
 
 	currentClassifierReport := &libsveltosv1alpha1.ClassifierReport{}
 	err = c.Get(ctx,
@@ -230,10 +257,6 @@ func updateClassifierReport(ctx context.Context, c client.Client, cluster *clust
 	currentClassifierReport.Labels[classifierReportClusterLabel] =
 		getClusterInfo(cluster.Namespace, cluster.Name)
 	return c.Update(ctx, currentClassifierReport)
-}
-
-func getClassifierReportName(classifierName, clusterName string) string {
-	return fmt.Sprintf("%s--%s", classifierName, clusterName)
 }
 
 func getClusterInfo(clusterNamespace, clusterName string) string {

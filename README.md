@@ -2,10 +2,11 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/projectsveltos/classifier)](https://goreportcard.com/report/github.com/projectsveltos/classifier)
 [![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q)
 [![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)
+[![Twitter Follow](https://img.shields.io/twitter/follow/projectsveltos?style=social)](https://twitter.com/projectsveltos)
 
 # classifier
 
-<img src="https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.1/logos/logo.png" width="200">
+<img src="https://raw.githubusercontent.com/projectsveltos/classifier/dev/logos/logo.png" width="200">
 
 Sveltos Classifier is an optional componet of the Sveltos project and it is used to dynamically classify a cluster based on its runtime configuration (Kubernetes version, deployed resources and more).
 

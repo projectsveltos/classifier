@@ -291,9 +291,12 @@ spec:
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
         - --v=5
+        - --cluster-namespace=
+        - --cluster-name=
+        - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: gianlucam76/classifier-agent-manager-amd64:v0.2.1
+        image: gianlucam76/classifier-agent-manager-amd64:dev
         livenessProbe:
           httpGet:
             path: /healthz

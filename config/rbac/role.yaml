@@ -75,6 +75,18 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - accessrequests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
   - classifierreports
   verbs:
   - create
