@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"os"
+	"regexp"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -33,25 +34,28 @@ import (
 	"github.com/projectsveltos/classifier/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
-	"github.com/projectsveltos/libsveltos/lib/logsettings"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	//+kubebuilder:scaffold:imports
 )
 
 var (
-	setupLog             = ctrl.Log.WithName("setup")
-	metricsAddr          string
-	enableLeaderElection bool
-	probeAddr            string
-	concurrentReconciles int
-	workers              int
-	reportMode           controllers.ReportMode
+	setupLog                              = ctrl.Log.WithName("setup")
+	metricsAddr                           string
+	enableLeaderElection                  bool
+	probeAddr                             string
+	concurrentReconciles                  int
+	workers                               int
+	reportMode                            controllers.ReportMode
+	tmpReportMode                         int
+	managementClusterControlPlaneEndpoint string
 )
 
 const (
-	defaultReconcilers = 10
-	defaultWorkers     = 10
-	defaulReportMode   = int(controllers.CollectFromManagementCluster)
+	defaultReconcilers  = 10
+	defaultWorkers      = 10
+	defaulReportMode    = int(controllers.CollectFromManagementCluster)
+	cpEndpointREPattern = `^https://[0-9a-zA-Z][0-9a-zA-Z-.]+[0-9a-zA-Z]:\d+$`
 )
 
 func main() {
@@ -66,6 +70,8 @@ func main() {
 	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
+
+	reportMode = controllers.ReportMode(tmpReportMode)
 
 	ctrl.SetLogger(klog.Background())
 
@@ -99,9 +105,17 @@ func main() {
 	d := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient(), workers)
 	controllers.RegisterFeatures(d, setupLog)
 
-	logsettings.RegisterForLogSettings(ctx,
+	logs.RegisterForLogSettings(ctx,
 		libsveltosv1alpha1.ComponentClassifier, ctrl.Log.WithName("log-setter"),
 		ctrl.GetConfigOrDie())
+
+	if managementClusterControlPlaneEndpoint != "" {
+		serverRegExp := regexp.MustCompile(cpEndpointREPattern)
+		if !serverRegExp.MatchString(managementClusterControlPlaneEndpoint) {
+			setupLog.WithValues("controlPlaneEndpoint", managementClusterControlPlaneEndpoint).Info("incorrect format")
+			os.Exit(1)
+		}
+	}
 
 	if err = (&controllers.ClassifierReconciler{
 		Client:               mgr.GetClient(),
@@ -111,6 +125,7 @@ func main() {
 		ClassifierMap:        make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
 		Deployer:             d,
 		ClassifierReportMode: reportMode,
+		ControlPlaneEndpoint: managementClusterControlPlaneEndpoint,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Classifier")
 		os.Exit(1)
@@ -134,13 +149,15 @@ func main() {
 }
 
 func initFlags(fs *pflag.FlagSet) {
-	var tmpReportMode int
-	fs.IntVar(
-		&tmpReportMode,
-		"reportMode",
+	fs.IntVar(&tmpReportMode,
+		"report-mode",
 		defaulReportMode,
 		"Indicates how ClassifierReport needs to be collected")
-	reportMode = controllers.ReportMode(tmpReportMode)
+
+	fs.StringVar(&managementClusterControlPlaneEndpoint,
+		"control-plane-endpoint",
+		"",
+		"The management cluster controlplane endpoint. Format <ip>:<port>.")
 
 	fs.StringVar(&metricsAddr,
 		"metrics-bind-address",
@@ -156,14 +173,12 @@ func initFlags(fs *pflag.FlagSet) {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 
-	fs.IntVar(
-		&workers,
+	fs.IntVar(&workers,
 		"worker-number",
 		defaultWorkers,
 		"Number of worker. Workers are used to deploy classifiers in CAPI clusters")
 
-	fs.IntVar(
-		&concurrentReconciles,
+	fs.IntVar(&concurrentReconciles,
 		"concurrent-reconciles",
 		defaultReconcilers,
 		"concurrent reconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 10")

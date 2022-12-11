@@ -19,6 +19,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 
 	"github.com/TwinProduction/go-color"
 	ginkgotypes "github.com/onsi/ginkgo/v2/types"
+	appsv1 "k8s.io/api/apps/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -36,6 +38,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectsveltos/classifier/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
@@ -92,6 +95,8 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(restConfig, client.Options{Scheme: scheme})
 	Expect(err).NotTo(HaveOccurred())
 
+	setClassifierMode(controllers.CollectFromManagementCluster)
+
 	clusterList := &clusterv1.ClusterList{}
 	listOptions := []client.ListOption{
 		client.MatchingLabels(
@@ -142,3 +147,69 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).To(BeNil())
 })
+
+func setClassifierMode(reportMode controllers.ReportMode) {
+	deplNamespace := "projectsveltos"
+	deplName := "classifier-manager"
+	depl := &appsv1.Deployment{}
+
+	var from, to string
+	if reportMode == controllers.CollectFromManagementCluster {
+		from = fmt.Sprintf("--report-mode=%d", controllers.AgentSendReportsNoGateway)
+		to = fmt.Sprintf("--report-mode=%d", controllers.CollectFromManagementCluster)
+	} else if reportMode == controllers.AgentSendReportsNoGateway {
+		from = fmt.Sprintf("--report-mode=%d", controllers.CollectFromManagementCluster)
+		to = fmt.Sprintf("--report-mode=%d", controllers.AgentSendReportsNoGateway)
+	} else {
+		// Never get here
+		Expect(1).To(BeZero())
+	}
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		Byf("Get classifier deployment")
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: deplNamespace, Name: deplName},
+			depl)).To(Succeed())
+
+		managerContainerName := "manager"
+		Byf("Setting Classifer report mode to collect classifierReports")
+		for i := range depl.Spec.Template.Spec.Containers {
+			if depl.Spec.Template.Spec.Containers[i].Name == managerContainerName {
+				for j := range depl.Spec.Template.Spec.Containers[i].Args {
+					depl.Spec.Template.Spec.Containers[i].Args[j] =
+						strings.ReplaceAll(depl.Spec.Template.Spec.Containers[i].Args[j],
+							from, to)
+				}
+			}
+		}
+
+		found := false
+		for i := range depl.Spec.Template.Spec.Containers {
+			if depl.Spec.Template.Spec.Containers[i].Name == managerContainerName {
+				for j := range depl.Spec.Template.Spec.Containers[i].Args {
+					if strings.Contains(depl.Spec.Template.Spec.Containers[i].Args[j],
+						"--control-plane-endpoint=https://sveltos-management-control-plane:6443") {
+
+						found = true
+					}
+				}
+				if !found {
+					depl.Spec.Template.Spec.Containers[i].Args = append(depl.Spec.Template.Spec.Containers[i].Args,
+						"--control-plane-endpoint=https://sveltos-management-control-plane:6443")
+				}
+			}
+		}
+
+		return k8sClient.Update(context.TODO(), depl)
+	})
+
+	Expect(err).To(BeNil())
+
+	Byf("Waiting for deployment replicas to be available")
+	Eventually(func() bool {
+		err := k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: deplNamespace, Name: deplName}, depl)
+		if err != nil {
+			return false
+		}
+		return depl.Status.AvailableReplicas == *depl.Spec.Replicas
+	}, timeout, pollingInterval).Should(BeTrue())
+}

@@ -125,6 +125,18 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - accessrequests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
   - classifierreports
   verbs:
   - create
@@ -305,9 +317,11 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
+        - --report-mode=0
+        - --v=5
         command:
         - /manager
-        image: gianlucam76/classifier-amd64:v0.2.1
+        image: gianlucam76/classifier-amd64:dev
         livenessProbe:
           httpGet:
             path: /healthz

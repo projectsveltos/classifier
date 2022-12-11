@@ -35,60 +35,64 @@ var _ = Describe("Classifier: update cluster labels", func() {
 	)
 
 	It("Cluster labels are updated", Label("FV"), func() {
-		clusterLabels := map[string]string{randomString(): randomString(), randomString(): randomString()}
-		classifier := getClassifier(namePrefix, clusterLabels)
-
-		Byf("Creating classifier instance %s in the management cluster", classifier.Name)
-		Expect(k8sClient.Create(context.TODO(), classifier)).To(Succeed())
-
-		Byf("Getting client to access the workload cluster")
-		workloadClient, err := getKindWorkloadClusterKubeconfig()
-		Expect(err).To(BeNil())
-		Expect(workloadClient).ToNot(BeNil())
-
-		Byf("Verifying Classifier CRD is installed in the workload cluster")
-		Eventually(func() error {
-			classifierCRD := &apiextensionsv1.CustomResourceDefinition{}
-			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: "classifiers.lib.projectsveltos.io"}, classifierCRD)
-		}, timeout, pollingInterval).Should(BeNil())
-
-		Byf("Verifying Classifier instance is deployed in the workload cluster")
-		Eventually(func() error {
-			currentClassifier := &libsveltosv1alpha1.Classifier{}
-			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: classifier.Name}, currentClassifier)
-		}, timeout, pollingInterval).Should(BeNil())
-
-		verifyClassifierReport(classifier.Name, true)
-
-		verifyClusterLabels(classifier)
-
-		Byf("Deleting classifier instance %s in the management cluster", classifier.Name)
-		currentClassifier := &libsveltosv1alpha1.Classifier{}
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
-		Expect(k8sClient.Delete(context.TODO(), currentClassifier)).To(Succeed())
-
-		Byf("Verifying Classifier instance is removed from the workload cluster")
-		Eventually(func() bool {
-			currentClassifier := &libsveltosv1alpha1.Classifier{}
-			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: classifier.Name}, currentClassifier)
-			return err != nil && apierrors.IsNotFound(err)
-		}, timeout, pollingInterval).Should(BeTrue())
-
-		Byf("Verifying Classifier instance is removed from the management cluster")
-		Eventually(func() bool {
-			currentClassifier := &libsveltosv1alpha1.Classifier{}
-			err = k8sClient.Get(context.TODO(),
-				types.NamespacedName{Name: classifier.Name}, currentClassifier)
-			return err != nil && apierrors.IsNotFound(err)
-		}, timeout, pollingInterval).Should(BeTrue())
-
-		Byf("Verifying Cluster labels are not updated because of Classifier being deleted")
-		verifyClusterLabels(classifier)
-
-		removeLabels(classifier)
+		verifyFlow(namePrefix)
 	})
 })
+
+func verifyFlow(namePrefix string) {
+	clusterLabels := map[string]string{randomString(): randomString(), randomString(): randomString()}
+	classifier := getClassifier(namePrefix, clusterLabels)
+
+	Byf("Creating classifier instance %s in the management cluster", classifier.Name)
+	Expect(k8sClient.Create(context.TODO(), classifier)).To(Succeed())
+
+	Byf("Getting client to access the workload cluster")
+	workloadClient, err := getKindWorkloadClusterKubeconfig()
+	Expect(err).To(BeNil())
+	Expect(workloadClient).ToNot(BeNil())
+
+	Byf("Verifying Classifier CRD is installed in the workload cluster")
+	Eventually(func() error {
+		classifierCRD := &apiextensionsv1.CustomResourceDefinition{}
+		return workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: "classifiers.lib.projectsveltos.io"}, classifierCRD)
+	}, timeout, pollingInterval).Should(BeNil())
+
+	Byf("Verifying Classifier instance is deployed in the workload cluster")
+	Eventually(func() error {
+		currentClassifier := &libsveltosv1alpha1.Classifier{}
+		return workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: classifier.Name}, currentClassifier)
+	}, timeout, pollingInterval).Should(BeNil())
+
+	verifyClassifierReport(classifier.Name, true)
+
+	verifyClusterLabels(classifier)
+
+	Byf("Deleting classifier instance %s in the management cluster", classifier.Name)
+	currentClassifier := &libsveltosv1alpha1.Classifier{}
+	Expect(k8sClient.Get(context.TODO(),
+		types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
+	Expect(k8sClient.Delete(context.TODO(), currentClassifier)).To(Succeed())
+
+	Byf("Verifying Classifier instance is removed from the workload cluster")
+	Eventually(func() bool {
+		currentClassifier := &libsveltosv1alpha1.Classifier{}
+		err = workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: classifier.Name}, currentClassifier)
+		return err != nil && apierrors.IsNotFound(err)
+	}, timeout, pollingInterval).Should(BeTrue())
+
+	Byf("Verifying Classifier instance is removed from the management cluster")
+	Eventually(func() bool {
+		currentClassifier := &libsveltosv1alpha1.Classifier{}
+		err = k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: classifier.Name}, currentClassifier)
+		return err != nil && apierrors.IsNotFound(err)
+	}, timeout, pollingInterval).Should(BeTrue())
+
+	Byf("Verifying Cluster labels are not updated because of Classifier being deleted")
+	verifyClusterLabels(classifier)
+
+	removeLabels(classifier)
+}

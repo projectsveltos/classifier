@@ -127,7 +127,7 @@ func validateClassifierReports(classifierName string, cluster *clusterv1.Cluster
 	// Verify ClassifierReport is created
 	// Eventual loop so testEnv Cache is synced
 	Eventually(func() bool {
-		classifierReportName := controllers.GetClassifierReportName(classifierName, cluster.Name)
+		classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifierName, cluster.Name)
 		currentClassifierReport := &libsveltosv1alpha1.ClassifierReport{}
 		err := testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: classifierReportName}, currentClassifierReport)

@@ -300,6 +300,137 @@ var _ = Describe("Classifier Predicates: MachinePredicates", func() {
 	})
 })
 
+var _ = Describe("Classifier Predicates: SecretPredicates", func() {
+	var logger logr.Logger
+	var secret *corev1.Secret
+
+	BeforeEach(func() {
+		logger = klogr.New()
+		secret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: "predicates" + randomString(),
+			},
+		}
+	})
+
+	It("Create reprocesses when label is present", func() {
+		secretPredicate := controllers.SecretPredicates(logger)
+
+		secret.Labels = map[string]string{
+			libsveltosv1alpha1.AccessRequestLabelName: randomString(),
+		}
+
+		e := event.CreateEvent{
+			Object: secret,
+		}
+
+		result := secretPredicate.Create(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Create does not reprocess when label is not present", func() {
+		secretPredicate := controllers.SecretPredicates(logger)
+
+		e := event.CreateEvent{
+			Object: secret,
+		}
+
+		result := secretPredicate.Create(e)
+		Expect(result).To(BeFalse())
+	})
+
+	It("Delete does not reprocess ", func() {
+		secretPredicate := controllers.SecretPredicates(logger)
+
+		e := event.DeleteEvent{
+			Object: secret,
+		}
+
+		result := secretPredicate.Delete(e)
+		Expect(result).To(BeFalse())
+	})
+
+	It("Update reprocesses when Secret Data has changed", func() {
+		secretPredicate := controllers.SecretPredicates(logger)
+
+		secret.Data = map[string][]byte{
+			randomString(): []byte(randomString()),
+		}
+		secret.Labels = map[string]string{
+			libsveltosv1alpha1.AccessRequestLabelName: randomString(),
+		}
+
+		oldSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secret.Name,
+				Namespace: secret.Namespace,
+				Labels:    secret.Labels,
+			},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: secret,
+			ObjectOld: oldSecret,
+		}
+
+		result := secretPredicate.Update(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Update does not reprocess when Secret Data has not changed", func() {
+		secretPredicate := controllers.SecretPredicates(logger)
+
+		secret.Data = map[string][]byte{
+			randomString(): []byte(randomString()),
+		}
+		secret.Labels = map[string]string{
+			libsveltosv1alpha1.AccessRequestLabelName: randomString(),
+		}
+
+		oldSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secret.Name,
+				Namespace: secret.Namespace,
+				Labels:    secret.Labels,
+			},
+			Data: secret.Data,
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: secret,
+			ObjectOld: oldSecret,
+		}
+
+		result := secretPredicate.Update(e)
+		Expect(result).To(BeFalse())
+	})
+
+	It("Update does not reprocess when Secret has no label", func() {
+		secretPredicate := controllers.SecretPredicates(logger)
+
+		secret.Data = map[string][]byte{
+			randomString(): []byte(randomString()),
+		}
+
+		oldSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secret.Name,
+				Namespace: secret.Namespace,
+				Labels:    secret.Labels,
+			},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: secret,
+			ObjectOld: oldSecret,
+		}
+
+		result := secretPredicate.Update(e)
+		Expect(result).To(BeFalse())
+	})
+})
+
 var _ = Describe("Classifier Predicates: ClassifierReportPredicate", func() {
 	var logger logr.Logger
 	var report *libsveltosv1alpha1.ClassifierReport

@@ -427,6 +427,57 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		Expect(controllers.RemoveAllRegistrations(reconciler, context.TODO(), classifierScope, klogr.New())).To(Succeed())
 		Expect(manager.CanManageLabel(classifier, clusterNamespace, clusterName, label)).To(BeFalse())
 	})
+
+	It("classifyLabels divides labels in managed and unmanaged", func() {
+		clusterNamespace := randomString()
+		clusterName := randomString()
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterNamespace,
+				Name:      clusterName,
+			},
+		}
+
+		managedLabel := libsveltosv1alpha1.ClassifierLabel{Key: randomString(), Value: randomString()}
+		unManagedLabel := libsveltosv1alpha1.ClassifierLabel{Key: randomString(), Value: randomString()}
+
+		classifier.Spec.ClassifierLabels = []libsveltosv1alpha1.ClassifierLabel{
+			managedLabel, unManagedLabel}
+
+		// Create an otherClassifier conflicting with first classifier for unManagedLabel
+		otherClassifier := getClassifierInstance(randomString())
+		otherClassifier.Spec.ClassifierLabels = []libsveltosv1alpha1.ClassifierLabel{
+			unManagedLabel,
+		}
+
+		initObjects := []client.Object{
+			classifier, otherClassifier, cluster,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		manager, err := keymanager.GetKeyManagerInstance(ctx, c)
+		Expect(err).To(BeNil())
+		// Register in this order, so otherClassifier can manage "unManagedLabel"
+		// classifier can only manage "managedLabel" and has conflict for "unManagedLabel"
+		manager.RegisterClassifierForLabels(otherClassifier, clusterNamespace, clusterName)
+		manager.RegisterClassifierForLabels(classifier, clusterNamespace, clusterName)
+
+		reconciler := &controllers.ClassifierReconciler{
+			Client:        c,
+			Scheme:        scheme,
+			ClusterMap:    make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClassifierMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			Mux:           sync.Mutex{},
+		}
+
+		managed, unManaged, err := controllers.ClassifyLabels(reconciler, context.TODO(), classifier,
+			&corev1.ObjectReference{Namespace: clusterNamespace, Name: clusterName}, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(len(managed)).To(Equal(1))
+		Expect(len(unManaged)).To(Equal(1))
+		Expect(unManaged[0].Key).To(Equal(unManagedLabel.Key))
+	})
 })
 
 var _ = Describe("ClassifierReconciler: requeue methods", func() {

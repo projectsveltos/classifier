@@ -24,6 +24,10 @@ import (
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
+const (
+	accessRequestClassifierLabel = "projectsveltos.io/classifierrequest"
+)
+
 func InitScheme() (*runtime.Scheme, error) {
 	s := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(s); err != nil {
