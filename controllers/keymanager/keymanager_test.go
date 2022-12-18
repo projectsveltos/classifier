@@ -42,6 +42,7 @@ const (
 var _ = Describe("Chart manager", func() {
 	var classifier *libsveltosv1alpha1.Classifier
 	var cluster *clusterv1.Cluster
+	var sveltosCluster *libsveltosv1alpha1.SveltosCluster
 	var c client.Client
 	var scheme *runtime.Scheme
 
@@ -67,6 +68,13 @@ var _ = Describe("Chart manager", func() {
 			},
 		}
 
+		sveltosCluster = &libsveltosv1alpha1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      upstreamClusterNamePrefix + randomString(),
+			},
+		}
+
 		initObjects := []client.Object{
 			classifier,
 		}
@@ -76,7 +84,8 @@ var _ = Describe("Chart manager", func() {
 	})
 
 	AfterEach(func() {
-		removeSubscriptions(c, classifier, cluster)
+		removeSubscriptions(c, classifier, cluster.Namespace, cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
+		removeSubscriptions(c, classifier, sveltosCluster.Namespace, sveltosCluster.Name, libsveltosv1alpha1.ClusterTypeSveltos)
 	})
 
 	It("registerClusterSummaryForCharts registers classifier for all referenced helm charts",
@@ -84,13 +93,14 @@ var _ = Describe("Chart manager", func() {
 			manager, err := keymanager.GetKeyManagerInstance(context.TODO(), c)
 			Expect(err).To(BeNil())
 
-			manager.RegisterClassifierForLabels(classifier, cluster.Namespace, cluster.Name)
+			manager.RegisterClassifierForLabels(classifier, cluster.Namespace, cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
 
 			for i := range classifier.Spec.ClassifierLabels {
 				labelKey := &classifier.Spec.ClassifierLabels[i].Key
 				By(fmt.Sprintf("Verifying Classifier %s manages label (key) %s",
 					classifier.Name, *labelKey))
-				Expect(manager.CanManageLabel(classifier, cluster.Namespace, cluster.Name, *labelKey)).To(BeTrue())
+				Expect(manager.CanManageLabel(classifier, cluster.Namespace, cluster.Name,
+					*labelKey, libsveltosv1alpha1.ClusterTypeCapi)).To(BeTrue())
 			}
 		})
 
@@ -98,7 +108,8 @@ var _ = Describe("Chart manager", func() {
 		manager, err := keymanager.GetKeyManagerInstance(context.TODO(), c)
 		Expect(err).To(BeNil())
 
-		manager.RegisterClassifierForLabels(classifier, cluster.Namespace, cluster.Name)
+		clusterType := libsveltosv1alpha1.ClusterTypeCapi
+		manager.RegisterClassifierForLabels(classifier, cluster.Namespace, cluster.Name, clusterType)
 
 		tmpClassifier := &libsveltosv1alpha1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
@@ -107,14 +118,14 @@ var _ = Describe("Chart manager", func() {
 			Spec: classifier.Spec,
 		}
 
-		manager.RegisterClassifierForLabels(tmpClassifier, cluster.Namespace, cluster.Name)
-		defer removeSubscriptions(c, tmpClassifier, cluster)
+		manager.RegisterClassifierForLabels(tmpClassifier, cluster.Namespace, cluster.Name, clusterType)
+		defer removeSubscriptions(c, tmpClassifier, cluster.Namespace, cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
 
 		for i := range tmpClassifier.Spec.ClassifierLabels {
 			labelKey := &tmpClassifier.Spec.ClassifierLabels[i].Key
 			By(fmt.Sprintf("Verifying Classifier %s does not manage label (key) %s",
 				tmpClassifier.Name, *labelKey))
-			Expect(manager.CanManageLabel(tmpClassifier, cluster.Namespace, cluster.Name, *labelKey)).To(BeFalse())
+			Expect(manager.CanManageLabel(tmpClassifier, cluster.Namespace, cluster.Name, *labelKey, clusterType)).To(BeFalse())
 		}
 	})
 
@@ -122,25 +133,28 @@ var _ = Describe("Chart manager", func() {
 		manager, err := keymanager.GetKeyManagerInstance(context.TODO(), c)
 		Expect(err).To(BeNil())
 
-		manager.RegisterClassifierForLabels(classifier, cluster.Namespace, cluster.Name)
+		clusterType := libsveltosv1alpha1.ClusterTypeSveltos
+		manager.RegisterClassifierForLabels(classifier, sveltosCluster.Namespace, sveltosCluster.Name, clusterType)
 
 		oldLabels := make([]libsveltosv1alpha1.ClassifierLabel, 0)
 		for i := range classifier.Spec.ClassifierLabels {
 			labelKey := &classifier.Spec.ClassifierLabels[i].Key
 			By(fmt.Sprintf("Verifying Classifier %s manages label (key) %s",
 				classifier.Name, *labelKey))
-			Expect(manager.CanManageLabel(classifier, cluster.Namespace, cluster.Name, *labelKey)).To(BeTrue())
+			Expect(manager.CanManageLabel(classifier, sveltosCluster.Namespace, sveltosCluster.Name, *labelKey,
+				clusterType)).To(BeTrue())
 			oldLabels = append(oldLabels, classifier.Spec.ClassifierLabels[i])
 		}
 
 		classifier.Spec.ClassifierLabels = nil
-		manager.RemoveStaleRegistrations(classifier, cluster.Namespace, cluster.Name)
+		manager.RemoveStaleRegistrations(classifier, sveltosCluster.Namespace, sveltosCluster.Name, clusterType)
 
 		for i := range oldLabels {
 			labelKey := &oldLabels[i].Key
 			By(fmt.Sprintf("Verifying Classifier %s manages label (key) %s",
 				classifier.Name, *labelKey))
-			Expect(manager.CanManageLabel(classifier, cluster.Namespace, cluster.Name, *labelKey)).To(BeFalse())
+			Expect(manager.CanManageLabel(classifier, sveltosCluster.Namespace, sveltosCluster.Name, *labelKey,
+				clusterType)).To(BeFalse())
 		}
 	})
 
@@ -155,7 +169,8 @@ var _ = Describe("Chart manager", func() {
 		manager, err := keymanager.GetKeyManagerInstance(context.TODO(), c)
 		Expect(err).To(BeNil())
 
-		manager.RegisterClassifierForLabels(classifier, cluster.Namespace, cluster.Name)
+		clusterType := libsveltosv1alpha1.ClusterTypeSveltos
+		manager.RegisterClassifierForLabels(classifier, sveltosCluster.Namespace, sveltosCluster.Name, clusterType)
 
 		tmpClassifier := &libsveltosv1alpha1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
@@ -167,10 +182,10 @@ var _ = Describe("Chart manager", func() {
 		newLabel := libsveltosv1alpha1.ClassifierLabel{Key: randomString(), Value: randomString()}
 		tmpClassifier.Spec.ClassifierLabels = append(tmpClassifier.Spec.ClassifierLabels, newLabel)
 
-		manager.RegisterClassifierForLabels(tmpClassifier, cluster.Namespace, cluster.Name)
-		defer removeSubscriptions(c, tmpClassifier, cluster)
+		manager.RegisterClassifierForLabels(tmpClassifier, sveltosCluster.Namespace, sveltosCluster.Name, clusterType)
+		defer removeSubscriptions(c, tmpClassifier, sveltosCluster.Namespace, sveltosCluster.Name, clusterType)
 
-		csName, err := manager.GetManagerForKey(cluster.Namespace, cluster.Name, newLabel.Key)
+		csName, err := manager.GetManagerForKey(sveltosCluster.Namespace, sveltosCluster.Name, newLabel.Key, clusterType)
 		Expect(err).To(BeNil())
 		Expect(csName).To(Equal(tmpClassifier.Name))
 
@@ -178,17 +193,20 @@ var _ = Describe("Chart manager", func() {
 			labelKey := &classifier.Spec.ClassifierLabels[i].Key
 			By(fmt.Sprintf("Verifying Classifier %s does not manage label (key) %s",
 				tmpClassifier.Name, *labelKey))
-			Expect(manager.CanManageLabel(tmpClassifier, cluster.Namespace, cluster.Name, *labelKey)).To(BeFalse())
-			Expect(manager.CanManageLabel(classifier, cluster.Namespace, cluster.Name, *labelKey)).To(BeTrue())
+			Expect(manager.CanManageLabel(tmpClassifier, sveltosCluster.Namespace, sveltosCluster.Name, *labelKey,
+				clusterType)).To(BeFalse())
+			Expect(manager.CanManageLabel(classifier, sveltosCluster.Namespace, sveltosCluster.Name, *labelKey,
+				clusterType)).To(BeTrue())
 		}
 	})
 
-	It("GetRegisteredClassifiers returns currently registered Classifiers filtering by CAPI Cluster",
+	It("GetRegisteredClassifiers returns currently registered Classifiers filtering by ∂∂Cluster",
 		func() {
 			manager, err := keymanager.GetKeyManagerInstance(context.TODO(), c)
 			Expect(err).To(BeNil())
 
-			manager.RegisterClassifierForLabels(classifier, cluster.Namespace, cluster.Name)
+			clusterType := libsveltosv1alpha1.ClusterTypeSveltos
+			manager.RegisterClassifierForLabels(classifier, sveltosCluster.Namespace, sveltosCluster.Name, clusterType)
 
 			tmpClassifier1 := &libsveltosv1alpha1.Classifier{
 				ObjectMeta: metav1.ObjectMeta{
@@ -196,8 +214,8 @@ var _ = Describe("Chart manager", func() {
 				},
 				Spec: classifier.Spec,
 			}
-			manager.RegisterClassifierForLabels(tmpClassifier1, cluster.Namespace, cluster.Name)
-			defer removeSubscriptions(c, tmpClassifier1, cluster)
+			manager.RegisterClassifierForLabels(tmpClassifier1, sveltosCluster.Namespace, sveltosCluster.Name, clusterType)
+			defer removeSubscriptions(c, tmpClassifier1, sveltosCluster.Namespace, sveltosCluster.Name, clusterType)
 
 			tmpClassifier2 := &libsveltosv1alpha1.Classifier{
 				ObjectMeta: metav1.ObjectMeta{
@@ -205,10 +223,11 @@ var _ = Describe("Chart manager", func() {
 				},
 				Spec: classifier.Spec,
 			}
-			manager.RegisterClassifierForLabels(tmpClassifier1, cluster.Namespace+randomString(), cluster.Name)
-			defer removeSubscriptions(c, tmpClassifier2, cluster)
+			tmpNamespace := sveltosCluster.Namespace + randomString()
+			manager.RegisterClassifierForLabels(tmpClassifier2, tmpNamespace, sveltosCluster.Name, clusterType)
+			defer removeSubscriptions(c, tmpClassifier2, tmpNamespace, sveltosCluster.Name, clusterType)
 
-			registered := manager.GetRegisteredClassifiers(cluster.Namespace, cluster.Name)
+			registered := manager.GetRegisteredClassifiers(sveltosCluster.Namespace, sveltosCluster.Name, clusterType)
 			Expect(len(registered)).To(Equal(2))
 			Expect(registered).To(ContainElement(classifier.Name))
 			Expect(registered).To(ContainElement(tmpClassifier1.Name))
@@ -221,7 +240,8 @@ var _ = Describe("Chart manager", func() {
 		classifier.Status = libsveltosv1alpha1.ClassifierStatus{
 			MachingClusterStatuses: []libsveltosv1alpha1.MachingClusterStatus{
 				{
-					ClusterRef:      corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
+					ClusterRef: corev1.ObjectReference{Namespace: sveltosCluster.Namespace, Name: sveltosCluster.Name,
+						APIVersion: libsveltosv1alpha1.GroupVersion.String(), Kind: libsveltosv1alpha1.SveltosClusterKind},
 					ManagedLabels:   []string{classifier.Spec.ClassifierLabels[0].Key},
 					UnManagedLabels: []libsveltosv1alpha1.UnManagedLabel{{Key: classifier.Spec.ClassifierLabels[1].Key}},
 				},
@@ -238,7 +258,8 @@ var _ = Describe("Chart manager", func() {
 			Status: libsveltosv1alpha1.ClassifierStatus{
 				MachingClusterStatuses: []libsveltosv1alpha1.MachingClusterStatus{
 					{
-						ClusterRef:      corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
+						ClusterRef: corev1.ObjectReference{Namespace: sveltosCluster.Namespace, Name: sveltosCluster.Name,
+							APIVersion: libsveltosv1alpha1.GroupVersion.String(), Kind: libsveltosv1alpha1.SveltosClusterKind},
 						ManagedLabels:   []string{classifier.Spec.ClassifierLabels[1].Key},
 						UnManagedLabels: []libsveltosv1alpha1.UnManagedLabel{{Key: classifier.Spec.ClassifierLabels[0].Key}},
 					},
@@ -246,7 +267,7 @@ var _ = Describe("Chart manager", func() {
 			},
 		}
 		Expect(c.Create(context.TODO(), tmpClassifier)).To(Succeed())
-		defer removeSubscriptions(c, tmpClassifier, cluster)
+		defer removeSubscriptions(c, tmpClassifier, sveltosCluster.Namespace, sveltosCluster.Name, libsveltosv1alpha1.ClusterTypeSveltos)
 
 		manager, err := keymanager.GetKeyManagerInstance(context.TODO(), c)
 		Expect(err).To(BeNil())
@@ -254,24 +275,26 @@ var _ = Describe("Chart manager", func() {
 		err = keymanager.RebuildRegistrations(manager, context.TODO(), c)
 		Expect(err).To(BeNil())
 
-		Expect(manager.CanManageLabel(classifier, cluster.Namespace, cluster.Name,
-			classifier.Spec.ClassifierLabels[0].Key)).To(BeTrue())
-		Expect(manager.CanManageLabel(tmpClassifier, cluster.Namespace, cluster.Name,
-			classifier.Spec.ClassifierLabels[0].Key)).To(BeFalse())
+		Expect(manager.CanManageLabel(classifier, sveltosCluster.Namespace, sveltosCluster.Name,
+			classifier.Spec.ClassifierLabels[0].Key, libsveltosv1alpha1.ClusterTypeSveltos)).To(BeTrue())
+		Expect(manager.CanManageLabel(tmpClassifier, sveltosCluster.Namespace, sveltosCluster.Name,
+			classifier.Spec.ClassifierLabels[0].Key, libsveltosv1alpha1.ClusterTypeSveltos)).To(BeFalse())
 
-		Expect(manager.CanManageLabel(classifier, cluster.Namespace, cluster.Name,
-			classifier.Spec.ClassifierLabels[1].Key)).To(BeFalse())
-		Expect(manager.CanManageLabel(tmpClassifier, cluster.Namespace, cluster.Name,
-			classifier.Spec.ClassifierLabels[1].Key)).To(BeTrue())
+		Expect(manager.CanManageLabel(classifier, sveltosCluster.Namespace, sveltosCluster.Name,
+			classifier.Spec.ClassifierLabels[1].Key, libsveltosv1alpha1.ClusterTypeSveltos)).To(BeFalse())
+		Expect(manager.CanManageLabel(tmpClassifier, sveltosCluster.Namespace, sveltosCluster.Name,
+			classifier.Spec.ClassifierLabels[1].Key, libsveltosv1alpha1.ClusterTypeSveltos)).To(BeTrue())
 	})
 })
 
-func removeSubscriptions(c client.Client, classifier *libsveltosv1alpha1.Classifier, cluster *clusterv1.Cluster) {
+func removeSubscriptions(c client.Client, classifier *libsveltosv1alpha1.Classifier,
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType) {
+
 	manager, err := keymanager.GetKeyManagerInstance(context.TODO(), c)
 	Expect(err).To(BeNil())
 
 	classifier.Spec.ClassifierLabels = nil
-	manager.RemoveStaleRegistrations(classifier, cluster.Namespace, cluster.Name)
+	manager.RemoveStaleRegistrations(classifier, clusterNamespace, clusterName, clusterType)
 }
 
 func setupScheme() *runtime.Scheme {

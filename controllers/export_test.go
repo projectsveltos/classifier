@@ -27,9 +27,9 @@ var (
 	RemoveClassifierReports             = removeClassifierReports
 	RemoveClusterClassifierReports      = removeClusterClassifierReports
 	CollectClassifierReportsFromCluster = collectClassifierReportsFromCluster
-	GetClusterInfo                      = getClusterInfo
 
 	CreateAccessRequest                        = createAccessRequest
+	GetAccessRequestName                       = getAccessRequestName
 	GetKubeconfigFromAccessRequest             = getKubeconfigFromAccessRequest
 	UpdateSecretWithAccessManagementKubeconfig = updateSecretWithAccessManagementKubeconfig
 
@@ -41,7 +41,6 @@ var (
 	RequeueClassifierForMachine            = (*ClassifierReconciler).requeueClassifierForMachine
 	RequeueClassifierForClassifierReport   = (*ClassifierReconciler).requeueClassifierForClassifierReport
 	RequeueClassifierForClassifier         = (*ClassifierReconciler).requeueClassifierForClassifier
-	GetListOfClusters                      = (*ClassifierReconciler).getListOfClusters
 	UpdateMatchingClustersAndRegistrations = (*ClassifierReconciler).updateMatchingClustersAndRegistrations
 	UpdateLabelsOnMatchingClusters         = (*ClassifierReconciler).updateLabelsOnMatchingClusters
 	HandleLabelRegistrations               = (*ClassifierReconciler).handleLabelRegistrations
@@ -52,9 +51,9 @@ var (
 
 var (
 	CreatFeatureHandlerMaps = creatFeatureHandlerMaps
+	GetListOfClusters       = getListOfClusters
 )
 
 const (
-	ClassifierReportClusterLabel = classifierReportClusterLabel
-	Controlplaneendpoint         = controlplaneendpoint
+	Controlplaneendpoint = controlplaneendpoint
 )

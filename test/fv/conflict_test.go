@@ -102,7 +102,8 @@ var _ = Describe("Classifier: update cluster labels", func() {
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifier1.Name, kindWorkloadCluster.Name)
+		clusterType := libsveltosv1alpha1.ClusterTypeCapi
+		classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifier1.Name, kindWorkloadCluster.Name, &clusterType)
 		Byf("Verifying ClassifierReports instance %s is removed from the management cluster", classifierReportName)
 		Eventually(func() bool {
 			classifierReport := &libsveltosv1alpha1.ClassifierReport{}

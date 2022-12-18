@@ -44,10 +44,10 @@ func init() {
 	metrics.Registry.MustRegister(programClassifierDurationHistogram)
 }
 
-func newClassifierHistogram(clusterNamespace, clusterName string,
+func newClassifierHistogram(clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
 	logger logr.Logger) prometheus.Histogram {
 
-	clusterInfo := strings.ReplaceAll(fmt.Sprintf("%s_%s", clusterNamespace, clusterName), "-", "_")
+	clusterInfo := strings.ReplaceAll(fmt.Sprintf("%s_%s_%s", clusterType, clusterNamespace, clusterName), "-", "_")
 	histogram := prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: clusterInfo,
@@ -81,11 +81,11 @@ func logCollectorError(err error, logger logr.Logger) {
 }
 
 func programDuration(elapsed time.Duration, clusterNamespace, clusterName, featureID string,
-	logger logr.Logger) {
+	clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) {
 
 	if featureID == string(libsveltosv1alpha1.FeatureClassifier) {
 		programClassifierDurationHistogram.Observe(elapsed.Seconds())
-		clusterHistogram := newClassifierHistogram(clusterNamespace, clusterName, logger)
+		clusterHistogram := newClassifierHistogram(clusterNamespace, clusterName, clusterType, logger)
 		if clusterHistogram != nil {
 			logger.V(logs.LogVerbose).Info(fmt.Sprintf("register data for %s/%s %s",
 				clusterNamespace, clusterName, featureID))
