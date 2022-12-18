@@ -293,6 +293,7 @@ spec:
         - --v=5
         - --cluster-namespace=
         - --cluster-name=
+        - --cluster-type=
         - --run-mode=do-not-send-reports
         command:
         - /manager

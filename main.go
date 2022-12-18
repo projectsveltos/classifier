@@ -25,17 +25,19 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 
 	"github.com/spf13/pflag"
+	corev1 "k8s.io/api/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
-	"github.com/projectsveltos/classifier/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+
+	"github.com/projectsveltos/classifier/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -121,8 +123,8 @@ func main() {
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		ConcurrentReconciles: concurrentReconciles,
-		ClusterMap:           make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-		ClassifierMap:        make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ClassifierMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 		Deployer:             d,
 		ClassifierReportMode: reportMode,
 		ControlPlaneEndpoint: managementClusterControlPlaneEndpoint,
@@ -135,6 +137,13 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Cluster")
+		os.Exit(1)
+	}
+	if err = (&controllers.SveltosClusterReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SveltosCluster")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

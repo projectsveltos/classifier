@@ -97,32 +97,6 @@ rules:
   - list
   - watch
 - apiGroups:
-  - cluster.x-k8s.io.projectsveltos.io
-  resources:
-  - clusters
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io.projectsveltos.io
-  resources:
-  - clusters/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - cluster.x-k8s.io.projectsveltos.io
-  resources:
-  - clusters/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - lib.projectsveltos.io
   resources:
   - accessrequests
@@ -175,6 +149,22 @@ rules:
   - lib.projectsveltos.io
   resources:
   - debuggingconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - sveltosclusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - sveltosclusters/status
   verbs:
   - get
   - list

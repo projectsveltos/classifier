@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -91,20 +92,27 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 			Client:     c,
 			Scheme:     scheme,
 			Mux:        sync.Mutex{},
-			ClusterMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 		}
 
 		set := libsveltosset.Set{}
-		key := libsveltosv1alpha1.PolicyRef{Kind: cluster.Kind, Namespace: cluster.Namespace, Name: cluster.Name}
+		key := corev1.ObjectReference{
+			Kind: cluster.Kind, Namespace: cluster.Namespace, Name: cluster.Name, APIVersion: cluster.APIVersion}
 
-		set.Insert(&libsveltosv1alpha1.PolicyRef{Kind: libsveltosv1alpha1.ClassifierKind, Name: classifier0.Name})
+		set.Insert(&corev1.ObjectReference{
+			Kind: libsveltosv1alpha1.ClassifierKind, Name: classifier0.Name,
+			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+		})
 		reconciler.ClusterMap[key] = &set
 
 		requests := controllers.RequeueClassifierForCluster(reconciler, cluster)
 		Expect(requests).To(HaveLen(1))
 		Expect(requests[0].Name).To(Equal(classifier0.Name))
 
-		set.Insert(&libsveltosv1alpha1.PolicyRef{Kind: libsveltosv1alpha1.ClassifierKind, Name: classifier1.Name})
+		set.Insert(&corev1.ObjectReference{
+			Kind: libsveltosv1alpha1.ClassifierKind, Name: classifier1.Name,
+			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+		})
 		reconciler.ClusterMap[key] = &set
 
 		requests = controllers.RequeueClassifierForCluster(reconciler, cluster)
@@ -141,7 +149,7 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 			Client:     c,
 			Scheme:     scheme,
 			Mux:        sync.Mutex{},
-			ClusterMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 		}
 
 		requests := controllers.RequeueClassifierForClassifierReport(reconciler, report)
@@ -158,14 +166,16 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 			Client:     c,
 			Scheme:     scheme,
 			Mux:        sync.Mutex{},
-			ClusterMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 		}
 
 		classifierName1 := randomString()
-		classifierInfo1 := libsveltosv1alpha1.PolicyRef{Kind: libsveltosv1alpha1.ClassifierKind, Name: classifierName1}
+		classifierInfo1 := corev1.ObjectReference{
+			Kind: libsveltosv1alpha1.ClassifierKind, Name: classifierName1, APIVersion: libsveltosv1alpha1.GroupVersion.String()}
 		reconciler.ClassifierSet.Insert(&classifierInfo1)
 		classifierName2 := randomString()
-		classifierInfo2 := libsveltosv1alpha1.PolicyRef{Kind: libsveltosv1alpha1.ClassifierKind, Name: classifierName2}
+		classifierInfo2 := corev1.ObjectReference{
+			Kind: libsveltosv1alpha1.ClassifierKind, Name: classifierName2, APIVersion: libsveltosv1alpha1.GroupVersion.String()}
 		reconciler.ClassifierSet.Insert(&classifierInfo2)
 
 		classifier := &libsveltosv1alpha1.Classifier{

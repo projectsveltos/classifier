@@ -95,9 +95,9 @@ func GetKeyManagerInstance(ctx context.Context, c client.Client) (*instance, err
 // all CAPI clusters currently matching this Classifier.
 // Only first Classifier registering for a given label in a given CAPI Cluster is given the manager role.
 func (m *instance) RegisterClassifierForLabels(classifier *libsveltosv1alpha1.Classifier,
-	clusterNamespace, clusterName string) {
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType) {
 
-	clusterKey := m.getClusterKey(clusterNamespace, clusterName)
+	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 	classifierKey := m.getClassifierKey(classifier.Name)
 
 	m.chartMux.Lock()
@@ -115,25 +115,25 @@ func (m *instance) RegisterClassifierForLabels(classifier *libsveltosv1alpha1.Cl
 // Any label (key), not referenced anymore by classifier, for which classifier is currently
 // registered, is considered stale and removed.
 func (m *instance) RemoveStaleRegistrations(classifier *libsveltosv1alpha1.Classifier,
-	clusterNamespace, clusterName string) {
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType) {
 
-	m.cleanRegistrations(classifier, clusterNamespace, clusterName, false)
+	m.cleanRegistrations(classifier, clusterNamespace, clusterName, clusterType, false)
 }
 
 // RemoveAllRegistrations removes all registrations for a classifier.
 func (m *instance) RemoveAllRegistrations(classifier *libsveltosv1alpha1.Classifier,
-	clusterNamespace, clusterName string) {
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType) {
 
-	m.cleanRegistrations(classifier, clusterNamespace, clusterName, true)
+	m.cleanRegistrations(classifier, clusterNamespace, clusterName, clusterType, true)
 }
 
 // cleanRegistrations removes Classifier's registrations.
 // If removeAll is set to true, all registrations are removed. Otherwise only registration for
 // labels (keys) not referenced anymore are.
 func (m *instance) cleanRegistrations(classifier *libsveltosv1alpha1.Classifier,
-	clusterNamespace, clusterName string, removeAll bool) {
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType, removeAll bool) {
 
-	clusterKey := m.getClusterKey(clusterNamespace, clusterName)
+	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 	classifierKey := m.getClassifierKey(classifier.Name)
 
 	currentReferencedLabels := make(map[string]bool)
@@ -171,9 +171,9 @@ func (m *instance) cleanRegistrations(classifier *libsveltosv1alpha1.Classifier,
 // CanManageLabel returns true if a Classifier can manage a given label key.
 // Only the first Classifier registered for a given label key in a given cluster can manage it.
 func (m *instance) CanManageLabel(classifier *libsveltosv1alpha1.Classifier,
-	clusterNamespace, clusterName, labelKey string) bool {
+	clusterNamespace, clusterName, labelKey string, clusterType libsveltosv1alpha1.ClusterType) bool {
 
-	clusterKey := m.getClusterKey(clusterNamespace, clusterName)
+	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 	classifierKey := m.getClassifierKey(classifier.Name)
 
 	m.chartMux.Lock()
@@ -185,8 +185,10 @@ func (m *instance) CanManageLabel(classifier *libsveltosv1alpha1.Classifier,
 // GetManagerForKey returns the name of the Classifier currently in charge of managing
 // label key
 // Returns an error if no Classifier is currently managing the label key
-func (m *instance) GetManagerForKey(clusterNamespace, clusterName, labelKey string) (string, error) {
-	clusterKey := m.getClusterKey(clusterNamespace, clusterName)
+func (m *instance) GetManagerForKey(clusterNamespace, clusterName, labelKey string,
+	clusterType libsveltosv1alpha1.ClusterType) (string, error) {
+
+	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 
 	if _, ok := m.perClusterLabelMap[clusterKey]; !ok {
 		return "", fmt.Errorf("no Classifier manging label key %s", labelKey)
@@ -205,8 +207,10 @@ func (m *instance) GetManagerForKey(clusterNamespace, clusterName, labelKey stri
 
 // GetRegisteredClassifiers returns all Classifiers currently registered for at
 // at least one label key in the provided CAPI cluster
-func (m *instance) GetRegisteredClassifiers(clusterNamespace, clusterName string) []string {
-	clusterKey := m.getClusterKey(clusterNamespace, clusterName)
+func (m *instance) GetRegisteredClassifiers(clusterNamespace, clusterName string,
+	clusterType libsveltosv1alpha1.ClusterType) []string {
+
+	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 
 	classifiers := make(map[string]bool)
 
@@ -254,8 +258,8 @@ func (m *instance) isCurrentlyManager(clusterKey, labelKey, classifierKey string
 }
 
 // getClusterKey returns the Key representing a CAPI Cluster
-func (m *instance) getClusterKey(clusterNamespace, clusterName string) string {
-	return fmt.Sprintf("%s%s%s", clusterNamespace, keySeparator, clusterName)
+func (m *instance) getClusterKey(clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
+	return fmt.Sprintf("%s%s%s%s%s", clusterType, keySeparator, clusterNamespace, keySeparator, clusterName)
 }
 
 // getClassifierKey returns the key for a Classifier instance
@@ -344,7 +348,11 @@ func (m *instance) addManagers(classifier *libsveltosv1alpha1.Classifier) {
 
 	for i := range classifier.Status.MachingClusterStatuses {
 		clusterStatus := &classifier.Status.MachingClusterStatuses[i]
-		clusterKey := m.getClusterKey(clusterStatus.ClusterRef.Namespace, clusterStatus.ClusterRef.Name)
+		clusterType := libsveltosv1alpha1.ClusterTypeCapi
+		if clusterStatus.ClusterRef.APIVersion == libsveltosv1alpha1.GroupVersion.String() {
+			clusterType = libsveltosv1alpha1.ClusterTypeSveltos
+		}
+		clusterKey := m.getClusterKey(clusterStatus.ClusterRef.Namespace, clusterStatus.ClusterRef.Name, clusterType)
 
 		m.addManagedLabelsInCluster(classifierKey, clusterKey, clusterStatus.ManagedLabels)
 	}
@@ -366,7 +374,11 @@ func (m *instance) addNonManagers(classifier *libsveltosv1alpha1.Classifier) {
 
 	for i := range classifier.Status.MachingClusterStatuses {
 		clusterStatus := &classifier.Status.MachingClusterStatuses[i]
-		clusterKey := m.getClusterKey(clusterStatus.ClusterRef.Namespace, clusterStatus.ClusterRef.Name)
+		clusterType := libsveltosv1alpha1.ClusterTypeCapi
+		if clusterStatus.ClusterRef.APIVersion == libsveltosv1alpha1.GroupVersion.String() {
+			clusterType = libsveltosv1alpha1.ClusterTypeSveltos
+		}
+		clusterKey := m.getClusterKey(clusterStatus.ClusterRef.Namespace, clusterStatus.ClusterRef.Name, clusterType)
 
 		unManagedLabels := m.buildSliceOfUnManagedLabels(clusterStatus.UnManagedLabels)
 		m.addManagedLabelsInCluster(classifierKey, clusterKey, unManagedLabels)

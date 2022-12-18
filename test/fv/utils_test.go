@@ -89,7 +89,8 @@ func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 }
 
 func verifyClassifierReport(classifierName string, isMatch bool) {
-	classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifierName, kindWorkloadCluster.Name)
+	clusterType := libsveltosv1alpha1.ClusterTypeCapi
+	classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifierName, kindWorkloadCluster.Name, &clusterType)
 	Byf("Verifing ClassifierReport %s for Classifier %s", classifierReportName, classifierName)
 	Eventually(func() bool {
 		currentClassifierReport := &libsveltosv1alpha1.ClassifierReport{}

@@ -19,10 +19,10 @@ package controllers
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -31,46 +31,57 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
-// ClusterReconciler reconciles a Cluster object
-type ClusterReconciler struct {
+// SveltosClusterReconciler reconciles a SveltosCluster object
+type SveltosClusterReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;list;watch
-//+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters/status,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=sveltosclusters,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=sveltosclusters/status,verbs=get;list;watch
 
-func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling Cluster")
+	logger.V(logs.LogInfo).Info("Reconciling SveltosCluster")
 
-	// Fecth the Cluster instance
-	cluster := &clusterv1.Cluster{}
-	if err := r.Get(ctx, req.NamespacedName, cluster); err != nil {
+	// Fecth the SveltosCluster instance
+	sveltosCluster := &libsveltosv1alpha1.SveltosCluster{}
+	if err := r.Get(ctx, req.NamespacedName, sveltosCluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			return removeClassifierReportForDeletedCluster(ctx, r.Client, req.Namespace, req.Name,
-				libsveltosv1alpha1.ClusterTypeCapi, logger)
+				libsveltosv1alpha1.ClusterTypeSveltos, logger)
 		}
-		logger.Error(err, "Failed to fetch Cluster")
+		logger.Error(err, "Failed to fetch SveltosCluster")
 		return reconcile.Result{}, errors.Wrapf(
 			err,
-			"Failed to fetch Cluster %s",
+			"Failed to fetch SveltosCluster %s",
 			req.NamespacedName,
 		)
 	}
 
-	// Handle deleted cluster
-	if !cluster.DeletionTimestamp.IsZero() {
+	// Handle deleted SveltosCluster
+	if !sveltosCluster.DeletionTimestamp.IsZero() {
 		return removeClassifierReportForDeletedCluster(ctx, r.Client, req.Namespace, req.Name,
-			libsveltosv1alpha1.ClusterTypeCapi, logger)
+			libsveltosv1alpha1.ClusterTypeSveltos, logger)
 	}
 
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *SveltosClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&clusterv1.Cluster{}).
+		For(&libsveltosv1alpha1.SveltosCluster{}).
 		Complete(r)
+}
+
+func removeClassifierReportForDeletedCluster(ctx context.Context, c client.Client,
+	clusterNamespace, cluserName string, clusterType libsveltosv1alpha1.ClusterType,
+	logger logr.Logger) (ctrl.Result, error) {
+
+	err := removeClusterClassifierReports(ctx, c, clusterNamespace, cluserName, clusterType, logger)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	return reconcile.Result{}, nil
 }

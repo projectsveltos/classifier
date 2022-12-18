@@ -49,13 +49,19 @@ func (r *ClassifierReconciler) requeueClassifierForCluster(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterInfo := libsveltosv1alpha1.PolicyRef{Kind: "Cluster", Namespace: cluster.Namespace, Name: cluster.Name}
+	clusterInfo := corev1.ObjectReference{
+		Kind:       cluster.Kind,
+		Namespace:  cluster.Namespace,
+		Name:       cluster.Name,
+		APIVersion: cluster.APIVersion,
+	}
 
 	// Get all Classifiers previously matching this cluster and reconcile those
 	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).Len())
 	consumers := r.getClusterMapForEntry(&clusterInfo).Items()
 
 	for i := range consumers {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("requeuing classifier %s", consumers[i].Name))
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
 				Name: consumers[i].Name,
@@ -82,20 +88,26 @@ func (r *ClassifierReconciler) requeueClassifierForMachine(
 
 	clusterLabelName, ok := machine.Labels[clusterv1.ClusterLabelName]
 	if !ok {
-		logger.V(logs.LogVerbose).Info("Machine has not ClusterLabelName")
+		logger.V(logs.LogDebug).Info("Machine has not ClusterLabelName")
 		return nil
 	}
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterInfo := libsveltosv1alpha1.PolicyRef{Kind: "Cluster", Namespace: machine.Namespace, Name: clusterLabelName}
+	clusterInfo := corev1.ObjectReference{
+		Kind:       "Cluster",
+		Namespace:  machine.Namespace,
+		Name:       clusterLabelName,
+		APIVersion: clusterv1.GroupVersion.String(),
+	}
 
 	// Get all Classifiers previously matching this cluster and reconcile those
 	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).Len())
 	consumers := r.getClusterMapForEntry(&clusterInfo).Items()
 
 	for i := range consumers {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("requeuing classifier %s", consumers[i].Name))
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
 				Name: consumers[i].Name,

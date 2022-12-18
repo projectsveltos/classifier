@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,6 +67,7 @@ var (
 const (
 	upstreamClusterNamePrefix = "upstream-cluster"
 	upstreamMachineNamePrefix = "upstream-machine"
+	clusterKind               = "Cluster"
 )
 
 const (
@@ -102,6 +104,10 @@ var _ = BeforeSuite(func() {
 			panic(fmt.Sprintf("Failed to start the envtest manager: %v", err))
 		}
 	}()
+
+	sveltosClusterCRD, err := utils.GetUnstructured(crd.GetSveltosClusterCRDYAML())
+	Expect(err).To(BeNil())
+	Expect(testEnv.Create(ctx, sveltosClusterCRD)).To(Succeed())
 
 	classifierCRD, err := utils.GetUnstructured(crd.GetClassifierCRDYAML())
 	Expect(err).To(BeNil())
@@ -157,6 +163,7 @@ func getClassifierReport(classifierName, clusterNamespace, clusterName string) *
 			ClusterNamespace: clusterNamespace,
 			ClusterName:      clusterName,
 			ClassifierName:   classifierName,
+			ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 		},
 	}
 }
@@ -184,8 +191,8 @@ func getClassifierReconciler(c client.Client, dep deployer.DeployerInterface) *c
 		Client:        c,
 		Scheme:        scheme,
 		Deployer:      dep,
-		ClusterMap:    make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-		ClassifierMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+		ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 		Mux:           sync.Mutex{},
 	}
 }

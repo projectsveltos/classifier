@@ -60,8 +60,8 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
 			Scheme:        scheme,
-			ClusterMap:    make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-			ClassifierMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
 		}
 
@@ -94,6 +94,8 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			},
 		}
 
+		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
+
 		initObjects := []client.Object{
 			classifier,
 			cluster,
@@ -113,9 +115,14 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		Expect(c.Get(context.TODO(), classifierName, currentClassifier)).To(Succeed())
 		currentClassifier.Status.ClusterInfo = []libsveltosv1alpha1.ClusterInfo{
 			{
-				Cluster: corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
-				Status:  libsveltosv1alpha1.ClassifierStatusProvisioned,
-				Hash:    []byte(randomString()),
+				Cluster: corev1.ObjectReference{
+					Namespace:  cluster.Namespace,
+					Name:       cluster.Name,
+					APIVersion: cluster.APIVersion,
+					Kind:       cluster.Kind,
+				},
+				Status: libsveltosv1alpha1.ClassifierStatusProvisioned,
+				Hash:   []byte(randomString()),
 			},
 		}
 
@@ -127,8 +134,8 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
 			Scheme:        scheme,
-			ClusterMap:    make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-			ClassifierMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
 			Deployer:      dep,
 		}
@@ -184,23 +191,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClassifierReconciler{
-			Client:        c,
-			Scheme:        scheme,
-			ClusterMap:    make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-			ClassifierMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-			Mux:           sync.Mutex{},
-		}
-
-		classifierScope, err := scope.NewClassifierScope(scope.ClassifierScopeParams{
-			Client:         c,
-			Logger:         klogr.New(),
-			Classifier:     classifier,
-			ControllerName: "classifier",
-		})
-		Expect(err).To(BeNil())
-
-		matches, err := controllers.GetListOfClusters(reconciler, context.TODO(), classifierScope)
+		matches, err := controllers.GetListOfClusters(context.TODO(), c, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(len(matches)).To(Equal(2))
 	})
@@ -226,8 +217,8 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
 			Scheme:        scheme,
-			ClusterMap:    make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-			ClassifierMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
 		}
 
@@ -280,13 +271,13 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		// Register classifier1 as manager for all labels in cluster
 		// because of this classifier won't be able to manage any of its labels on the
 		// cluster even though cluster is a match
-		manager.RegisterClassifierForLabels(classifier1, clusterNamespace, clusterName)
+		manager.RegisterClassifierForLabels(classifier1, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi)
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
 			Scheme:        scheme,
-			ClusterMap:    make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-			ClassifierMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
 		}
 
@@ -305,6 +296,8 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		Expect(len(classifier.Status.MachingClusterStatuses)).To(Equal(1))
 		Expect(classifier.Status.MachingClusterStatuses[0].ClusterRef.Namespace).To(Equal(clusterNamespace))
 		Expect(classifier.Status.MachingClusterStatuses[0].ClusterRef.Name).To(Equal(clusterName))
+		Expect(classifier.Status.MachingClusterStatuses[0].ClusterRef.APIVersion).To(Equal(clusterv1.GroupVersion.String()))
+		Expect(classifier.Status.MachingClusterStatuses[0].ClusterRef.Kind).To(Equal(clusterKind))
 		Expect(len(classifier.Status.MachingClusterStatuses[0].ManagedLabels)).To(BeZero())
 		Expect(len(classifier.Status.MachingClusterStatuses[0].UnManagedLabels)).To(Equal(len(classifier.Spec.ClassifierLabels)))
 	})
@@ -327,7 +320,12 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 
 		classifier.Status.MachingClusterStatuses = []libsveltosv1alpha1.MachingClusterStatus{
 			{
-				ClusterRef:    corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
+				ClusterRef: corev1.ObjectReference{
+					Namespace:  cluster.Namespace,
+					Name:       cluster.Name,
+					Kind:       clusterKind,
+					APIVersion: clusterv1.GroupVersion.String(),
+				},
 				ManagedLabels: managedLabels,
 			},
 		}
@@ -342,8 +340,8 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
 			Scheme:        scheme,
-			ClusterMap:    make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-			ClassifierMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
 		}
 
@@ -355,9 +353,11 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		})
 		Expect(err).To(BeNil())
 
+		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
+
 		// Call HandleLabelRegistrations so that Classifier is the manager for all its keys
 		currentMatchingClusters := map[corev1.ObjectReference]bool{
-			{Namespace: cluster.Namespace, Name: cluster.Name}: true,
+			{Namespace: cluster.Namespace, Name: cluster.Name, APIVersion: cluster.APIVersion, Kind: cluster.Kind}: true,
 		}
 		oldMatchingClusters := map[corev1.ObjectReference]bool{}
 		Expect(controllers.HandleLabelRegistrations(reconciler, context.TODO(), classifier,
@@ -391,7 +391,12 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		}
 		classifier.Status.MachingClusterStatuses = []libsveltosv1alpha1.MachingClusterStatus{
 			{
-				ClusterRef:    corev1.ObjectReference{Namespace: clusterNamespace, Name: clusterName},
+				ClusterRef: corev1.ObjectReference{
+					Namespace:  clusterNamespace,
+					Name:       clusterName,
+					Kind:       clusterKind,
+					APIVersion: clusterv1.GroupVersion.Group,
+				},
 				ManagedLabels: []string{label},
 			},
 		}
@@ -405,14 +410,14 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		manager, err := keymanager.GetKeyManagerInstance(ctx, c)
 		Expect(err).To(BeNil())
 
-		manager.RegisterClassifierForLabels(classifier, clusterNamespace, clusterName)
-		Expect(manager.CanManageLabel(classifier, clusterNamespace, clusterName, label)).To(BeTrue())
+		manager.RegisterClassifierForLabels(classifier, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi)
+		Expect(manager.CanManageLabel(classifier, clusterNamespace, clusterName, label, libsveltosv1alpha1.ClusterTypeCapi)).To(BeTrue())
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
 			Scheme:        scheme,
-			ClusterMap:    make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-			ClassifierMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
 		}
 
@@ -425,7 +430,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		Expect(err).To(BeNil())
 
 		Expect(controllers.RemoveAllRegistrations(reconciler, context.TODO(), classifierScope, klogr.New())).To(Succeed())
-		Expect(manager.CanManageLabel(classifier, clusterNamespace, clusterName, label)).To(BeFalse())
+		Expect(manager.CanManageLabel(classifier, clusterNamespace, clusterName, label, libsveltosv1alpha1.ClusterTypeCapi)).To(BeFalse())
 	})
 
 	It("classifyLabels divides labels in managed and unmanaged", func() {
@@ -460,19 +465,26 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		Expect(err).To(BeNil())
 		// Register in this order, so otherClassifier can manage "unManagedLabel"
 		// classifier can only manage "managedLabel" and has conflict for "unManagedLabel"
-		manager.RegisterClassifierForLabels(otherClassifier, clusterNamespace, clusterName)
-		manager.RegisterClassifierForLabels(classifier, clusterNamespace, clusterName)
+		manager.RegisterClassifierForLabels(otherClassifier, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi)
+		manager.RegisterClassifierForLabels(classifier, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi)
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
 			Scheme:        scheme,
-			ClusterMap:    make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-			ClassifierMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
 		}
 
+		clusterRef := &corev1.ObjectReference{
+			Namespace:  clusterNamespace,
+			Name:       clusterName,
+			APIVersion: clusterv1.GroupVersion.String(),
+			Kind:       "Cluster",
+		}
+
 		managed, unManaged, err := controllers.ClassifyLabels(reconciler, context.TODO(), classifier,
-			&corev1.ObjectReference{Namespace: clusterNamespace, Name: clusterName}, klogr.New())
+			clusterRef, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(len(managed)).To(Equal(1))
 		Expect(len(unManaged)).To(Equal(1))
@@ -483,42 +495,22 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 var _ = Describe("ClassifierReconciler: requeue methods", func() {
 	var classifier *libsveltosv1alpha1.Classifier
 	var cluster *clusterv1.Cluster
-	var namespace string
 
 	BeforeEach(func() {
-		namespace = "reconcile" + randomString()
-
-		cluster = &clusterv1.Cluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      upstreamClusterNamePrefix + randomString(),
-				Namespace: namespace,
-				Labels: map[string]string{
-					"env":  "qa",
-					"zone": "west",
-				},
-			},
-		}
+		cluster = prepareCluster()
 
 		classifier = getClassifierInstance(randomString())
 	})
 
 	AfterEach(func() {
 		ns := &corev1.Namespace{}
-		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: namespace}, ns)).To(Succeed())
+		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: cluster.Namespace}, ns)).To(Succeed())
 		Expect(testEnv.Client.Delete(context.TODO(), classifier)).To(Succeed())
 		Expect(testEnv.Client.Delete(context.TODO(), cluster)).To(Succeed())
 		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
 	})
 
 	It("RequeueClassifierForCluster returns correct Classifier for a CAPI cluster", func() {
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
-
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), classifier)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
@@ -551,12 +543,6 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 	})
 
 	It("RequeueClassifierForMachine returns correct Classifier for a CAPI machine", func() {
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
-
 		cpMachine := &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: cluster.Namespace,
@@ -569,8 +555,6 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 		}
 		cpMachine.Status.SetTypedPhase(clusterv1.MachinePhaseRunning)
 
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), classifier)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), cpMachine)).To(Succeed())
 
