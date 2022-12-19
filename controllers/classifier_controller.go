@@ -111,7 +111,6 @@ type ClassifierReconciler struct {
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=classifiers/finalizers,verbs=update
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=classifierreports,verbs=get;list;watch;create;update;delete
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=accessrequests,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=debuggingconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;watch;list;update
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters/status,verbs=get;watch;list
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;watch;list
@@ -275,7 +274,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Controller, error) {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&libsveltosv1alpha1.Classifier{}).
 		WithEventFilter(ifNewDeletedOrSpecChange(mgr.GetLogger())).
@@ -284,8 +283,11 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}).
 		Build(r)
 	if err != nil {
-		return errors.Wrap(err, "error creating controller")
+		return nil, errors.Wrap(err, "error creating controller")
 	}
+
+	// At this point we don't know yet whether CAPI is present in the cluster.
+	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
 
 	// When classifierReport changes, according to ClassifierReportPredicates,
 	// one Classifier needs to be reconciled
@@ -293,7 +295,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifierReport),
 		ClassifierReportPredicate(mgr.GetLogger().WithValues("predicate", "classifierreportpredicate")),
 	); err != nil {
-		return err
+		return nil, err
 	}
 
 	// When Classifier changes, according to ClassifierPredicates,
@@ -302,16 +304,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifier),
 		ClassifierPredicate(mgr.GetLogger().WithValues("predicate", "classifiepredicate")),
 	); err != nil {
-		return err
-	}
-
-	// When cluster-api cluster changes, according to ClusterPredicates,
-	// one or more Classifiers need to be reconciled.
-	if err := c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
-		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForCluster),
-		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
-	); err != nil {
-		return err
+		return nil, err
 	}
 
 	// When Sveltos Cluster changes (from paused to unpaused), one or more ClusterSummaries
@@ -320,7 +313,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForCluster),
 		SveltosClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
 	); err != nil {
-		return err
+		return nil, err
 	}
 
 	// When Secret changes, according to SecretPredicates,
@@ -329,11 +322,24 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForSecret),
 		SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
 	); err != nil {
-		return err
+		return nil, err
 	}
 
 	if r.ClassifierReportMode == CollectFromManagementCluster {
 		go collectClassifierReports(mgr.GetClient(), mgr.GetLogger())
+	}
+
+	return c, nil
+}
+
+func (r *ClassifierReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
+	// When cluster-api cluster changes, according to ClusterPredicates,
+	// one or more Classifiers need to be reconciled.
+	if err := c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForCluster),
+		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
+	); err != nil {
+		return err
 	}
 
 	// When cluster-api machine changes, according to ClusterPredicates,
