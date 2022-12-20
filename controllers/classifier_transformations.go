@@ -34,14 +34,14 @@ func (r *ClassifierReconciler) requeueClassifierForCluster(
 	o client.Object,
 ) []reconcile.Request {
 
-	cluster := o.(*clusterv1.Cluster)
+	cluster := o
 	logger := klogr.New().WithValues(
 		"objectMapper",
 		"requeueClassifierForCluster",
 		"namespace",
-		cluster.Namespace,
+		cluster.GetNamespace(),
 		"cluster",
-		cluster.Name,
+		cluster.GetName(),
 	)
 
 	logger.V(logs.LogDebug).Info("reacting to CAPI Cluster change")
@@ -50,10 +50,10 @@ func (r *ClassifierReconciler) requeueClassifierForCluster(
 	defer r.Mux.Unlock()
 
 	clusterInfo := corev1.ObjectReference{
-		Kind:       cluster.Kind,
-		Namespace:  cluster.Namespace,
-		Name:       cluster.Name,
-		APIVersion: cluster.APIVersion,
+		Kind:       cluster.GetObjectKind().GroupVersionKind().Kind,
+		Namespace:  cluster.GetNamespace(),
+		Name:       cluster.GetName(),
+		APIVersion: cluster.GetObjectKind().GroupVersionKind().GroupVersion().String(),
 	}
 
 	// Get all Classifiers previously matching this cluster and reconcile those

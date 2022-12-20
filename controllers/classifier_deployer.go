@@ -659,8 +659,7 @@ func (r *ClassifierReconciler) canProceed(ctx context.Context, classifierScope *
 		return false, nil
 	}
 
-	ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, r.Client,
-		&corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name}, classifierScope.Logger)
+	ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, r.Client, cluster, classifierScope.Logger)
 	if err != nil {
 		return false, err
 	}
