@@ -131,20 +131,20 @@ Assumptions are:
 Apply needed CRDs:
 1. Classifier CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
 ```
 
 2. ClassifierReport CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
 ```
 
 3. DebuggingConfiguration CRD
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
 ```
 
 Finally install classifier controller
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.1/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/classifier/dev/manifest/manifest.yaml
 ```
