@@ -473,6 +473,7 @@ func (r *ClassifierReconciler) updateMatchingClustersAndRegistrations(ctx contex
 				ManagedLabels:   tmpManaged,
 				UnManagedLabels: tmpUnmanaged,
 			}
+		i++
 	}
 
 	r.updateClassifierSet(classifierScope, unManaged != 0)
@@ -599,11 +600,7 @@ func (r *ClassifierReconciler) removeAllRegistrations(ctx context.Context,
 
 	for i := range classifierScope.Classifier.Status.MachingClusterStatuses {
 		c := &classifierScope.Classifier.Status.MachingClusterStatuses[i].ClusterRef
-		clusterType := libsveltosv1alpha1.ClusterTypeCapi
-		if c.GetObjectKind().GroupVersionKind().Kind == libsveltosv1alpha1.SveltosClusterKind {
-			clusterType = libsveltosv1alpha1.ClusterTypeCapi
-		}
-		manager.RemoveAllRegistrations(classifierScope.Classifier, c.Namespace, c.Name, clusterType)
+		manager.RemoveAllRegistrations(classifierScope.Classifier, c.Namespace, c.Name, getClusterType(c))
 	}
 
 	return nil
