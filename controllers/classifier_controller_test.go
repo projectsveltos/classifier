@@ -395,7 +395,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 					Namespace:  clusterNamespace,
 					Name:       clusterName,
 					Kind:       clusterKind,
-					APIVersion: clusterv1.GroupVersion.Group,
+					APIVersion: clusterv1.GroupVersion.String(),
 				},
 				ManagedLabels: []string{label},
 			},
