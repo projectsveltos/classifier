@@ -168,6 +168,7 @@ rules:
   verbs:
   - get
   - list
+  - update
   - watch
 - apiGroups:
   - lib.projectsveltos.io

@@ -513,7 +513,7 @@ func (r *ClassifierReconciler) updateLabelsOnMatchingClusters(ctx context.Contex
 
 		l := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.GetNamespace(), cluster.GetName()))
 		l.V(logs.LogDebug).Info("update labels on cluster")
-		err = r.updateLabelsOnCluster(ctx, classifierScope, cluster, l)
+		err = r.updateLabelsOnCluster(ctx, classifierScope, cluster, getClusterType(ref), l)
 		if err != nil {
 			l.V(logs.LogDebug).Error(err, "failed to update labels on cluster")
 			return err
@@ -524,7 +524,8 @@ func (r *ClassifierReconciler) updateLabelsOnMatchingClusters(ctx context.Contex
 }
 
 func (r *ClassifierReconciler) updateLabelsOnCluster(ctx context.Context,
-	classifierScope *scope.ClassifierScope, cluster client.Object, logger logr.Logger) error {
+	classifierScope *scope.ClassifierScope, cluster client.Object, clusterType libsveltosv1alpha1.ClusterType,
+	logger logr.Logger) error {
 
 	manager, err := keymanager.GetKeyManagerInstance(ctx, r.Client)
 	if err != nil {
@@ -534,10 +535,6 @@ func (r *ClassifierReconciler) updateLabelsOnCluster(ctx context.Context,
 
 	for i := range classifierScope.Classifier.Spec.ClassifierLabels {
 		label := classifierScope.Classifier.Spec.ClassifierLabels[i]
-		clusterType := libsveltosv1alpha1.ClusterTypeCapi
-		if cluster.GetObjectKind().GroupVersionKind().Kind == libsveltosv1alpha1.SveltosClusterKind {
-			clusterType = libsveltosv1alpha1.ClusterTypeCapi
-		}
 		if manager.CanManageLabel(classifierScope.Classifier, cluster.GetNamespace(), cluster.GetName(), label.Key, clusterType) {
 			labels := cluster.GetLabels()
 			if labels == nil {
