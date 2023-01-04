@@ -115,6 +115,27 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
 	})
 
+	It("deployDebuggingConfigurationCRD deploys DebuggingConfiguration CRD", func() {
+		Expect(controllers.DeployDebuggingConfigurationCRD(context.TODO(), testEnv.Config, klogr.New())).To(Succeed())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			dcCRD := &apiextensionsv1.CustomResourceDefinition{}
+			return testEnv.Get(context.TODO(),
+				types.NamespacedName{Name: "debuggingconfigurations.lib.projectsveltos.io"}, dcCRD)
+		}, timeout, pollingInterval).Should(BeNil())
+	})
+
+	It("deployClassifierInstance creates Classifier instance", func() {
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		classifier := getClassifierInstance(randomString())
+		Expect(controllers.DeployClassifierInstance(ctx, c, classifier, klogr.New())).To(Succeed())
+
+		currentClassifier := &libsveltosv1alpha1.Classifier{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
+	})
+
 	It("deployClassifierInstance updates Classifier instance", func() {
 		classifier := getClassifierInstance(randomString())
 
