@@ -371,6 +371,13 @@ func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterN
 		return err
 	}
 
+	logger.V(logs.LogDebug).Info("deploy debuggingConfiguration CRD")
+	// Deploy DebuggingConfiguration CRD
+	err = deployDebuggingConfigurationCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -878,6 +885,35 @@ func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 	currentClassifier.Spec = classifier.Spec
 
 	return remoteClient.Update(ctx, currentClassifier)
+}
+
+// deployDebuggingConfigurationCRD deploys DebuggingConfiguration CRD in remote cluster
+func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest.Config,
+	logger logr.Logger) error {
+
+	dcCRD, err := utils.GetUnstructured(crd.GetDebuggingConfigurationCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get DebuggingConfiguration CRD unstructured: %v",
+			err))
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, dcCRD.GroupVersionKind(), "")
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+		return err
+	}
+
+	options := metav1.ApplyOptions{
+		FieldManager: "application/apply-patch",
+	}
+	_, err = dr.Apply(ctx, dcCRD.GetName(), dcCRD, options)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply DebuggingConfiguration CRD: %v", err))
+		return err
+	}
+
+	return nil
 }
 
 func deployClassifierAgent(ctx context.Context, remoteRestConfig *rest.Config,

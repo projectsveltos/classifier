@@ -19,6 +19,7 @@ package controllers
 var (
 	DeployClassifierCRD                 = deployClassifierCRD
 	DeployClassifierReportCRD           = deployClassifierReportCRD
+	DeployDebuggingConfigurationCRD     = deployDebuggingConfigurationCRD
 	DeployClassifierInstance            = deployClassifierInstance
 	DeployClassifierAgent               = deployClassifierAgent
 	ClassifierHash                      = classifierHash
