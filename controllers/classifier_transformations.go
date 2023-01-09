@@ -17,6 +17,9 @@ limitations under the License.
 package controllers
 
 import (
+	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -31,14 +34,14 @@ func (r *ClassifierReconciler) requeueClassifierForCluster(
 	o client.Object,
 ) []reconcile.Request {
 
-	cluster := o.(*clusterv1.Cluster)
+	cluster := o
 	logger := klogr.New().WithValues(
 		"objectMapper",
 		"requeueClassifierForCluster",
 		"namespace",
-		cluster.Namespace,
+		cluster.GetNamespace(),
 		"cluster",
-		cluster.Name,
+		cluster.GetName(),
 	)
 
 	logger.V(logs.LogDebug).Info("reacting to CAPI Cluster change")
@@ -46,13 +49,19 @@ func (r *ClassifierReconciler) requeueClassifierForCluster(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterInfo := libsveltosv1alpha1.PolicyRef{Kind: "Cluster", Namespace: cluster.Namespace, Name: cluster.Name}
+	clusterInfo := corev1.ObjectReference{
+		Kind:       cluster.GetObjectKind().GroupVersionKind().Kind,
+		Namespace:  cluster.GetNamespace(),
+		Name:       cluster.GetName(),
+		APIVersion: cluster.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+	}
 
-	// Get all ClusterProfile previously matching this cluster and reconcile those
+	// Get all Classifiers previously matching this cluster and reconcile those
 	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).Len())
 	consumers := r.getClusterMapForEntry(&clusterInfo).Items()
 
 	for i := range consumers {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("requeuing classifier %s", consumers[i].Name))
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
 				Name: consumers[i].Name,
@@ -79,23 +88,69 @@ func (r *ClassifierReconciler) requeueClassifierForMachine(
 
 	clusterLabelName, ok := machine.Labels[clusterv1.ClusterLabelName]
 	if !ok {
-		logger.V(logs.LogVerbose).Info("Machine has not ClusterLabelName")
+		logger.V(logs.LogDebug).Info("Machine has not ClusterLabelName")
 		return nil
 	}
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterInfo := libsveltosv1alpha1.PolicyRef{Kind: "Cluster", Namespace: machine.Namespace, Name: clusterLabelName}
+	clusterInfo := corev1.ObjectReference{
+		Kind:       "Cluster",
+		Namespace:  machine.Namespace,
+		Name:       clusterLabelName,
+		APIVersion: clusterv1.GroupVersion.String(),
+	}
 
-	// Get all ClusterProfile previously matching this cluster and reconcile those
+	// Get all Classifiers previously matching this cluster and reconcile those
 	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).Len())
 	consumers := r.getClusterMapForEntry(&clusterInfo).Items()
 
 	for i := range consumers {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("requeuing classifier %s", consumers[i].Name))
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
 				Name: consumers[i].Name,
+			},
+		}
+	}
+
+	return requests
+}
+
+func (r *ClassifierReconciler) requeueClassifierForSecret(
+	o client.Object,
+) []reconcile.Request {
+
+	secret := o.(*corev1.Secret)
+	logger := klogr.New().WithValues(
+		"objectMapper",
+		"requeueClassifierForSecret",
+		"namespace",
+		secret.Namespace,
+		"secret",
+		secret.Name,
+	)
+
+	logger.V(logs.LogDebug).Info("reacting to Secret change")
+
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	if secret.Labels == nil {
+		return nil
+	}
+	if _, ok := secret.Labels[libsveltosv1alpha1.AccessRequestLabelName]; !ok {
+		return nil
+	}
+
+	requests := make([]ctrl.Request, r.AllClassifierSet.Len())
+	classifiers := r.AllClassifierSet.Items()
+	for i := range classifiers {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("queuing classifier %s", classifiers[i].Name))
+		requests[i] = ctrl.Request{
+			NamespacedName: client.ObjectKey{
+				Name: classifiers[i].Name,
 			},
 		}
 	}
@@ -162,6 +217,7 @@ func (r *ClassifierReconciler) requeueClassifierForClassifier(
 			continue
 		}
 
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("queing %s for reconciliation", cName))
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
 				Name: cName,

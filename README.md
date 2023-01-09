@@ -2,17 +2,19 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/projectsveltos/classifier)](https://goreportcard.com/report/github.com/projectsveltos/classifier)
 [![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q)
 [![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)
+[![Twitter Follow](https://img.shields.io/twitter/follow/projectsveltos?style=social)](https://twitter.com/projectsveltos)
 
 # classifier
 
-<img src="https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.1/logos/logo.png" width="200">
+<img src="https://raw.githubusercontent.com/projectsveltos/sveltos/main/docs/assets/logo.png" width="200">
 
-Sveltos Classifier is an optional componet of the Sveltos project and it is used to dynamically classify a cluster based on its runtime configuration (Kubernetes version, deployed resources and more).
+Please refere to sveltos [documentation](https://projectsveltos.github.io/sveltos/).
+
+Sveltos Classifier is an componet of the Sveltos project and it is used to dynamically classify a cluster based on its runtime configuration (Kubernetes version, deployed resources and more).
 
 Classifier currently supports the following classification criterias:
 1. Kubernetes version
 2. Kubernetes resources
-
 
 For instance, this Classifier instance will match any cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.25.0"
 
@@ -120,30 +122,25 @@ With the above configuration:
 2. Any cluster with a Kubernetes version v1.25.x will get label _gatekeeper:v3.10_ added and because of that Gatekeeper 3.10.0 helm chart will be deployed;
 3. As soon a cluster is upgraded from Kubernetes version v1.24.x to v1.25.x, Gatekeeper helm chart will be automatically upgraded from 3.9.0 to 3.10.0
 
-## Install Sveltos classifier on any local or remote Kubernetes cluster.
+## Contributing [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/projectsveltos/sveltos-manager/issues)
+:heart: Your contributions are always welcome!
+If you have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
+1. Open a bug/feature enhancement on github;
+2. Chat with us on the Slack in the [#projectsveltos](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q) channel;
+3. Submit a pull request.
 
-Assumptions are:
-1. management cluster with ClusterAPI is available;
-2. Sveltos manager is deployed.
+## License
 
+Copyright 2022.
 
-Apply needed CRDs:
-1. Classifier CRD
-```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
-```
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-2. ClassifierReport CRD
-```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
-```
+    http://www.apache.org/licenses/LICENSE-2.0
 
-3. DebuggingConfiguration CRD
-```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
-```
-
-Finally install classifier controller
-```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/classifier/v0.2.1/manifest/manifest.yaml
-```
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.

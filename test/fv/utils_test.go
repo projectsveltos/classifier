@@ -89,9 +89,10 @@ func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 }
 
 func verifyClassifierReport(classifierName string, isMatch bool) {
-	Byf("Verifing ClassifierReport for Classifier %s", classifierName)
+	clusterType := libsveltosv1alpha1.ClusterTypeCapi
+	classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifierName, kindWorkloadCluster.Name, &clusterType)
+	Byf("Verifing ClassifierReport %s for Classifier %s", classifierReportName, classifierName)
 	Eventually(func() bool {
-		classifierReportName := getClassifierReportName(classifierName, kindWorkloadCluster.Name)
 		currentClassifierReport := &libsveltosv1alpha1.ClassifierReport{}
 		err := k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: classifierReportName},
@@ -101,7 +102,7 @@ func verifyClassifierReport(classifierName string, isMatch bool) {
 }
 
 func verifyClusterLabels(classifier *libsveltosv1alpha1.Classifier) {
-	Byf("Verifying Cluster labels are updated")
+	Byf("Verifying Cluster labels are updated with labels from Classifier %s", classifier.Name)
 	Eventually(func() bool {
 		currentCuster := &clusterv1.Cluster{}
 		err := k8sClient.Get(context.TODO(),
@@ -125,10 +126,6 @@ func verifyClusterLabels(classifier *libsveltosv1alpha1.Classifier) {
 		}
 		return true
 	}, timeout, pollingInterval).Should(BeTrue())
-}
-
-func getClassifierReportName(classifierName, clusterName string) string {
-	return fmt.Sprintf("%s--%s", classifierName, clusterName)
 }
 
 func removeLabels(classifier *libsveltosv1alpha1.Classifier) {

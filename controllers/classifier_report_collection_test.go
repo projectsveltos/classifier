@@ -60,14 +60,22 @@ var _ = Describe("Classifier Deployer", func() {
 	})
 
 	It("removeClusterClassifierReports deletes all ClassifierReport for a given cluster instance", func() {
+		clusterType := libsveltosv1alpha1.ClusterTypeCapi
 		clusterNamespace := randomString()
 		clusterName := randomString()
-		classifierReport1 := getClassifierReport(classifier.Name, randomString(), randomString())
-		classifierReport1.Labels[controllers.ClassifierReportClusterLabel] =
-			controllers.GetClusterInfo(clusterNamespace, clusterName)
-		classifierReport2 := getClassifierReport(classifier.Name, randomString(), randomString())
-		classifierReport2.Labels[controllers.ClassifierReportClusterLabel] =
-			controllers.GetClusterInfo(clusterNamespace, clusterName)
+
+		// Create a classifierReport from clusterNamespace/clusterName for a random Classifier (classifierName)
+		classifierName := randomString()
+		classifierReport1 := getClassifierReport(classifierName, clusterNamespace, clusterName)
+		classifierReport1.Labels = libsveltosv1alpha1.GetClassifierReportLabels(
+			classifier.Name, clusterName, &clusterType)
+
+		// Create a classifierReport from clusterNamespace/clusterName for a random Classifier (classifierName)
+		classifierName = randomString()
+		classifierReport2 := getClassifierReport(classifierName, clusterNamespace, clusterName)
+		classifierReport2.Labels = libsveltosv1alpha1.GetClassifierReportLabels(
+			classifier.Name, clusterName, &clusterType)
+
 		initObjects := []client.Object{
 			classifierReport1,
 			classifierReport2,
@@ -76,7 +84,7 @@ var _ = Describe("Classifier Deployer", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		Expect(controllers.RemoveClusterClassifierReports(context.TODO(), c, clusterNamespace, clusterName,
-			klogr.New())).To(Succeed())
+			clusterType, klogr.New())).To(Succeed())
 
 		classifierReportList := &libsveltosv1alpha1.ClassifierReportList{}
 		Expect(c.List(context.TODO(), classifierReportList)).To(Succeed())
@@ -111,23 +119,27 @@ var _ = Describe("Classifier Deployer", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifierReport)).To(Succeed())
 
-		Expect(controllers.CollectClassifierReportsFromCluster(context.TODO(), testEnv.Client, cluster, klogr.New())).To(Succeed())
+		Expect(controllers.CollectClassifierReportsFromCluster(context.TODO(), testEnv.Client, getClusterRef(cluster),
+			klogr.New())).To(Succeed())
 
-		validateClassifierReports(classifierName, cluster)
+		clusterType := libsveltosv1alpha1.ClusterTypeCapi
+
+		validateClassifierReports(classifierName, cluster, &clusterType)
 
 		// Update ClassifierReports and validate again
-		Expect(controllers.CollectClassifierReportsFromCluster(context.TODO(), testEnv.Client, cluster, klogr.New())).To(Succeed())
+		Expect(controllers.CollectClassifierReportsFromCluster(context.TODO(), testEnv.Client, getClusterRef(cluster),
+			klogr.New())).To(Succeed())
 
-		validateClassifierReports(classifierName, cluster)
+		validateClassifierReports(classifierName, cluster, &clusterType)
 	})
 
 })
 
-func validateClassifierReports(classifierName string, cluster *clusterv1.Cluster) {
+func validateClassifierReports(classifierName string, cluster *clusterv1.Cluster, clusterType *libsveltosv1alpha1.ClusterType) {
 	// Verify ClassifierReport is created
 	// Eventual loop so testEnv Cache is synced
 	Eventually(func() bool {
-		classifierReportName := controllers.GetClassifierReportName(classifierName, cluster.Name)
+		classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifierName, cluster.Name, clusterType)
 		currentClassifierReport := &libsveltosv1alpha1.ClassifierReport{}
 		err := testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: classifierReportName}, currentClassifierReport)

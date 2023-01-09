@@ -115,6 +115,27 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
 	})
 
+	It("deployDebuggingConfigurationCRD deploys DebuggingConfiguration CRD", func() {
+		Expect(controllers.DeployDebuggingConfigurationCRD(context.TODO(), testEnv.Config, klogr.New())).To(Succeed())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			dcCRD := &apiextensionsv1.CustomResourceDefinition{}
+			return testEnv.Get(context.TODO(),
+				types.NamespacedName{Name: "debuggingconfigurations.lib.projectsveltos.io"}, dcCRD)
+		}, timeout, pollingInterval).Should(BeNil())
+	})
+
+	It("deployClassifierInstance creates Classifier instance", func() {
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		classifier := getClassifierInstance(randomString())
+		Expect(controllers.DeployClassifierInstance(ctx, c, classifier, klogr.New())).To(Succeed())
+
+		currentClassifier := &libsveltosv1alpha1.Classifier{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
+	})
+
 	It("deployClassifierInstance updates Classifier instance", func() {
 		classifier := getClassifierInstance(randomString())
 
@@ -141,7 +162,8 @@ var _ = Describe("Classifier Deployer", func() {
 		// Just verify result is success (testEnv is used to simulate both management and workload cluster and because
 		// classifier is expected in the management cluster, above line is required
 		Expect(controllers.DeployClassifierInCluster(context.TODO(), testEnv.Client, cluster.Namespace, cluster.Name,
-			classifier.Name, libsveltosv1alpha1.FeatureClassifier, klogr.New())).To(Succeed())
+			classifier.Name, libsveltosv1alpha1.FeatureClassifier, libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{},
+			klogr.New())).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -162,8 +184,8 @@ var _ = Describe("Classifier Deployer", func() {
 		cluster := prepareCluster()
 
 		f := controllers.GetHandlersForFeature(libsveltosv1alpha1.FeatureClassifier)
-		clusterInfo, err := controllers.ProcessClassifier(classifierReconciler, context.TODO(), classifierScope,
-			cluster, f, klogr.New())
+		clusterInfo, err := controllers.ProcessClassifier(classifierReconciler, context.TODO(), classifierScope, "",
+			getClusterRef(cluster), f, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(clusterInfo).ToNot(BeNil())
 		Expect(clusterInfo.Status).To(Equal(libsveltosv1alpha1.ClassifierStatusProvisioning))
@@ -191,9 +213,12 @@ var _ = Describe("Classifier Deployer", func() {
 		classifier.Status = libsveltosv1alpha1.ClassifierStatus{
 			ClusterInfo: []libsveltosv1alpha1.ClusterInfo{
 				{
-					Cluster: corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
-					Status:  libsveltosv1alpha1.ClassifierStatusProvisioned,
-					Hash:    hash,
+					Cluster: corev1.ObjectReference{
+						Namespace: cluster.Namespace, Name: cluster.Name,
+						APIVersion: clusterv1.GroupVersion.String(), Kind: clusterKind,
+					},
+					Status: libsveltosv1alpha1.ClassifierStatusProvisioned,
+					Hash:   hash,
 				},
 			},
 		}
@@ -210,8 +235,8 @@ var _ = Describe("Classifier Deployer", func() {
 		classifierScope := getClassifierScope(testEnv.Client, klogr.New(), classifier)
 
 		f := controllers.GetHandlersForFeature(libsveltosv1alpha1.FeatureClassifier)
-		clusterInfo, err := controllers.ProcessClassifier(classifierReconciler, context.TODO(), classifierScope,
-			cluster, f, klogr.New())
+		clusterInfo, err := controllers.ProcessClassifier(classifierReconciler, context.TODO(), classifierScope, "",
+			getClusterRef(cluster), f, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(clusterInfo).ToNot(BeNil())
 		Expect(clusterInfo.Status).To(Equal(libsveltosv1alpha1.ClassifierStatusProvisioned))
@@ -235,9 +260,12 @@ var _ = Describe("Classifier Deployer", func() {
 			currentClassifier)).To(Succeed())
 		currentClassifier.Status.ClusterInfo = []libsveltosv1alpha1.ClusterInfo{
 			{
-				Cluster: corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
-				Status:  libsveltosv1alpha1.ClassifierStatusProvisioned,
-				Hash:    []byte(randomString()),
+				Cluster: corev1.ObjectReference{
+					Namespace: cluster.Namespace, Name: cluster.Name,
+					APIVersion: clusterv1.GroupVersion.String(), Kind: clusterKind,
+				},
+				Status: libsveltosv1alpha1.ClassifierStatusProvisioned,
+				Hash:   []byte(randomString()),
 			},
 		}
 
@@ -252,12 +280,12 @@ var _ = Describe("Classifier Deployer", func() {
 
 		f := controllers.GetHandlersForFeature(libsveltosv1alpha1.FeatureClassifier)
 		err := controllers.RemoveClassifier(classifierReconciler, context.TODO(), classifierScope,
-			cluster, f, klogr.New())
+			getClusterRef(cluster), f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("cleanup request is queued"))
 
 		key := deployer.GetKey(cluster.Namespace, cluster.Name,
-			classifier.Name, libsveltosv1alpha1.FeatureClassifier, true)
+			classifier.Name, libsveltosv1alpha1.FeatureClassifier, libsveltosv1alpha1.ClusterTypeCapi, true)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 	})
 
@@ -277,9 +305,12 @@ var _ = Describe("Classifier Deployer", func() {
 			currentClassifier)).To(Succeed())
 		currentClassifier.Status.ClusterInfo = []libsveltosv1alpha1.ClusterInfo{
 			{
-				Cluster: corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
-				Status:  libsveltosv1alpha1.ClassifierStatusProvisioned,
-				Hash:    []byte(randomString()),
+				Cluster: corev1.ObjectReference{
+					Namespace: cluster.Namespace, Name: cluster.Name,
+					APIVersion: clusterv1.GroupVersion.String(), Kind: clusterKind,
+				},
+				Status: libsveltosv1alpha1.ClassifierStatusProvisioned,
+				Hash:   []byte(randomString()),
 			},
 		}
 
@@ -293,7 +324,8 @@ var _ = Describe("Classifier Deployer", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		err := controllers.UndeployClassifierFromCluster(context.TODO(), testEnv, cluster.Namespace,
-			cluster.Name, classifier.Name, libsveltosv1alpha1.FeatureClassifier, klogr.New())
+			cluster.Name, classifier.Name, libsveltosv1alpha1.FeatureClassifier, libsveltosv1alpha1.ClusterTypeCapi,
+			deployer.Options{}, klogr.New())
 		Expect(err).To(BeNil())
 
 		// Eventual loop so testEnv Cache is synced
@@ -323,9 +355,12 @@ var _ = Describe("Classifier Deployer", func() {
 			currentClassifier)).To(Succeed())
 		currentClassifier.Status.ClusterInfo = []libsveltosv1alpha1.ClusterInfo{
 			{
-				Cluster: corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name},
-				Status:  libsveltosv1alpha1.ClassifierStatusProvisioned,
-				Hash:    []byte(randomString()),
+				Cluster: corev1.ObjectReference{
+					Namespace: cluster.Namespace, Name: cluster.Name,
+					APIVersion: clusterv1.GroupVersion.String(), Kind: clusterKind,
+				},
+				Status: libsveltosv1alpha1.ClassifierStatusProvisioned,
+				Hash:   []byte(randomString()),
 			},
 		}
 
@@ -345,12 +380,13 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(err.Error()).To(Equal("still in the process of removing Classifier from 1 clusters"))
 
 		key := deployer.GetKey(cluster.Namespace, cluster.Name,
-			classifier.Name, libsveltosv1alpha1.FeatureClassifier, true)
+			classifier.Name, libsveltosv1alpha1.FeatureClassifier, libsveltosv1alpha1.ClusterTypeCapi, true)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 	})
 
 	It("deployClassifierAgent deploys classifier agent", func() {
-		Expect(controllers.DeployClassifierAgent(ctx, testEnv.Config, klogr.New())).To(Succeed())
+		Expect(controllers.DeployClassifierAgent(ctx, testEnv.Config, randomString(), randomString(),
+			"do-not-send-reports", libsveltosv1alpha1.ClusterTypeCapi, klogr.New())).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -359,6 +395,104 @@ var _ = Describe("Classifier Deployer", func() {
 				types.NamespacedName{Namespace: "projectsveltos", Name: "classifier-agent-manager"},
 				currentClassifierAgent)
 		}, timeout, pollingInterval).Should(BeNil())
+	})
+
+	It("createAccessRequest creates AccessRequest instance", func() {
+		classifier := getClassifierInstance(randomString())
+
+		clusterNamespace := randomString()
+		clusterName := randomString()
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterNamespace,
+			},
+		}
+
+		initObjects := []client.Object{classifier, ns}
+
+		options := deployer.Options{
+			HandlerOptions: map[string]string{controllers.Controlplaneendpoint: "http://192.168.10.1:443"},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		Expect(controllers.CreateAccessRequest(ctx, c, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi,
+			options)).To(Succeed())
+
+		accessRequest := &libsveltosv1alpha1.AccessRequest{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{
+				Namespace: clusterNamespace,
+				Name:      controllers.GetAccessRequestName(clusterName, libsveltosv1alpha1.ClusterTypeCapi),
+			},
+			accessRequest)).To(Succeed())
+	})
+
+	It("getKubeconfigFromAccessRequest returns Kubeconfig contained in the AccessRequest Secret", func() {
+		classifier := getClassifierInstance(randomString())
+
+		clusterNamespace := randomString()
+		clusterName := randomString()
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterNamespace,
+			},
+		}
+
+		kubeconfig := []byte(randomString())
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+			Data: map[string][]byte{
+				"kubeconfig": kubeconfig,
+			},
+		}
+
+		accessRequest := libsveltosv1alpha1.AccessRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      controllers.GetAccessRequestName(clusterName, libsveltosv1alpha1.ClusterTypeCapi),
+				Namespace: clusterNamespace,
+			},
+			Status: libsveltosv1alpha1.AccessRequestStatus{
+				SecretRef: &corev1.ObjectReference{
+					Namespace: secret.Namespace,
+					Name:      secret.Name,
+				},
+			},
+		}
+
+		initObjects := []client.Object{classifier, secret, ns, &accessRequest}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		currentKubeconfig, err := controllers.GetKubeconfigFromAccessRequest(context.TODO(), c,
+			clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(currentKubeconfig).ToNot(BeNil())
+		Expect(reflect.DeepEqual(currentKubeconfig, kubeconfig)).To(BeTrue())
+	})
+
+	It("updateSecretWithAccessManagementKubeconfig creates a secret containing kubeconfig to access management cluster", func() {
+		classifier := getClassifierInstance(randomString())
+		Expect(testEnv.Create(context.TODO(), classifier)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
+
+		kubeconfig := []byte(randomString())
+
+		cluster := prepareCluster()
+
+		Expect(controllers.UpdateSecretWithAccessManagementKubeconfig(context.TODO(), testEnv.Client, cluster.Namespace, cluster.Name,
+			classifier.Name, libsveltosv1alpha1.ClusterTypeCapi, kubeconfig, klogr.New())).To(BeNil())
+
+		Eventually(func() bool {
+			secret := &corev1.Secret{}
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: libsveltosv1alpha1.ClassifierSecretNamespace, Name: libsveltosv1alpha1.ClassifierSecretName},
+				secret)
+			return err == nil
+		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })
 
@@ -420,5 +554,17 @@ func prepareCluster() *clusterv1.Cluster {
 	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
 
+	Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
+
 	return cluster
+}
+
+func getClusterRef(cluster client.Object) *corev1.ObjectReference {
+	apiVersion, kind := cluster.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
+	return &corev1.ObjectReference{
+		Namespace:  cluster.GetNamespace(),
+		Name:       cluster.GetName(),
+		APIVersion: apiVersion,
+		Kind:       kind,
+	}
 }

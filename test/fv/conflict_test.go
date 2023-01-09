@@ -88,17 +88,27 @@ var _ = Describe("Classifier: update cluster labels", func() {
 			types.NamespacedName{Name: classifier1.Name}, currentClassifier)).To(Succeed())
 		Expect(k8sClient.Delete(context.TODO(), currentClassifier)).To(Succeed())
 
-		Byf("Verifying Classifier instance is removed from the workload cluster")
+		Byf("Verifying Classifier %s instance is removed from the workload cluster", classifier1.Name)
 		Eventually(func() bool {
 			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Name: classifier1.Name}, currentClassifier)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		Byf("Verifying Classifier instance is removed from the management cluster")
+		Byf("Verifying Classifier %s instance is removed from the management cluster", classifier1.Name)
 		Eventually(func() bool {
 			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: classifier1.Name}, currentClassifier)
+			return err != nil && apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		clusterType := libsveltosv1alpha1.ClusterTypeCapi
+		classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifier1.Name, kindWorkloadCluster.Name, &clusterType)
+		Byf("Verifying ClassifierReports instance %s is removed from the management cluster", classifierReportName)
+		Eventually(func() bool {
+			classifierReport := &libsveltosv1alpha1.ClassifierReport{}
+			err = k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: classifierReportName}, classifierReport)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 

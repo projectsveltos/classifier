@@ -38,6 +38,8 @@ spec:
         - /manager
         args:
         - --leader-elect
+        - --report-mode=1
+        - --v=5
         image: controller:latest
         imagePullPolicy: Always
         name: manager

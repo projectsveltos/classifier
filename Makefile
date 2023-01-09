@@ -44,7 +44,7 @@ ARCH ?= amd64
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= v0.2.1
+TAG ?= main
 
 ## Tool Binaries
 CONTROLLER_GEN := $(TOOLS_BIN_DIR)/controller-gen
@@ -127,7 +127,8 @@ generate: $(CONTROLLER_GEN) ## Generate code containing DeepCopy, DeepCopyInto, 
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 .PHONY: fmt
-fmt: ## Run go fmt against code.
+fmt: $(GOIMPORTS) ## Run go fmt against code.
+	$(GOIMPORTS) -local github.com/projectsveltos -w .
 	go fmt ./...
 
 .PHONY: vet
@@ -183,6 +184,8 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	@echo "Start projectsveltos classifier"
 	$(MAKE) deploy-projectsveltos
 
+	@echo "Deploying access manager"
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/access-manager/main/manifest/manifest.yaml
 	@echo "wait for cluster to be provisioned"
 	$(KUBECTL) wait cluster sveltos-management-workload -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
 
@@ -207,7 +210,7 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 
 classifier-agent:
 	@echo "Downloading classifier agent yaml"
-	curl -L https://raw.githubusercontent.com/projectsveltos/classifier-agent/v0.2.1/manifest/manifest.yaml -o ./pkg/agent/classifier-agent.yaml
+	curl -L https://raw.githubusercontent.com/projectsveltos/classifier-agent/main/manifest/manifest.yaml -o ./pkg/agent/classifier-agent.yaml
 	cd pkg/agent; go generate
 
 .PHONY: build
@@ -294,9 +297,11 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	$(MAKE) load-image
 	
 	@echo 'Install libsveltos CRDs'
-	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
-	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
-	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.1/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/main/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/main/config/crd/bases/lib.projectsveltos.io_classifiers.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/main/config/crd/bases/lib.projectsveltos.io_classifierreports.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/main/config/crd/bases/lib.projectsveltos.io_accessrequests.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/main/config/crd/bases/lib.projectsveltos.io_sveltosclusters.yaml
 
 	# Install projectsveltos classifier components
 	@echo 'Install projectsveltos classifier components'

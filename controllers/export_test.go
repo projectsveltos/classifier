@@ -19,6 +19,7 @@ package controllers
 var (
 	DeployClassifierCRD                 = deployClassifierCRD
 	DeployClassifierReportCRD           = deployClassifierReportCRD
+	DeployDebuggingConfigurationCRD     = deployDebuggingConfigurationCRD
 	DeployClassifierInstance            = deployClassifierInstance
 	DeployClassifierAgent               = deployClassifierAgent
 	ClassifierHash                      = classifierHash
@@ -27,8 +28,11 @@ var (
 	RemoveClassifierReports             = removeClassifierReports
 	RemoveClusterClassifierReports      = removeClusterClassifierReports
 	CollectClassifierReportsFromCluster = collectClassifierReportsFromCluster
-	GetClassifierReportName             = getClassifierReportName
-	GetClusterInfo                      = getClusterInfo
+
+	CreateAccessRequest                        = createAccessRequest
+	GetAccessRequestName                       = getAccessRequestName
+	GetKubeconfigFromAccessRequest             = getKubeconfigFromAccessRequest
+	UpdateSecretWithAccessManagementKubeconfig = updateSecretWithAccessManagementKubeconfig
 
 	GetHandlersForFeature = getHandlersForFeature
 
@@ -38,18 +42,19 @@ var (
 	RequeueClassifierForMachine            = (*ClassifierReconciler).requeueClassifierForMachine
 	RequeueClassifierForClassifierReport   = (*ClassifierReconciler).requeueClassifierForClassifierReport
 	RequeueClassifierForClassifier         = (*ClassifierReconciler).requeueClassifierForClassifier
-	GetListOfClusters                      = (*ClassifierReconciler).getListOfClusters
 	UpdateMatchingClustersAndRegistrations = (*ClassifierReconciler).updateMatchingClustersAndRegistrations
 	UpdateLabelsOnMatchingClusters         = (*ClassifierReconciler).updateLabelsOnMatchingClusters
 	HandleLabelRegistrations               = (*ClassifierReconciler).handleLabelRegistrations
 	UndeployClassifier                     = (*ClassifierReconciler).undeployClassifier
 	RemoveAllRegistrations                 = (*ClassifierReconciler).removeAllRegistrations
+	ClassifyLabels                         = (*ClassifierReconciler).classifyLabels
 )
 
 var (
 	CreatFeatureHandlerMaps = creatFeatureHandlerMaps
+	GetListOfClusters       = getListOfClusters
 )
 
 const (
-	ClassifierReportClusterLabel = classifierReportClusterLabel
+	Controlplaneendpoint = controlplaneendpoint
 )
