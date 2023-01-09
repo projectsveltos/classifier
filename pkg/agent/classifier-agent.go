@@ -82,6 +82,14 @@ rules:
   - list
   - watch
 - apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - lib.projectsveltos.io
   resources:
   - classifierreports
@@ -126,6 +134,14 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - debuggingconfigurations
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - projectsveltos.io
   resources:
@@ -297,7 +313,7 @@ spec:
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: gianlucam76/classifier-agent-manager-amd64:dev
+        image: gianlucam76/classifier-agent-manager-amd64:v0.3.0
         livenessProbe:
           httpGet:
             path: /healthz
