@@ -320,7 +320,7 @@ spec:
         - --v=5
         command:
         - /manager
-        image: gianlucam76/classifier-amd64:main
+        image: gianlucam76/classifier-amd64:dev
         livenessProbe:
           httpGet:
             path: /healthz

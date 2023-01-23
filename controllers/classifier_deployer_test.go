@@ -188,7 +188,7 @@ var _ = Describe("Classifier Deployer", func() {
 			getClusterRef(cluster), f, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(clusterInfo).ToNot(BeNil())
-		Expect(clusterInfo.Status).To(Equal(libsveltosv1alpha1.ClassifierStatusProvisioning))
+		Expect(clusterInfo.Status).To(Equal(libsveltosv1alpha1.SveltosStatusProvisioning))
 	})
 
 	It("processClassifier detects classifier does not need to be deployed in cluster", func() {
@@ -217,7 +217,7 @@ var _ = Describe("Classifier Deployer", func() {
 						Namespace: cluster.Namespace, Name: cluster.Name,
 						APIVersion: clusterv1.GroupVersion.String(), Kind: clusterKind,
 					},
-					Status: libsveltosv1alpha1.ClassifierStatusProvisioned,
+					Status: libsveltosv1alpha1.SveltosStatusProvisioned,
 					Hash:   hash,
 				},
 			},
@@ -239,7 +239,7 @@ var _ = Describe("Classifier Deployer", func() {
 			getClusterRef(cluster), f, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(clusterInfo).ToNot(BeNil())
-		Expect(clusterInfo.Status).To(Equal(libsveltosv1alpha1.ClassifierStatusProvisioned))
+		Expect(clusterInfo.Status).To(Equal(libsveltosv1alpha1.SveltosStatusProvisioned))
 	})
 
 	It("removeClassifier queue job to remove Classifier from Cluster", func() {
@@ -264,7 +264,7 @@ var _ = Describe("Classifier Deployer", func() {
 					Namespace: cluster.Namespace, Name: cluster.Name,
 					APIVersion: clusterv1.GroupVersion.String(), Kind: clusterKind,
 				},
-				Status: libsveltosv1alpha1.ClassifierStatusProvisioned,
+				Status: libsveltosv1alpha1.SveltosStatusProvisioned,
 				Hash:   []byte(randomString()),
 			},
 		}
@@ -309,7 +309,7 @@ var _ = Describe("Classifier Deployer", func() {
 					Namespace: cluster.Namespace, Name: cluster.Name,
 					APIVersion: clusterv1.GroupVersion.String(), Kind: clusterKind,
 				},
-				Status: libsveltosv1alpha1.ClassifierStatusProvisioned,
+				Status: libsveltosv1alpha1.SveltosStatusProvisioned,
 				Hash:   []byte(randomString()),
 			},
 		}
@@ -359,7 +359,7 @@ var _ = Describe("Classifier Deployer", func() {
 					Namespace: cluster.Namespace, Name: cluster.Name,
 					APIVersion: clusterv1.GroupVersion.String(), Kind: clusterKind,
 				},
-				Status: libsveltosv1alpha1.ClassifierStatusProvisioned,
+				Status: libsveltosv1alpha1.SveltosStatusProvisioned,
 				Hash:   []byte(randomString()),
 			},
 		}

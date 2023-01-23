@@ -74,7 +74,7 @@ func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierS
 		}
 		if cInfo != nil {
 			clusterInfo = append(clusterInfo, *cInfo)
-			if cInfo.Status != libsveltosv1alpha1.ClassifierStatusProvisioned {
+			if cInfo.Status != libsveltosv1alpha1.SveltosStatusProvisioned {
 				allDeployed = false
 			}
 		}
@@ -125,7 +125,7 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 			failureMessage := err.Error()
 			clusterInfo = append(clusterInfo, libsveltosv1alpha1.ClusterInfo{
 				Cluster:        *c,
-				Status:         libsveltosv1alpha1.ClassifierStatusRemoving,
+				Status:         libsveltosv1alpha1.SveltosStatusRemoving,
 				FailureMessage: &failureMessage,
 			})
 		}
@@ -543,19 +543,19 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 	return remoteClient.Delete(ctx, currentClassifier)
 }
 
-func (r *ClassifierReconciler) convertResultStatus(result deployer.Result) *libsveltosv1alpha1.ClassifierFeatureStatus {
+func (r *ClassifierReconciler) convertResultStatus(result deployer.Result) *libsveltosv1alpha1.SveltosFeatureStatus {
 	switch result.ResultStatus {
 	case deployer.Deployed:
-		s := libsveltosv1alpha1.ClassifierStatusProvisioned
+		s := libsveltosv1alpha1.SveltosStatusProvisioned
 		return &s
 	case deployer.Failed:
-		s := libsveltosv1alpha1.ClassifierStatusFailed
+		s := libsveltosv1alpha1.SveltosStatusFailed
 		return &s
 	case deployer.InProgress:
-		s := libsveltosv1alpha1.ClassifierStatusProvisioning
+		s := libsveltosv1alpha1.SveltosStatusProvisioning
 		return &s
 	case deployer.Removed:
-		s := libsveltosv1alpha1.ClassifierStatusRemoved
+		s := libsveltosv1alpha1.SveltosStatusRemoved
 		return &s
 	case deployer.Unavailable:
 		return nil
@@ -567,7 +567,7 @@ func (r *ClassifierReconciler) convertResultStatus(result deployer.Result) *libs
 // getClassifierInClusterHashAndStatus returns the hash of the Classifier that was deployed in a given
 // Cluster (if ever deployed)
 func (r *ClassifierReconciler) getClassifierInClusterHashAndStatus(classifier *libsveltosv1alpha1.Classifier,
-	cluster *corev1.ObjectReference) ([]byte, *libsveltosv1alpha1.ClassifierFeatureStatus) {
+	cluster *corev1.ObjectReference) ([]byte, *libsveltosv1alpha1.SveltosFeatureStatus) {
 
 	for i := range classifier.Status.ClusterInfo {
 		cInfo := &classifier.Status.ClusterInfo[i]
@@ -631,10 +631,10 @@ func (r *ClassifierReconciler) removeClassifier(ctx context.Context, classifierS
 	status := r.convertResultStatus(result)
 
 	if status != nil {
-		if *status == libsveltosv1alpha1.ClassifierStatusProvisioning {
+		if *status == libsveltosv1alpha1.SveltosStatusProvisioning {
 			return fmt.Errorf("feature is still being removed")
 		}
-		if *status == libsveltosv1alpha1.ClassifierStatusRemoved {
+		if *status == libsveltosv1alpha1.SveltosStatusRemoved {
 			return nil
 		}
 	} else {
@@ -742,7 +742,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 			string(currentHash), string(hash)))
 	}
 
-	var status *libsveltosv1alpha1.ClassifierFeatureStatus
+	var status *libsveltosv1alpha1.SveltosFeatureStatus
 	var result deployer.Result
 
 	if isConfigSame {
@@ -765,19 +765,19 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 			FailureMessage: &errorMessage,
 		}
 
-		if *status == libsveltosv1alpha1.ClassifierStatusProvisioned {
+		if *status == libsveltosv1alpha1.SveltosStatusProvisioned {
 			return clusterInfo, nil
 		}
-		if *status == libsveltosv1alpha1.ClassifierStatusProvisioning {
+		if *status == libsveltosv1alpha1.SveltosStatusProvisioning {
 			return clusterInfo, fmt.Errorf("classifier is still being provisioned")
 		}
-	} else if isConfigSame && currentStatus != nil && *currentStatus == libsveltosv1alpha1.ClassifierStatusProvisioned {
+	} else if isConfigSame && currentStatus != nil && *currentStatus == libsveltosv1alpha1.SveltosStatusProvisioned {
 		logger.V(logs.LogInfo).Info("already deployed")
-		s := libsveltosv1alpha1.ClassifierStatusProvisioned
+		s := libsveltosv1alpha1.SveltosStatusProvisioned
 		status = &s
 	} else {
 		logger.V(logs.LogInfo).Info("no result is available. queue job and mark status as provisioning")
-		s := libsveltosv1alpha1.ClassifierStatusProvisioning
+		s := libsveltosv1alpha1.SveltosStatusProvisioning
 		status = &s
 
 		options := deployer.Options{}
