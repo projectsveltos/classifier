@@ -121,7 +121,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 					APIVersion: cluster.APIVersion,
 					Kind:       cluster.Kind,
 				},
-				Status: libsveltosv1alpha1.ClassifierStatusProvisioned,
+				Status: libsveltosv1alpha1.SveltosStatusProvisioned,
 				Hash:   []byte(randomString()),
 			},
 		}
