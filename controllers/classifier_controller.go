@@ -192,22 +192,6 @@ func (r *ClassifierReconciler) reconcileDelete(
 		return reconcile.Result{}, err
 	}
 
-	r.Mux.Lock()
-	defer r.Mux.Unlock()
-
-	classifierInfo := getKeyFromObject(r.Scheme, classifierScope.Classifier)
-	r.ClassifierSet.Erase(classifierInfo)
-	r.AllClassifierSet.Erase(classifierInfo)
-
-	// Get list of Clusters not matched anymore by Classifier
-	if v, ok := r.ClassifierMap[*classifierInfo]; ok {
-		clusters := v.Items()
-		for i := range clusters {
-			r.getClusterMapForEntry(&clusters[i]).Erase(classifierInfo)
-		}
-	}
-	delete(r.ClassifierMap, *classifierInfo)
-
 	f := getHandlersForFeature(libsveltosv1alpha1.FeatureClassifier)
 	err = r.undeployClassifier(ctx, classifierScope, f, logger)
 	if err != nil {
@@ -228,6 +212,22 @@ func (r *ClassifierReconciler) reconcileDelete(
 			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 		}
 	}
+
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	classifierInfo := getKeyFromObject(r.Scheme, classifierScope.Classifier)
+	r.ClassifierSet.Erase(classifierInfo)
+	r.AllClassifierSet.Erase(classifierInfo)
+
+	// Get list of Clusters not matched anymore by Classifier
+	if v, ok := r.ClassifierMap[*classifierInfo]; ok {
+		clusters := v.Items()
+		for i := range clusters {
+			r.getClusterMapForEntry(&clusters[i]).Erase(classifierInfo)
+		}
+	}
+	delete(r.ClassifierMap, *classifierInfo)
 
 	if controllerutil.ContainsFinalizer(classifierScope.Classifier, libsveltosv1alpha1.ClassifierFinalizer) {
 		controllerutil.RemoveFinalizer(classifierScope.Classifier, libsveltosv1alpha1.ClassifierFinalizer)
