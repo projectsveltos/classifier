@@ -102,7 +102,7 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 	logger.V(logs.LogDebug).Info("request to undeploy")
 
 	clusters := make([]*corev1.ObjectReference, 0)
-	// Get list of CAPI clusters where Classifier needs to be removed
+	// Get list of clusters where Classifier needs to be removed
 	for i := range classifier.Status.ClusterInfo {
 		c := &classifier.Status.ClusterInfo[i].Cluster
 		_, err := getCluster(ctx, r.Client, c.Namespace, c.Name, getClusterType(c))
@@ -111,7 +111,7 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("cluster %s/%s does not exist", c.Namespace, c.Name))
 				continue
 			}
-			logger.V(logs.LogInfo).Info("failed to get CAPI cluster")
+			logger.V(logs.LogInfo).Info("failed to get cluster")
 			return err
 		}
 		clusters = append(clusters, c)
@@ -178,7 +178,7 @@ func getClassifierAndClusterClient(ctx context.Context, clusterNamespace, cluste
 		return nil, nil, fmt.Errorf("classifier is marked for deletion")
 	}
 
-	// Get CAPI Cluster
+	// Get Cluster
 	cluster, err := getCluster(ctx, c, clusterNamespace, clusterName, clusterType)
 	if err != nil {
 		return nil, nil, err
@@ -312,7 +312,7 @@ func updateSecretWithAccessManagementKubeconfig(ctx context.Context, c client.Cl
 	_, remoteClient, err := getClassifierAndClusterClient(ctx, clusterNamespace, clusterName, applicant,
 		clusterType, c, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to get classifier and CAPI cluster client")
+		logger.V(logs.LogInfo).Error(err, "failed to get classifier and cluster client")
 		return err
 	}
 
@@ -353,7 +353,7 @@ func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterN
 	// Deploy Classifier CRD and the Classifier instance
 	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to get CAPI cluster rest config")
+		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
 	}
 
@@ -419,7 +419,7 @@ func deployClassifierWithKubeconfigInCluster(ctx context.Context, c client.Clien
 
 	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to get CAPI cluster rest config")
+		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
 	}
 
@@ -434,7 +434,7 @@ func deployClassifierWithKubeconfigInCluster(ctx context.Context, c client.Clien
 	classifier, remoteClient, err := getClassifierAndClusterClient(ctx, clusterNamespace, clusterName, applicant, clusterType,
 		c, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to get classifier and CAPI cluster client")
+		logger.V(logs.LogInfo).Error(err, "failed to get classifier and cluster client")
 		return err
 	}
 
@@ -457,7 +457,7 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 
 	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to get CAPI cluster rest config")
+		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
 	}
 
@@ -477,7 +477,7 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 	classifier, remoteClient, err := getClassifierAndClusterClient(ctx, clusterNamespace, clusterName, applicant, clusterType,
 		c, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to get classifier and CAPI cluster client")
+		logger.V(logs.LogInfo).Error(err, "failed to get classifier and cluster client")
 		return err
 	}
 
@@ -491,7 +491,7 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 	return nil
 }
 
-// undeployClassifierFromCluster deletes Classifier instance from CAPI cluster
+// undeployClassifierFromCluster deletes Classifier instance from cluster
 func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
 	clusterType libsveltosv1alpha1.ClusterType, options deployer.Options, logger logr.Logger) error {
@@ -500,7 +500,7 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName))
 	logger.V(logs.LogDebug).Info("Undeploy classifier")
 
-	// Get CAPI Cluster
+	// Get Cluster
 	cluster, err := getCluster(ctx, c, clusterNamespace, clusterName, clusterType)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
