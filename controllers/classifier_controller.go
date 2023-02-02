@@ -117,15 +117,6 @@ type ClassifierReconciler struct {
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines/status,verbs=get;watch;list
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Classifier object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.12.1/pkg/reconcile
 func (r *ClassifierReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(logs.LogInfo).Info("Reconciling")
@@ -192,13 +183,6 @@ func (r *ClassifierReconciler) reconcileDelete(
 		return reconcile.Result{}, err
 	}
 
-	r.Mux.Lock()
-	defer r.Mux.Unlock()
-
-	classifierInfo := getKeyFromObject(r.Scheme, classifierScope.Classifier)
-	r.ClassifierSet.Erase(classifierInfo)
-	r.AllClassifierSet.Erase(classifierInfo)
-
 	f := getHandlersForFeature(libsveltosv1alpha1.FeatureClassifier)
 	err = r.undeployClassifier(ctx, classifierScope, f, logger)
 	if err != nil {
@@ -219,6 +203,22 @@ func (r *ClassifierReconciler) reconcileDelete(
 			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 		}
 	}
+
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	classifierInfo := getKeyFromObject(r.Scheme, classifierScope.Classifier)
+	r.ClassifierSet.Erase(classifierInfo)
+	r.AllClassifierSet.Erase(classifierInfo)
+
+	// Get list of Clusters not matched anymore by Classifier
+	if v, ok := r.ClassifierMap[*classifierInfo]; ok {
+		clusters := v.Items()
+		for i := range clusters {
+			r.getClusterMapForEntry(&clusters[i]).Erase(classifierInfo)
+		}
+	}
+	delete(r.ClassifierMap, *classifierInfo)
 
 	if controllerutil.ContainsFinalizer(classifierScope.Classifier, libsveltosv1alpha1.ClassifierFinalizer) {
 		controllerutil.RemoveFinalizer(classifierScope.Classifier, libsveltosv1alpha1.ClassifierFinalizer)

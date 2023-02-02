@@ -105,7 +105,7 @@ var _ = Describe("ClassifierScope", func() {
 		hash := []byte(randomString())
 		clusterInfo := libsveltosv1alpha1.ClusterInfo{
 			Cluster: corev1.ObjectReference{Namespace: clusterNamespace, Name: clusterName},
-			Status:  libsveltosv1alpha1.ClassifierStatusProvisioned,
+			Status:  libsveltosv1alpha1.SveltosStatusProvisioned,
 			Hash:    hash,
 		}
 		scope.SetClusterInfo([]libsveltosv1alpha1.ClusterInfo{clusterInfo})
@@ -114,7 +114,7 @@ var _ = Describe("ClassifierScope", func() {
 		Expect(classifier.Status.ClusterInfo[0].Cluster.Namespace).To(Equal(clusterNamespace))
 		Expect(classifier.Status.ClusterInfo[0].Cluster.Name).To(Equal(clusterName))
 		Expect(classifier.Status.ClusterInfo[0].Hash).To(Equal(hash))
-		Expect(classifier.Status.ClusterInfo[0].Status).To(Equal(libsveltosv1alpha1.ClassifierStatusProvisioned))
+		Expect(classifier.Status.ClusterInfo[0].Status).To(Equal(libsveltosv1alpha1.SveltosStatusProvisioned))
 	})
 
 	It("SetMatchingClusters sets Classifier.Status.MatchingCluster", func() {
