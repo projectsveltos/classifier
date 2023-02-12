@@ -12,7 +12,7 @@ Please refere to sveltos [documentation](https://projectsveltos.github.io/svelto
 
 Sveltos Classifier is an componet of the Sveltos project and it is used to dynamically classify a cluster based on its runtime configuration (Kubernetes version, deployed resources and more).
 
-Classifier currently supports the following classification criterias:
+Classifier currently supports the following classification criteria:
 1. Kubernetes version
 2. Kubernetes resources
 
