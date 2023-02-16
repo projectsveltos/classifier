@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sync"
 	"syscall"
 	"time"
 
@@ -142,6 +143,7 @@ func main() {
 		Deployer:             d,
 		ClassifierReportMode: reportMode,
 		ControlPlaneEndpoint: managementClusterControlPlaneEndpoint,
+		Mux:                  sync.Mutex{},
 	}
 	var classifierController controller.Controller
 	classifierController, err = classifierReconciler.SetupWithManager(mgr)

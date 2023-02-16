@@ -91,12 +91,12 @@ func (s *ClassifierScope) ControllerName() string {
 	return s.controllerName
 }
 
-// SetMatchingClusterRefs sets the feature status.
+// SetMachingClusterStatuses sets the MachingClusterStatuses status.
 func (s *ClassifierScope) SetMachingClusterStatuses(matchingClusters []libsveltosv1alpha1.MachingClusterStatus) {
 	s.Classifier.Status.MachingClusterStatuses = matchingClusters
 }
 
-// SetMatchingClusterRefs sets the feature status.
+// SetClusterInfo sets the ClusterInfo status field.
 func (s *ClassifierScope) SetClusterInfo(clusterInfo []libsveltosv1alpha1.ClusterInfo) {
 	s.Classifier.Status.ClusterInfo = clusterInfo
 }
