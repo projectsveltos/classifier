@@ -313,7 +313,7 @@ spec:
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: gianlucam76/classifier-agent-manager-amd64:v0.5.0
+        image: gianlucam76/classifier-agent-manager-amd64:main
         livenessProbe:
           httpGet:
             path: /healthz
