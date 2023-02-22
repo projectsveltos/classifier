@@ -43,7 +43,7 @@ import (
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
-var _ = Describe("ClusterProfile: Reconciler", func() {
+var _ = Describe("Classifier: Reconciler", func() {
 	var classifier *libsveltosv1alpha1.Classifier
 
 	BeforeEach(func() {

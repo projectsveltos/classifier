@@ -105,6 +105,18 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 	// Get list of clusters where Classifier needs to be removed
 	for i := range classifier.Status.ClusterInfo {
 		c := &classifier.Status.ClusterInfo[i].Cluster
+
+		// Remove any queued entry to deploy/evaluate
+		r.Deployer.CleanupEntries(c.Namespace, c.Name, classifier.Name, f.id, getClusterType(c), false)
+
+		// If deploying feature is in progress, wait for it to complete.
+		// Otherwise, if we cleanup feature while same feature is still being provisioned, if two workers process those request in
+		// parallel some resources might be left over.
+		if r.Deployer.IsInProgress(c.Namespace, c.Name, classifier.Name, f.id, getClusterType(c), false) {
+			logger.V(logs.LogDebug).Info("provisioning is in progress")
+			return fmt.Errorf("deploying %s still in progress. Wait before cleanup", f.id)
+		}
+
 		_, err := getCluster(ctx, r.Client, c.Namespace, c.Name, getClusterType(c))
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -738,8 +750,8 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 	hash, currentStatus := r.getClassifierInClusterHashAndStatus(classifier, cluster)
 	isConfigSame := reflect.DeepEqual(hash, currentHash)
 	if !isConfigSame {
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("Classifier has changed. Current hash %s. Previous hash %s",
-			string(currentHash), string(hash)))
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("Classifier has changed. Current hash %x. Previous hash %x",
+			currentHash, hash))
 	}
 
 	var status *libsveltosv1alpha1.SveltosFeatureStatus
