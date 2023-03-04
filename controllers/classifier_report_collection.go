@@ -125,7 +125,7 @@ func collectClassifierReports(c client.Client, logger logr.Logger) {
 	ctx := context.TODO()
 	for {
 		logger.V(logs.LogDebug).Info("collecting ClassifierReports")
-		clusterList, err := getListOfClusters(ctx, c, logger)
+		clusterList, err := clusterproxy.GetListOfClusters(ctx, c, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
 		}
@@ -163,13 +163,9 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	scheme, err := InitScheme()
-	if err != nil {
-		return err
-	}
-
 	var remoteClient client.Client
-	remoteClient, err = getKubernetesClient(ctx, c, scheme, cluster.Namespace, cluster.Name, getClusterType(clusterRef), logger)
+	remoteClient, err = clusterproxy.GetKubernetesClient(ctx, c, cluster.Namespace, cluster.Name, "",
+		clusterproxy.GetClusterType(clusterRef), logger)
 	if err != nil {
 		return err
 	}
@@ -225,7 +221,7 @@ func updateClassifierReport(ctx context.Context, c client.Client, cluster *corev
 		return nil
 	}
 
-	clusterType := getClusterType(cluster)
+	clusterType := clusterproxy.GetClusterType(cluster)
 	classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifierName, cluster.Name, &clusterType)
 
 	currentClassifierReport := &libsveltosv1alpha1.ClassifierReport{}
