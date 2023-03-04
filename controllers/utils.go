@@ -80,3 +80,21 @@ func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) {
 		break
 	}
 }
+
+func getClusterRefFromClassifierReport(report *libsveltosv1alpha1.ClassifierReport) *corev1.ObjectReference {
+	cluster := corev1.ObjectReference{
+		Namespace: report.Spec.ClusterNamespace,
+		Name:      report.Spec.ClusterName,
+	}
+	switch report.Spec.ClusterType {
+	case libsveltosv1alpha1.ClusterTypeCapi:
+		cluster.APIVersion = clusterv1.GroupVersion.String()
+		cluster.Kind = "Cluster"
+	case libsveltosv1alpha1.ClusterTypeSveltos:
+		cluster.APIVersion = libsveltosv1alpha1.GroupVersion.String()
+		cluster.Kind = libsveltosv1alpha1.SveltosClusterKind
+	default:
+		panic(1)
+	}
+	return &cluster
+}

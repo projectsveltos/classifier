@@ -52,7 +52,6 @@ var (
 
 var (
 	CreatFeatureHandlerMaps = creatFeatureHandlerMaps
-	GetListOfClusters       = getListOfClusters
 )
 
 const (
