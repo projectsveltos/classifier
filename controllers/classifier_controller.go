@@ -56,8 +56,9 @@ const (
 
 	// In this mode, classifier agent sends ClassifierReport
 	// to management cluster.
-	// ClassifierAgent is provided with Kubeconfig to access
-	// management cluster and can only update ClassifierReport
+	// SveltosAgent is provided with Kubeconfig to access
+	// management cluster and can only update ClassifierReport/
+	// HealthCheckReport/EventReport
 	AgentSendReportsNoGateway
 )
 

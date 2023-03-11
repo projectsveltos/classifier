@@ -105,6 +105,50 @@ var _ = Describe("Classifier Deployer", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 	})
 
+	It("deployHealthCheckCRD deploys HealthCheck CRD", func() {
+		Expect(controllers.DeployHealthCheckCRD(context.TODO(), testEnv.Config, klogr.New())).To(Succeed())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			healthCheckCRD := &apiextensionsv1.CustomResourceDefinition{}
+			return testEnv.Get(context.TODO(),
+				types.NamespacedName{Name: "healthchecks.lib.projectsveltos.io"}, healthCheckCRD)
+		}, timeout, pollingInterval).Should(BeNil())
+	})
+
+	It("deployHealthCheckReportCRD deploys HealthCheckReport CRD", func() {
+		Expect(controllers.DeployHealthCheckReportCRD(context.TODO(), testEnv.Config, klogr.New())).To(Succeed())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			healthCheckReportCRD := &apiextensionsv1.CustomResourceDefinition{}
+			return testEnv.Get(context.TODO(),
+				types.NamespacedName{Name: "healthcheckreports.lib.projectsveltos.io"}, healthCheckReportCRD)
+		}, timeout, pollingInterval).Should(BeNil())
+	})
+
+	It("deployEventSourceCRD deploys EventSource CRD", func() {
+		Expect(controllers.DeployEventSourceCRD(context.TODO(), testEnv.Config, klogr.New())).To(Succeed())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			eventSourceCRD := &apiextensionsv1.CustomResourceDefinition{}
+			return testEnv.Get(context.TODO(),
+				types.NamespacedName{Name: "eventsources.lib.projectsveltos.io"}, eventSourceCRD)
+		}, timeout, pollingInterval).Should(BeNil())
+	})
+
+	It("deployEventReportCRD deploys EventReport CRD", func() {
+		Expect(controllers.DeployEventReportCRD(context.TODO(), testEnv.Config, klogr.New())).To(Succeed())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			eventReportCRD := &apiextensionsv1.CustomResourceDefinition{}
+			return testEnv.Get(context.TODO(),
+				types.NamespacedName{Name: "eventreports.lib.projectsveltos.io"}, eventReportCRD)
+		}, timeout, pollingInterval).Should(BeNil())
+	})
+
 	It("deployClassifierInstance creates Classifier instance", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -384,16 +428,16 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 	})
 
-	It("deployClassifierAgent deploys classifier agent", func() {
-		Expect(controllers.DeployClassifierAgent(ctx, testEnv.Config, randomString(), randomString(),
+	It("deploySveltosAgent deploys sveltos agent", func() {
+		Expect(controllers.DeploySveltosAgent(ctx, testEnv.Config, randomString(), randomString(),
 			"do-not-send-reports", libsveltosv1alpha1.ClusterTypeCapi, klogr.New())).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
-			currentClassifierAgent := &appsv1.Deployment{}
+			currentSveltosAgent := &appsv1.Deployment{}
 			return testEnv.Get(context.TODO(),
-				types.NamespacedName{Namespace: "projectsveltos", Name: "classifier-agent-manager"},
-				currentClassifierAgent)
+				types.NamespacedName{Namespace: "projectsveltos", Name: "sveltos-agent-manager"},
+				currentSveltosAgent)
 		}, timeout, pollingInterval).Should(BeNil())
 	})
 

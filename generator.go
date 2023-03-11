@@ -81,13 +81,13 @@ func generate(filename, outputFilename, manifest string) {
 	}
 
 	// Generate template.
-	manifesTemplate := template.Must(template.New("classifier-agent-generate").Parse(agentTemplate))
+	manifesTemplate := template.Must(template.New("sveltos-agent-generate").Parse(agentTemplate))
 	if err := manifesTemplate.Execute(agent, mi); err != nil {
 		panic(err)
 	}
 }
 
 func main() {
-	classifierAgentFile := "../../pkg/agent/classifier-agent.yaml"
-	generate(classifierAgentFile, "classifier-agent", "classifierAgent")
+	sveltosAgentFile := "../../pkg/agent/sveltos-agent.yaml"
+	generate(sveltosAgentFile, "sveltos-agent", "sveltosAgent")
 }

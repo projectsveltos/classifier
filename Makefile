@@ -44,7 +44,7 @@ ARCH ?= amd64
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= main
+TAG ?= dev
 
 ## Tool Binaries
 CONTROLLER_GEN := $(TOOLS_BIN_DIR)/controller-gen
@@ -208,13 +208,13 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 
 ##@ Build
 
-classifier-agent:
-	@echo "Downloading classifier agent yaml"
-	curl -L https://raw.githubusercontent.com/projectsveltos/classifier-agent/$(TAG)/manifest/manifest.yaml -o ./pkg/agent/classifier-agent.yaml
+sveltos-agent:
+	@echo "Downloading sveltos agent yaml"
+	curl -L https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/manifest.yaml -o ./pkg/agent/sveltos-agent.yaml
 	cd pkg/agent; go generate
 
 .PHONY: build
-build: classifier-agent generate fmt vet ## Build manager binary.
+build: sveltos-agent generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
 
 .PHONY: run

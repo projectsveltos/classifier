@@ -25,11 +25,11 @@ import (
 	"github.com/projectsveltos/classifier/pkg/agent"
 )
 
-var _ = Describe("ClassifierAgent", func() {
-	It("Should get the ClassifierAgent", func() {
-		yaml := agent.GetClassifierAgentYAML()
+var _ = Describe("SveltosAgent", func() {
+	It("Should get the SveltosAgent", func() {
+		yaml := agent.GetSveltosAgentYAML()
 
-		filename := "classifier-agent.yaml"
+		filename := "sveltos-agent.yaml"
 		currentFile, err := os.ReadFile(filename)
 		Expect(err).To(BeNil())
 

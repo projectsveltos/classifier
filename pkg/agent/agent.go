@@ -18,6 +18,6 @@ package agent
 
 //go:generate go run ../../generator.go
 
-func GetClassifierAgentYAML() []byte {
-	return classifierAgentYAML
+func GetSveltosAgentYAML() []byte {
+	return sveltosAgentYAML
 }
