@@ -249,7 +249,7 @@ func createAccessRequest(ctx context.Context, c client.Client,
 			accessRequest.Spec = libsveltosv1alpha1.AccessRequestSpec{
 				Namespace: clusterNamespace,
 				Name:      clusterName,
-				Type:      libsveltosv1alpha1.ClassifierAgentRequest,
+				Type:      libsveltosv1alpha1.SveltosAgentRequest,
 				ControlPlaneEndpoint: clusterv1.APIEndpoint{
 					Host: fmt.Sprintf("%s:%s", info[0], info[1]),
 					Port: int32(port),
@@ -374,8 +374,36 @@ func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterN
 	}
 
 	logger.V(logs.LogDebug).Info("deploy classifierReport CRD")
-	// Deploy Classifier CRD
+	// Deploy ClassifierReport CRD
 	err = deployClassifierReportCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("deploy healthCheck CRD")
+	// Deploy HealthCheck CRD
+	err = deployHealthCheckCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("deploy healthCheckReport CRD")
+	// Deploy HealthCheckReport CRD
+	err = deployClassifierReportCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("deploy eventsource CRD")
+	// Deploy EventSource CRD
+	err = deployEventSourceCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("deploy eventReport CRD")
+	// Deploy EventReport CRD
+	err = deployEventReportCRD(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
@@ -433,9 +461,9 @@ func deployClassifierWithKubeconfigInCluster(ctx context.Context, c client.Clien
 		return err
 	}
 
-	logger.V(logs.LogDebug).Info("Deploying classifier agent")
-	// Deploy ClassifierAgent
-	err = deployClassifierAgent(ctx, remoteRestConfig, clusterNamespace, clusterName, "send-reports", clusterType, logger)
+	logger.V(logs.LogDebug).Info("Deploying sveltos agent")
+	// Deploy SveltosAgent
+	err = deploySveltosAgent(ctx, remoteRestConfig, clusterNamespace, clusterName, "send-reports", clusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -477,9 +505,9 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
-	logger.V(logs.LogDebug).Info("Deploying classifier agent")
-	// Deploy ClassifierAgent
-	err = deployClassifierAgent(ctx, remoteRestConfig, clusterNamespace, clusterName, "do-not-send-reports", clusterType, logger)
+	logger.V(logs.LogDebug).Info("Deploying sveltos agent")
+	// Deploy SveltosAgent
+	err = deploySveltosAgent(ctx, remoteRestConfig, clusterNamespace, clusterName, "do-not-send-reports", clusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -870,6 +898,120 @@ func deployClassifierReportCRD(ctx context.Context, remoteRestConfig *rest.Confi
 	return nil
 }
 
+// deployHealthCheckCRD deploys HealthCheck CRD in remote cluster
+func deployHealthCheckCRD(ctx context.Context, remoteRestConfig *rest.Config,
+	logger logr.Logger) error {
+
+	healthCheckCRD, err := utils.GetUnstructured(crd.GetHealthCheckCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get HealthCheck CRD unstructured: %v", err))
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, healthCheckCRD.GroupVersionKind(), "")
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+		return err
+	}
+
+	options := metav1.ApplyOptions{
+		FieldManager: "application/apply-patch",
+	}
+	_, err = dr.Apply(ctx, healthCheckCRD.GetName(), healthCheckCRD, options)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply healthCheck CRD: %v", err))
+		return err
+	}
+
+	return nil
+}
+
+// deployHealthCheckeportCRD deploys HealthCheckReport CRD in remote cluster
+func deployHealthCheckReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
+	logger logr.Logger) error {
+
+	healthCheckReportCRD, err := utils.GetUnstructured(crd.GetHealthCheckReportCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get healthCheckReport CRD unstructured: %v",
+			err))
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, healthCheckReportCRD.GroupVersionKind(), "")
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+		return err
+	}
+
+	options := metav1.ApplyOptions{
+		FieldManager: "application/apply-patch",
+	}
+	_, err = dr.Apply(ctx, healthCheckReportCRD.GetName(), healthCheckReportCRD, options)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply ClassifierReport CRD: %v", err))
+		return err
+	}
+
+	return nil
+}
+
+// deployEventSourceCRD deploys EventSource CRD in remote cluster
+func deployEventSourceCRD(ctx context.Context, remoteRestConfig *rest.Config,
+	logger logr.Logger) error {
+
+	eventSourceCRD, err := utils.GetUnstructured(crd.GetEventSourceCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get eventSourceCRD CRD unstructured: %v", err))
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, eventSourceCRD.GroupVersionKind(), "")
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+		return err
+	}
+
+	options := metav1.ApplyOptions{
+		FieldManager: "application/apply-patch",
+	}
+	_, err = dr.Apply(ctx, eventSourceCRD.GetName(), eventSourceCRD, options)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply eventSourceCRD CRD: %v", err))
+		return err
+	}
+
+	return nil
+}
+
+// deployEventReportCRD deploys EventReport CRD in remote cluster
+func deployEventReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
+	logger logr.Logger) error {
+
+	eventReportCRD, err := utils.GetUnstructured(crd.GetEventReportCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get eventReportCRD CRD unstructured: %v",
+			err))
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, eventReportCRD.GroupVersionKind(), "")
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+		return err
+	}
+
+	options := metav1.ApplyOptions{
+		FieldManager: "application/apply-patch",
+	}
+	_, err = dr.Apply(ctx, eventReportCRD.GetName(), eventReportCRD, options)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply ClassifierReport CRD: %v", err))
+		return err
+	}
+
+	return nil
+}
+
 func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 	classifier *libsveltosv1alpha1.Classifier, logger logr.Logger) error {
 
@@ -924,10 +1066,10 @@ func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest
 	return nil
 }
 
-func deployClassifierAgent(ctx context.Context, remoteRestConfig *rest.Config,
+func deploySveltosAgent(ctx context.Context, remoteRestConfig *rest.Config,
 	clusterNamespace, clusterName, mode string, clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
 
-	agentYAML := string(agent.GetClassifierAgentYAML())
+	agentYAML := string(agent.GetSveltosAgentYAML())
 
 	if mode != "do-not-send-reports" {
 		agentYAML = strings.ReplaceAll(agentYAML, "do-not-send-reports", "send-reports")

@@ -34,7 +34,7 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
-// removeAccessRequest removes AccessRequest generated for ClassifierAgent
+// removeAccessRequest removes AccessRequest generated for SveltosAgent
 func removeAccessRequest(ctx context.Context, c client.Client, logger logr.Logger) error {
 	accessRequestList := &libsveltosv1alpha1.AccessRequestList{}
 
@@ -57,7 +57,7 @@ func removeAccessRequest(ctx context.Context, c client.Client, logger logr.Logge
 		}
 	}
 
-	logger.V(logs.LogDebug).Info("remove AccessRequest for ClassifierAgents")
+	logger.V(logs.LogDebug).Info("remove AccessRequest for SveltosAgents")
 	return nil
 }
 
