@@ -389,7 +389,7 @@ func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterN
 
 	logger.V(logs.LogDebug).Info("deploy healthCheckReport CRD")
 	// Deploy HealthCheckReport CRD
-	err = deployClassifierReportCRD(ctx, remoteRestConfig, logger)
+	err = deployHealthCheckReportCRD(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
