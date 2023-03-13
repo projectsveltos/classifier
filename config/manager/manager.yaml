@@ -77,7 +77,7 @@ spec:
 apiVersion: lib.projectsveltos.io/v1alpha1
 kind: Classifier
 metadata:
-  name: default-classifier
+  name: default
 spec:
   classifierLabels:
    - key: sveltos-agent

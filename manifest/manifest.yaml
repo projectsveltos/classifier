@@ -377,7 +377,7 @@ spec:
 apiVersion: lib.projectsveltos.io/v1alpha1
 kind: Classifier
 metadata:
-  name: classifier-default-classifier
+  name: classifier-default
   namespace: projectsveltos
 spec:
   classifierLabels:
