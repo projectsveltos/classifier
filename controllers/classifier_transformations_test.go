@@ -36,7 +36,7 @@ import (
 )
 
 var _ = Describe("ClassifierTransformations map functions", func() {
-	It("requeueClassifierForCluster returns matching ClusterSummary", func() {
+	It("requeueClassifierForCluster returns all existing Classifiers", func() {
 		cluster := &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
@@ -104,21 +104,16 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
 		})
 		reconciler.ClusterMap[key] = &set
+		reconciler.AllClassifierSet = libsveltosset.Set{}
+		reconciler.AllClassifierSet.Insert(
+			&corev1.ObjectReference{Kind: libsveltosv1alpha1.ClassifierKind, Name: classifier0.Name},
+		)
+		reconciler.AllClassifierSet.Insert(
+			&corev1.ObjectReference{Kind: libsveltosv1alpha1.ClassifierKind, Name: classifier1.Name},
+		)
 
 		requests := controllers.RequeueClassifierForCluster(reconciler, cluster)
-		Expect(requests).To(HaveLen(1))
-		Expect(requests[0].Name).To(Equal(classifier0.Name))
-
-		set.Insert(&corev1.ObjectReference{
-			Kind: libsveltosv1alpha1.ClassifierKind, Name: classifier1.Name,
-			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-		})
-		reconciler.ClusterMap[key] = &set
-
-		requests = controllers.RequeueClassifierForCluster(reconciler, cluster)
 		Expect(requests).To(HaveLen(2))
-		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: classifier0.Name}}))
-		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: classifier1.Name}}))
 	})
 })
 
