@@ -482,7 +482,7 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
 	})
 
-	It("RequeueClassifierForCluster returns correct Classifier for a CAPI cluster", func() {
+	It("RequeueClassifierForCluster returns all existing Classifiers", func() {
 		Expect(testEnv.Client.Create(context.TODO(), classifier)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())

@@ -44,27 +44,20 @@ func (r *ClassifierReconciler) requeueClassifierForCluster(
 		cluster.GetName(),
 	)
 
-	logger.V(logs.LogDebug).Info("reacting to CAPI Cluster change")
+	logger.V(logs.LogDebug).Info("reacting to Cluster change")
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterInfo := corev1.ObjectReference{
-		Kind:       cluster.GetObjectKind().GroupVersionKind().Kind,
-		Namespace:  cluster.GetNamespace(),
-		Name:       cluster.GetName(),
-		APIVersion: cluster.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-	}
+	// Get all existing classifiers
+	classifiers := r.AllClassifierSet.Items()
+	requests := make([]ctrl.Request, r.AllClassifierSet.Len())
 
-	// Get all Classifiers previously matching this cluster and reconcile those
-	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).Len())
-	consumers := r.getClusterMapForEntry(&clusterInfo).Items()
-
-	for i := range consumers {
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("requeuing classifier %s", consumers[i].Name))
+	for i := range classifiers {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("requeuing classifier %s", classifiers[i].Name))
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
-				Name: consumers[i].Name,
+				Name: classifiers[i].Name,
 			},
 		}
 	}
@@ -86,31 +79,18 @@ func (r *ClassifierReconciler) requeueClassifierForMachine(
 		machine.Name,
 	)
 
-	clusterLabelName, ok := machine.Labels[clusterv1.ClusterLabelName]
-	if !ok {
-		logger.V(logs.LogDebug).Info("Machine has not ClusterLabelName")
-		return nil
-	}
-
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterInfo := corev1.ObjectReference{
-		Kind:       "Cluster",
-		Namespace:  machine.Namespace,
-		Name:       clusterLabelName,
-		APIVersion: clusterv1.GroupVersion.String(),
-	}
+	// Get all existing classifiers
+	classifiers := r.AllClassifierSet.Items()
+	requests := make([]ctrl.Request, r.AllClassifierSet.Len())
 
-	// Get all Classifiers previously matching this cluster and reconcile those
-	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).Len())
-	consumers := r.getClusterMapForEntry(&clusterInfo).Items()
-
-	for i := range consumers {
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("requeuing classifier %s", consumers[i].Name))
+	for i := range classifiers {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("requeuing classifier %s", classifiers[i].Name))
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
-				Name: consumers[i].Name,
+				Name: classifiers[i].Name,
 			},
 		}
 	}
