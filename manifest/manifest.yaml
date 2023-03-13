@@ -373,3 +373,13 @@ spec:
         runAsNonRoot: true
       serviceAccountName: classifier-manager
       terminationGracePeriodSeconds: 10
+---
+apiVersion: lib.projectsveltos.io/v1alpha1
+kind: Classifier
+metadata:
+  name: classifier-default-classifier
+  namespace: projectsveltos
+spec:
+  classifierLabels:
+  - key: sveltos-agent
+    value: present
