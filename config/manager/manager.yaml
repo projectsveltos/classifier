@@ -71,14 +71,3 @@ spec:
             memory: 128Mi
       serviceAccountName: classifier-manager
       terminationGracePeriodSeconds: 10
----
-# This default Classifier is needed so any cluster
-# where sveltos-agent is installed is labeled
-apiVersion: lib.projectsveltos.io/v1alpha1
-kind: Classifier
-metadata:
-  name: default
-spec:
-  classifierLabels:
-   - key: sveltos-agent
-     value: present

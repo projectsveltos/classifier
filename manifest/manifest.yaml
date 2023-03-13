@@ -374,12 +374,13 @@ spec:
       serviceAccountName: classifier-manager
       terminationGracePeriodSeconds: 10
 ---
+# This default Classifier is needed so any cluster
+# where sveltos-agent is installed is labeled
 apiVersion: lib.projectsveltos.io/v1alpha1
 kind: Classifier
 metadata:
-  name: classifier-default
-  namespace: projectsveltos
+  name: default-classifier
 spec:
   classifierLabels:
-  - key: sveltos-agent
-    value: present
+   - key: sveltos-agent
+     value: present
