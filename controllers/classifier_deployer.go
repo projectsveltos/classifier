@@ -107,17 +107,17 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 		c := &classifier.Status.ClusterInfo[i].Cluster
 
 		// Remove any queued entry to deploy/evaluate
-		r.Deployer.CleanupEntries(c.Namespace, c.Name, classifier.Name, f.id, getClusterType(c), false)
+		r.Deployer.CleanupEntries(c.Namespace, c.Name, classifier.Name, f.id, clusterproxy.GetClusterType(c), false)
 
 		// If deploying feature is in progress, wait for it to complete.
 		// Otherwise, if we cleanup feature while same feature is still being provisioned, if two workers process those request in
 		// parallel some resources might be left over.
-		if r.Deployer.IsInProgress(c.Namespace, c.Name, classifier.Name, f.id, getClusterType(c), false) {
+		if r.Deployer.IsInProgress(c.Namespace, c.Name, classifier.Name, f.id, clusterproxy.GetClusterType(c), false) {
 			logger.V(logs.LogDebug).Info("provisioning is in progress")
 			return fmt.Errorf("deploying %s still in progress. Wait before cleanup", f.id)
 		}
 
-		_, err := getCluster(ctx, r.Client, c.Namespace, c.Name, getClusterType(c))
+		_, err := clusterproxy.GetCluster(ctx, r.Client, c.Namespace, c.Name, clusterproxy.GetClusterType(c))
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("cluster %s/%s does not exist", c.Namespace, c.Name))
@@ -191,7 +191,7 @@ func getClassifierAndClusterClient(ctx context.Context, clusterNamespace, cluste
 	}
 
 	// Get Cluster
-	cluster, err := getCluster(ctx, c, clusterNamespace, clusterName, clusterType)
+	cluster, err := clusterproxy.GetCluster(ctx, c, clusterNamespace, clusterName, clusterType)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -202,12 +202,8 @@ func getClassifierAndClusterClient(ctx context.Context, clusterNamespace, cluste
 		return nil, nil, fmt.Errorf("cluster is marked for deletion")
 	}
 
-	s, err := InitScheme()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	clusterClient, err := getKubernetesClient(ctx, c, s, clusterNamespace, clusterName, clusterType, logger)
+	clusterClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName, "",
+		clusterType, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -253,7 +249,7 @@ func createAccessRequest(ctx context.Context, c client.Client,
 			accessRequest.Spec = libsveltosv1alpha1.AccessRequestSpec{
 				Namespace: clusterNamespace,
 				Name:      clusterName,
-				Type:      libsveltosv1alpha1.ClassifierAgentRequest,
+				Type:      libsveltosv1alpha1.SveltosAgentRequest,
 				ControlPlaneEndpoint: clusterv1.APIEndpoint{
 					Host: fmt.Sprintf("%s:%s", info[0], info[1]),
 					Port: int32(port),
@@ -363,7 +359,8 @@ func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterN
 	clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
 
 	// Deploy Classifier CRD and the Classifier instance
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, "",
+		clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
@@ -377,8 +374,36 @@ func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterN
 	}
 
 	logger.V(logs.LogDebug).Info("deploy classifierReport CRD")
-	// Deploy Classifier CRD
+	// Deploy ClassifierReport CRD
 	err = deployClassifierReportCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("deploy healthCheck CRD")
+	// Deploy HealthCheck CRD
+	err = deployHealthCheckCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("deploy healthCheckReport CRD")
+	// Deploy HealthCheckReport CRD
+	err = deployHealthCheckReportCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("deploy eventsource CRD")
+	// Deploy EventSource CRD
+	err = deployEventSourceCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("deploy eventReport CRD")
+	// Deploy EventReport CRD
+	err = deployEventReportCRD(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
@@ -429,15 +454,16 @@ func deployClassifierWithKubeconfigInCluster(ctx context.Context, c client.Clien
 		return err
 	}
 
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, "",
+		clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
 	}
 
-	logger.V(logs.LogDebug).Info("Deploying classifier agent")
-	// Deploy ClassifierAgent
-	err = deployClassifierAgent(ctx, remoteRestConfig, clusterNamespace, clusterName, "send-reports", clusterType, logger)
+	logger.V(logs.LogDebug).Info("Deploying sveltos agent")
+	// Deploy SveltosAgent
+	err = deploySveltosAgent(ctx, remoteRestConfig, clusterNamespace, clusterName, "send-reports", clusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -467,7 +493,8 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 	logger = logger.WithValues("classifier", applicant)
 	logger.V(logs.LogDebug).Info("deploy classifier: do not send reports mode")
 
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, "",
+		clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
@@ -478,9 +505,9 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
-	logger.V(logs.LogDebug).Info("Deploying classifier agent")
-	// Deploy ClassifierAgent
-	err = deployClassifierAgent(ctx, remoteRestConfig, clusterNamespace, clusterName, "do-not-send-reports", clusterType, logger)
+	logger.V(logs.LogDebug).Info("Deploying sveltos agent")
+	// Deploy SveltosAgent
+	err = deploySveltosAgent(ctx, remoteRestConfig, clusterNamespace, clusterName, "do-not-send-reports", clusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -513,7 +540,7 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 	logger.V(logs.LogDebug).Info("Undeploy classifier")
 
 	// Get Cluster
-	cluster, err := getCluster(ctx, c, clusterNamespace, clusterName, clusterType)
+	cluster, err := clusterproxy.GetCluster(ctx, c, clusterNamespace, clusterName, clusterType)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.V(logs.LogDebug).Info("cluster not found. nothing to clean up")
@@ -527,12 +554,8 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	s, err := InitScheme()
-	if err != nil {
-		return err
-	}
-
-	remoteClient, err := getKubernetesClient(ctx, c, s, clusterNamespace, clusterName, clusterType, logger)
+	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName, "",
+		clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to get cluster client")
 		return err
@@ -599,7 +622,8 @@ func (r *ClassifierReconciler) getClassifierInClusterHashAndStatus(classifier *l
 func (r *ClassifierReconciler) isPaused(ctx context.Context, cluster *corev1.ObjectReference,
 	classifier *libsveltosv1alpha1.Classifier) (bool, error) {
 
-	isClusterPaused, err := isClusterPaused(ctx, r.Client, cluster.Namespace, cluster.Name, getClusterType(cluster))
+	isClusterPaused, err := clusterproxy.IsClusterPaused(ctx, r.Client, cluster.Namespace, cluster.Name,
+		clusterproxy.GetClusterType(cluster))
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -634,12 +658,12 @@ func (r *ClassifierReconciler) removeClassifier(ctx context.Context, classifierS
 	// If deploying feature is in progress, wait for it to complete.
 	// Otherwise, if we undeploy feature while same feature is still being deployed, if two workers process those request in
 	// parallel some resources might end stale.
-	if r.Deployer.IsInProgress(cluster.Namespace, cluster.Name, classifier.Name, f.id, getClusterType(cluster), false) {
+	if r.Deployer.IsInProgress(cluster.Namespace, cluster.Name, classifier.Name, f.id, clusterproxy.GetClusterType(cluster), false) {
 		logger.V(logs.LogDebug).Info("deploy is in progress")
 		return fmt.Errorf("deploy of %s in cluster still in progress. Wait before redeploying", f.id)
 	}
 
-	result := r.Deployer.GetResult(ctx, cluster.Namespace, cluster.Name, classifier.Name, f.id, getClusterType(cluster), true)
+	result := r.Deployer.GetResult(ctx, cluster.Namespace, cluster.Name, classifier.Name, f.id, clusterproxy.GetClusterType(cluster), true)
 	status := r.convertResultStatus(result)
 
 	if status != nil {
@@ -654,7 +678,7 @@ func (r *ClassifierReconciler) removeClassifier(ctx context.Context, classifierS
 	}
 
 	logger.V(logs.LogDebug).Info("queueing request to un-deploy")
-	if err := r.Deployer.Deploy(ctx, cluster.Namespace, cluster.Name, classifier.Name, f.id, getClusterType(cluster),
+	if err := r.Deployer.Deploy(ctx, cluster.Namespace, cluster.Name, classifier.Name, f.id, clusterproxy.GetClusterType(cluster),
 		true, undeployClassifierFromCluster, programDuration, deployer.Options{}); err != nil {
 		return err
 	}
@@ -702,7 +726,7 @@ func (r *ClassifierReconciler) getCurrentHash(ctx context.Context, classifierSco
 	var err error
 	if r.ClassifierReportMode == AgentSendReportsNoGateway {
 		kubeconfig, err = getKubeconfigFromAccessRequest(ctx, r.Client, cluster.Namespace, cluster.Name,
-			getClusterType(cluster), logger)
+			clusterproxy.GetClusterType(cluster), logger)
 		if err != nil && !apierrors.IsNotFound(err) {
 			return nil, err
 		}
@@ -741,7 +765,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 	// If undeploying feature is in progress, wait for it to complete.
 	// Otherwise, if we redeploy feature while same feature is still being cleaned up, if two workers process those request in
 	// parallel some resources might end up missing.
-	if r.Deployer.IsInProgress(cluster.Namespace, cluster.Name, classifier.Name, f.id, getClusterType(cluster), true) {
+	if r.Deployer.IsInProgress(cluster.Namespace, cluster.Name, classifier.Name, f.id, clusterproxy.GetClusterType(cluster), true) {
 		logger.V(logs.LogDebug).Info("cleanup is in progress")
 		return nil, fmt.Errorf("cleanup of %s in cluster still in progress. Wait before redeploying", f.id)
 	}
@@ -760,7 +784,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 	if isConfigSame {
 		logger.V(logs.LogInfo).Info("classifier and kubeconfig have has not changed")
 		result = r.Deployer.GetResult(ctx, cluster.Namespace, cluster.Name, classifier.Name, f.id,
-			getClusterType(cluster), false)
+			clusterproxy.GetClusterType(cluster), false)
 		status = r.convertResultStatus(result)
 	}
 
@@ -802,7 +826,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 		// Getting here means either Classifier failed to be deployed or Classifier has changed.
 		// Classifier must be (re)deployed.
 		if err := r.Deployer.Deploy(ctx, cluster.Namespace, cluster.Name,
-			classifier.Name, f.id, getClusterType(cluster), false, handler, programDuration, options); err != nil {
+			classifier.Name, f.id, clusterproxy.GetClusterType(cluster), false, handler, programDuration, options); err != nil {
 			return nil, err
 		}
 	}
@@ -874,6 +898,120 @@ func deployClassifierReportCRD(ctx context.Context, remoteRestConfig *rest.Confi
 	return nil
 }
 
+// deployHealthCheckCRD deploys HealthCheck CRD in remote cluster
+func deployHealthCheckCRD(ctx context.Context, remoteRestConfig *rest.Config,
+	logger logr.Logger) error {
+
+	healthCheckCRD, err := utils.GetUnstructured(crd.GetHealthCheckCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get HealthCheck CRD unstructured: %v", err))
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, healthCheckCRD.GroupVersionKind(), "")
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+		return err
+	}
+
+	options := metav1.ApplyOptions{
+		FieldManager: "application/apply-patch",
+	}
+	_, err = dr.Apply(ctx, healthCheckCRD.GetName(), healthCheckCRD, options)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply healthCheck CRD: %v", err))
+		return err
+	}
+
+	return nil
+}
+
+// deployHealthCheckeportCRD deploys HealthCheckReport CRD in remote cluster
+func deployHealthCheckReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
+	logger logr.Logger) error {
+
+	healthCheckReportCRD, err := utils.GetUnstructured(crd.GetHealthCheckReportCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get healthCheckReport CRD unstructured: %v",
+			err))
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, healthCheckReportCRD.GroupVersionKind(), "")
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+		return err
+	}
+
+	options := metav1.ApplyOptions{
+		FieldManager: "application/apply-patch",
+	}
+	_, err = dr.Apply(ctx, healthCheckReportCRD.GetName(), healthCheckReportCRD, options)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply ClassifierReport CRD: %v", err))
+		return err
+	}
+
+	return nil
+}
+
+// deployEventSourceCRD deploys EventSource CRD in remote cluster
+func deployEventSourceCRD(ctx context.Context, remoteRestConfig *rest.Config,
+	logger logr.Logger) error {
+
+	eventSourceCRD, err := utils.GetUnstructured(crd.GetEventSourceCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get eventSourceCRD CRD unstructured: %v", err))
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, eventSourceCRD.GroupVersionKind(), "")
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+		return err
+	}
+
+	options := metav1.ApplyOptions{
+		FieldManager: "application/apply-patch",
+	}
+	_, err = dr.Apply(ctx, eventSourceCRD.GetName(), eventSourceCRD, options)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply eventSourceCRD CRD: %v", err))
+		return err
+	}
+
+	return nil
+}
+
+// deployEventReportCRD deploys EventReport CRD in remote cluster
+func deployEventReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
+	logger logr.Logger) error {
+
+	eventReportCRD, err := utils.GetUnstructured(crd.GetEventReportCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get eventReportCRD CRD unstructured: %v",
+			err))
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, eventReportCRD.GroupVersionKind(), "")
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+		return err
+	}
+
+	options := metav1.ApplyOptions{
+		FieldManager: "application/apply-patch",
+	}
+	_, err = dr.Apply(ctx, eventReportCRD.GetName(), eventReportCRD, options)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply ClassifierReport CRD: %v", err))
+		return err
+	}
+
+	return nil
+}
+
 func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 	classifier *libsveltosv1alpha1.Classifier, logger logr.Logger) error {
 
@@ -928,10 +1066,10 @@ func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest
 	return nil
 }
 
-func deployClassifierAgent(ctx context.Context, remoteRestConfig *rest.Config,
+func deploySveltosAgent(ctx context.Context, remoteRestConfig *rest.Config,
 	clusterNamespace, clusterName, mode string, clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
 
-	agentYAML := string(agent.GetClassifierAgentYAML())
+	agentYAML := string(agent.GetSveltosAgentYAML())
 
 	if mode != "do-not-send-reports" {
 		agentYAML = strings.ReplaceAll(agentYAML, "do-not-send-reports", "send-reports")

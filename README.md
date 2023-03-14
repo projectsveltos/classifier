@@ -40,7 +40,7 @@ Refer to [examples](./examples/) for more complex examples.
 
 ## Sveltos Classifier in action
 
-![Sveltos Classifier in action](https://github.com/projectsveltos/demos/blob/main/classifier/classifier.gif)
+![Sveltos Classifier in action](https://github.com/projectsveltos/demos/blob/dev/classifier/classifier.gif)
 
 ## A simple use case: upgrade helm charts automatically when Kubernetes cluster is upgraded
 Suppose you are managing several Kubernetes clusters with different versions.

@@ -19,9 +19,13 @@ package controllers
 var (
 	DeployClassifierCRD                 = deployClassifierCRD
 	DeployClassifierReportCRD           = deployClassifierReportCRD
+	DeployHealthCheckCRD                = deployHealthCheckCRD
+	DeployHealthCheckReportCRD          = deployHealthCheckReportCRD
+	DeployEventSourceCRD                = deployEventSourceCRD
+	DeployEventReportCRD                = deployEventReportCRD
 	DeployDebuggingConfigurationCRD     = deployDebuggingConfigurationCRD
 	DeployClassifierInstance            = deployClassifierInstance
-	DeployClassifierAgent               = deployClassifierAgent
+	DeploySveltosAgent                  = deploySveltosAgent
 	ClassifierHash                      = classifierHash
 	DeployClassifierInCluster           = deployClassifierInCluster
 	UndeployClassifierFromCluster       = undeployClassifierFromCluster
@@ -52,7 +56,6 @@ var (
 
 var (
 	CreatFeatureHandlerMaps = creatFeatureHandlerMaps
-	GetListOfClusters       = getListOfClusters
 )
 
 const (

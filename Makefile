@@ -121,7 +121,7 @@ manifests: $(CONTROLLER_GEN) $(KUSTOMIZE) $(ENVSUBST) ## Generate WebhookConfigu
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) $(MAKE) set-manifest-image
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) > manifest/manifest.yaml
-
+	
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
@@ -208,13 +208,13 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 
 ##@ Build
 
-classifier-agent:
-	@echo "Downloading classifier agent yaml"
-	curl -L https://raw.githubusercontent.com/projectsveltos/classifier-agent/$(TAG)/manifest/manifest.yaml -o ./pkg/agent/classifier-agent.yaml
+sveltos-agent:
+	@echo "Downloading sveltos agent yaml"
+	curl -L https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/manifest.yaml -o ./pkg/agent/sveltos-agent.yaml
 	cd pkg/agent; go generate
 
 .PHONY: build
-build: classifier-agent generate fmt vet ## Build manager binary.
+build: sveltos-agent generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
 
 .PHONY: run
@@ -295,7 +295,7 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	# Load projectsveltos image into cluster
 	@echo 'Load projectsveltos image into cluster'
 	$(MAKE) load-image
-	
+
 	@echo 'Install libsveltos CRDs'
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_classifiers.yaml

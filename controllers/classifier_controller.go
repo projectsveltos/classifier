@@ -40,6 +40,7 @@ import (
 	"github.com/projectsveltos/classifier/controllers/keymanager"
 	"github.com/projectsveltos/classifier/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
@@ -55,8 +56,9 @@ const (
 
 	// In this mode, classifier agent sends ClassifierReport
 	// to management cluster.
-	// ClassifierAgent is provided with Kubeconfig to access
-	// management cluster and can only update ClassifierReport
+	// SveltosAgent is provided with Kubeconfig to access
+	// management cluster and can only update ClassifierReport/
+	// HealthCheckReport/EventReport
 	AgentSendReportsNoGateway
 )
 
@@ -380,10 +382,10 @@ func (r *ClassifierReconciler) updateClusterInfo(ctx context.Context, classifier
 	classifier := classifierScope.Classifier
 
 	getClusterID := func(cluster corev1.ObjectReference) string {
-		return fmt.Sprintf("%s:%s/%s", getClusterType(&cluster), cluster.Namespace, cluster.Name)
+		return fmt.Sprintf("%s:%s/%s", clusterproxy.GetClusterType(&cluster), cluster.Namespace, cluster.Name)
 	}
 
-	matchingCluster, err := getListOfClusters(ctx, r.Client, classifierScope.Logger)
+	matchingCluster, err := clusterproxy.GetListOfClusters(ctx, r.Client, classifierScope.Logger)
 	if err != nil {
 		return err
 	}
@@ -506,7 +508,7 @@ func (r *ClassifierReconciler) updateLabelsOnMatchingClusters(ctx context.Contex
 	// for all the clusters currently matching
 	for i := range classifierScope.Classifier.Status.MachingClusterStatuses {
 		ref := &classifierScope.Classifier.Status.MachingClusterStatuses[i].ClusterRef
-		cluster, err := getCluster(ctx, r.Client, ref.Namespace, ref.Name, getClusterType(ref))
+		cluster, err := clusterproxy.GetCluster(ctx, r.Client, ref.Namespace, ref.Name, clusterproxy.GetClusterType(ref))
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to get cluster %s/%s", ref.Namespace, ref.Name))
 			return err
@@ -514,7 +516,7 @@ func (r *ClassifierReconciler) updateLabelsOnMatchingClusters(ctx context.Contex
 
 		l := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.GetNamespace(), cluster.GetName()))
 		l.V(logs.LogDebug).Info("update labels on cluster")
-		err = r.updateLabelsOnCluster(ctx, classifierScope, cluster, getClusterType(ref), l)
+		err = r.updateLabelsOnCluster(ctx, classifierScope, cluster, clusterproxy.GetClusterType(ref), l)
 		if err != nil {
 			l.V(logs.LogDebug).Error(err, "failed to update labels on cluster")
 			return err
@@ -600,7 +602,7 @@ func (r *ClassifierReconciler) removeAllRegistrations(ctx context.Context,
 
 	for i := range classifierScope.Classifier.Status.MachingClusterStatuses {
 		c := &classifierScope.Classifier.Status.MachingClusterStatuses[i].ClusterRef
-		manager.RemoveAllRegistrations(classifierScope.Classifier, c.Namespace, c.Name, getClusterType(c))
+		manager.RemoveAllRegistrations(classifierScope.Classifier, c.Namespace, c.Name, clusterproxy.GetClusterType(c))
 	}
 
 	return nil
@@ -625,7 +627,7 @@ func (r *ClassifierReconciler) handleLabelRegistrations(ctx context.Context,
 	matchingClusterRefs := make([]corev1.ObjectReference, len(currentMatchingClusters))
 	i := 0
 	for c := range currentMatchingClusters {
-		clusterType := getClusterType(&c)
+		clusterType := clusterproxy.GetClusterType(&c)
 		manager.RemoveStaleRegistrations(classifier, c.Namespace, c.Name, clusterType)
 		manager.RegisterClassifierForLabels(classifier, c.Namespace, c.Name, clusterType)
 		matchingClusterRefs[i] = c
@@ -635,7 +637,7 @@ func (r *ClassifierReconciler) handleLabelRegistrations(ctx context.Context,
 	// For every cluster which is not a match anymore, remove registations
 	for c := range oldMatchingClusters {
 		if _, ok := currentMatchingClusters[c]; !ok {
-			clusterType := getClusterType(&c)
+			clusterType := clusterproxy.GetClusterType(&c)
 			manager.RemoveAllRegistrations(classifier, c.Namespace, c.Name, clusterType)
 		}
 	}
@@ -653,7 +655,7 @@ func (r *ClassifierReconciler) classifyLabels(ctx context.Context, classifier *l
 		return nil, nil, err
 	}
 
-	clusterType := getClusterType(&corev1.ObjectReference{
+	clusterType := clusterproxy.GetClusterType(&corev1.ObjectReference{
 		Namespace: cluster.Namespace, Name: cluster.Name,
 		APIVersion: cluster.APIVersion, Kind: cluster.Kind,
 	})

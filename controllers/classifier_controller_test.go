@@ -168,34 +168,6 @@ var _ = Describe("Classifier: Reconciler", func() {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
-	It("getListOfClusters returns the CAPI Clusters where a Classifier has to be deployed", func() {
-		cluster1 := &clusterv1.Cluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: randomString(),
-				Name:      randomString(),
-			},
-		}
-
-		cluster2 := &clusterv1.Cluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: randomString(),
-				Name:      randomString(),
-			},
-		}
-
-		initObjects := []client.Object{
-			classifier,
-			cluster1,
-			cluster2,
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
-		matches, err := controllers.GetListOfClusters(context.TODO(), c, klogr.New())
-		Expect(err).To(BeNil())
-		Expect(len(matches)).To(Equal(2))
-	})
-
 	It("updateMatchingClustersAndRegistrations updates Classifier Status with matching clusters", func() {
 		clusterNamespace := randomString()
 		clusterName := randomString()
@@ -510,7 +482,7 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
 	})
 
-	It("RequeueClassifierForCluster returns correct Classifier for a CAPI cluster", func() {
+	It("RequeueClassifierForCluster returns all existing Classifiers", func() {
 		Expect(testEnv.Client.Create(context.TODO(), classifier)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
