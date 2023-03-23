@@ -494,7 +494,7 @@ var _ = Describe("Classifier Predicates: MachinePredicates", func() {
 				Name:      upstreamMachineNamePrefix + randomString(),
 				Namespace: "predicates" + randomString(),
 				Labels: map[string]string{
-					clusterv1.MachineControlPlaneLabelName: "ok",
+					clusterv1.MachineControlPlaneLabel: "ok",
 				},
 			},
 		}
