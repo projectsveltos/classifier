@@ -2,7 +2,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # KUBEBUILDER_ENVTEST_KUBERNETES_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-KUBEBUILDER_ENVTEST_KUBERNETES_VERSION = 1.25.0
+KUBEBUILDER_ENVTEST_KUBERNETES_VERSION = 1.26.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -150,7 +150,7 @@ endif
 # K8S_VERSION for the Kind cluster can be set as environment variable. If not defined,
 # this default value is used
 ifndef K8S_VERSION
-K8S_VERSION := v1.25.2
+K8S_VERSION := v1.26.0
 endif
 
 KIND_CONFIG ?= kind-cluster.yaml
@@ -278,10 +278,12 @@ set-manifest-pull-policy:
 # Error: failed to read "cluster-template-development.yaml" from provider's repository "infrastructure-docker": failed to get GitHub release v1.2.0: rate limit for github api has been reached. 
 # Please wait one hour or get a personal API token and assign it to the GITHUB_TOKEN environment variable
 #
-# add this target. It needs to be run only when changing cluster-api version. create-cluster target uses the output of this command which is stored within repo
-# It requires control cluster to exist. So first "make create-control-cluster" then run this target.
+# It requires control cluster to exist. So first "make create-control-cluster" then run this target before creating any workload cluster.
+# Once generated, remove
+#      enforce: "{{ .podSecurityStandard.enforce }}"
+#      enforce-version: "latest"
 create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL) 
-	KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
+	CLUSTER_TOPOLOGY=ok KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
 		--control-plane-machine-count=1 \
   		--worker-machine-count=1 > $(KIND_CLUSTER_YAML)
 

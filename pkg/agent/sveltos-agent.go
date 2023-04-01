@@ -79,6 +79,7 @@ rules:
   - '*'
   verbs:
   - get
+  - impersonate
   - list
   - watch
 - apiGroups:

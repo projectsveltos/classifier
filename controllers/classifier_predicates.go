@@ -547,7 +547,7 @@ func isControlPlaneMachine(machine *clusterv1.Machine) bool {
 		return false
 	}
 
-	if _, ok := machine.Labels[clusterv1.MachineControlPlaneLabelName]; !ok {
+	if _, ok := machine.Labels[clusterv1.MachineControlPlaneLabel]; !ok {
 		return false
 	}
 
