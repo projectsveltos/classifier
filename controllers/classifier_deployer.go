@@ -1024,7 +1024,7 @@ func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 			toDeployClassifier := &libsveltosv1alpha1.Classifier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: classifier.Name,
-					Labels: map[string]string{
+					Annotations: map[string]string{
 						libsveltosv1alpha1.DeployedBySveltosAnnotation: "true",
 					},
 				},
@@ -1036,7 +1036,9 @@ func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 	}
 
 	currentClassifier.Spec = classifier.Spec
-
+	currentClassifier.Annotations = map[string]string{
+		libsveltosv1alpha1.DeployedBySveltosAnnotation: "true",
+	}
 	return remoteClient.Update(ctx, currentClassifier)
 }
 
