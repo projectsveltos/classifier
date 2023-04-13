@@ -164,8 +164,8 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 	}
 
 	var remoteClient client.Client
-	remoteClient, err = clusterproxy.GetKubernetesClient(ctx, c, cluster.Namespace, cluster.Name, "",
-		clusterproxy.GetClusterType(clusterRef), logger)
+	remoteClient, err = clusterproxy.GetKubernetesClient(ctx, c, cluster.Namespace, cluster.Name,
+		"", "", clusterproxy.GetClusterType(clusterRef), logger)
 	if err != nil {
 		return err
 	}
@@ -181,6 +181,12 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 		cr := &classifierReportList.Items[i]
 		if !cr.DeletionTimestamp.IsZero() {
 			// ignore deleted ClassifierReport
+			continue
+		}
+		if cr.Spec.ClusterName != "" {
+			// if ClusterName is set, this is coming from a
+			// managed cluster. If management cluster is in turn
+			// managed by another cluster, do not pull those.
 			continue
 		}
 		l := logger.WithValues("classifierReport", cr.Name)
