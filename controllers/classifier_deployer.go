@@ -202,8 +202,8 @@ func getClassifierAndClusterClient(ctx context.Context, clusterNamespace, cluste
 		return nil, nil, fmt.Errorf("cluster is marked for deletion")
 	}
 
-	clusterClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName, "",
-		clusterType, logger)
+	clusterClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
+		"", "", clusterType, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -359,8 +359,8 @@ func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterN
 	clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
 
 	// Deploy Classifier CRD and the Classifier instance
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, "",
-		clusterType, logger)
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+		"", "", clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
@@ -454,8 +454,8 @@ func deployClassifierWithKubeconfigInCluster(ctx context.Context, c client.Clien
 		return err
 	}
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, "",
-		clusterType, logger)
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+		"", "", clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
@@ -493,8 +493,8 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 	logger = logger.WithValues("classifier", applicant)
 	logger.V(logs.LogDebug).Info("deploy classifier: do not send reports mode")
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, "",
-		clusterType, logger)
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+		"", "", clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
@@ -554,8 +554,8 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName, "",
-		clusterType, logger)
+	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
+		"", "", clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to get cluster client")
 		return err
@@ -1024,6 +1024,9 @@ func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 			toDeployClassifier := &libsveltosv1alpha1.Classifier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: classifier.Name,
+					Annotations: map[string]string{
+						libsveltosv1alpha1.DeployedBySveltosAnnotation: "true",
+					},
 				},
 				Spec: classifier.Spec,
 			}
@@ -1033,7 +1036,9 @@ func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 	}
 
 	currentClassifier.Spec = classifier.Spec
-
+	currentClassifier.Annotations = map[string]string{
+		libsveltosv1alpha1.DeployedBySveltosAnnotation: "true",
+	}
 	return remoteClient.Update(ctx, currentClassifier)
 }
 
