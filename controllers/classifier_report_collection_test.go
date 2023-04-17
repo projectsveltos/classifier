@@ -113,7 +113,7 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(testEnv.Create(context.TODO(), classifier)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
 
-		classifierReport := getClassifierReport(classifierName, cluster.Namespace, cluster.Name)
+		classifierReport := getClassifierReport(classifierName, "", "")
 		classifierReport.Namespace = classifierReportNamespace
 		Expect(testEnv.Create(context.TODO(), classifierReport)).To(Succeed())
 
