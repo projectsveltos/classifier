@@ -1,6 +1,6 @@
 module github.com/projectsveltos/classifier
 
-go 1.18
+go 1.20
 
 require (
 	github.com/TwinProduction/go-color v1.0.0
