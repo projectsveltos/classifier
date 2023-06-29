@@ -50,7 +50,8 @@ var _ = Describe("ClassifierScope", func() {
 
 		scheme := setupScheme()
 		initObjects := []client.Object{classifier}
-		c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 	})
 
 	It("Return nil,error if Classifier is not specified", func() {
