@@ -79,7 +79,8 @@ var _ = Describe("Chart manager", func() {
 			classifier,
 		}
 
-		c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 	})
 

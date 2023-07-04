@@ -187,7 +187,8 @@ var _ = Describe("Classifier Deployer", func() {
 			classifier,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		classifier.Spec.ClassifierLabels = []libsveltosv1alpha1.ClassifierLabel{{Key: randomString(), Value: randomString()}}
 		Expect(controllers.DeployClassifierInstance(ctx, c, classifier, klogr.New())).To(Succeed())
@@ -459,7 +460,8 @@ var _ = Describe("Classifier Deployer", func() {
 			HandlerOptions: map[string]string{controllers.Controlplaneendpoint: "http://192.168.10.1:443"},
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 		Expect(controllers.CreateAccessRequest(ctx, c, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi,
 			options)).To(Succeed())
 
@@ -510,7 +512,8 @@ var _ = Describe("Classifier Deployer", func() {
 
 		initObjects := []client.Object{classifier, secret, ns, &accessRequest}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 		currentKubeconfig, err := controllers.GetKubeconfigFromAccessRequest(context.TODO(), c,
 			clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi, klogr.New())
 		Expect(err).To(BeNil())

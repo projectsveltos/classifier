@@ -17,6 +17,7 @@ limitations under the License.
 package controllers_test
 
 import (
+	"context"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -86,7 +87,8 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 			classifier1,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:     c,
@@ -112,7 +114,7 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 			&corev1.ObjectReference{Kind: libsveltosv1alpha1.ClassifierKind, Name: classifier1.Name},
 		)
 
-		requests := controllers.RequeueClassifierForCluster(reconciler, cluster)
+		requests := controllers.RequeueClassifierForCluster(reconciler, context.TODO(), cluster)
 		Expect(requests).To(HaveLen(2))
 	})
 })
@@ -138,7 +140,8 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 			report,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:     c,
@@ -147,7 +150,7 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 			ClusterMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 		}
 
-		requests := controllers.RequeueClassifierForClassifierReport(reconciler, report)
+		requests := controllers.RequeueClassifierForClassifierReport(reconciler, context.TODO(), report)
 		Expect(requests).To(HaveLen(1))
 		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: classifierName}}))
 	})
@@ -179,7 +182,7 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 			},
 		}
 
-		requests := controllers.RequeueClassifierForClassifier(reconciler, classifier)
+		requests := controllers.RequeueClassifierForClassifier(reconciler, context.TODO(), classifier)
 		Expect(requests).To(HaveLen(2))
 		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: classifierName2}}))
 		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: classifierName1}}))

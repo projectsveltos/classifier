@@ -293,7 +293,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 
 	// When classifierReport changes, according to ClassifierReportPredicates,
 	// one Classifier needs to be reconciled
-	if err := c.Watch(&source.Kind{Type: &libsveltosv1alpha1.ClassifierReport{}},
+	if err := c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.ClassifierReport{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifierReport),
 		ClassifierReportPredicate(mgr.GetLogger().WithValues("predicate", "classifierreportpredicate")),
 	); err != nil {
@@ -302,7 +302,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 
 	// When Classifier changes, according to ClassifierPredicates,
 	// all Classifier with at least one conflict needs to be reconciled
-	if err := c.Watch(&source.Kind{Type: &libsveltosv1alpha1.Classifier{}},
+	if err := c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.Classifier{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifier),
 		ClassifierPredicate(mgr.GetLogger().WithValues("predicate", "classifiepredicate")),
 	); err != nil {
@@ -311,7 +311,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 
 	// When Sveltos Cluster changes (from paused to unpaused), one or more ClusterSummaries
 	// need to be reconciled.
-	if err := c.Watch(&source.Kind{Type: &libsveltosv1alpha1.SveltosCluster{}},
+	if err := c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.SveltosCluster{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForCluster),
 		SveltosClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
 	); err != nil {
@@ -320,7 +320,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 
 	// When Secret changes, according to SecretPredicates,
 	// Classifiers need to be reconciled.
-	if err := c.Watch(&source.Kind{Type: &corev1.Secret{}},
+	if err := c.Watch(source.Kind(mgr.GetCache(), &corev1.Secret{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForSecret),
 		SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
 	); err != nil {
@@ -337,7 +337,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 func (r *ClassifierReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
 	// When cluster-api cluster changes, according to ClusterPredicates,
 	// one or more Classifiers need to be reconciled.
-	if err := c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
+	if err := c.Watch(source.Kind(mgr.GetCache(), &clusterv1.Cluster{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForCluster),
 		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
 	); err != nil {
@@ -346,7 +346,7 @@ func (r *ClassifierReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Contr
 
 	// When cluster-api machine changes, according to ClusterPredicates,
 	// one or more ClusterProfiles need to be reconciled.
-	return c.Watch(&source.Kind{Type: &clusterv1.Machine{}},
+	return c.Watch(source.Kind(mgr.GetCache(), &clusterv1.Machine{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForMachine),
 		MachinePredicates(mgr.GetLogger().WithValues("predicate", "machinepredicate")),
 	)

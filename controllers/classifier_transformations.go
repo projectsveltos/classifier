@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
@@ -31,7 +32,7 @@ import (
 )
 
 func (r *ClassifierReconciler) requeueClassifierForCluster(
-	o client.Object,
+	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
 	cluster := o
@@ -66,7 +67,7 @@ func (r *ClassifierReconciler) requeueClassifierForCluster(
 }
 
 func (r *ClassifierReconciler) requeueClassifierForMachine(
-	o client.Object,
+	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
 	machine := o.(*clusterv1.Machine)
@@ -99,7 +100,7 @@ func (r *ClassifierReconciler) requeueClassifierForMachine(
 }
 
 func (r *ClassifierReconciler) requeueClassifierForSecret(
-	o client.Object,
+	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
 	secret := o.(*corev1.Secret)
@@ -139,7 +140,7 @@ func (r *ClassifierReconciler) requeueClassifierForSecret(
 }
 
 func (r *ClassifierReconciler) requeueClassifierForClassifierReport(
-	o client.Object,
+	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
 	report := o.(*libsveltosv1alpha1.ClassifierReport)
@@ -169,7 +170,7 @@ func (r *ClassifierReconciler) requeueClassifierForClassifierReport(
 }
 
 func (r *ClassifierReconciler) requeueClassifierForClassifier(
-	o client.Object,
+	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
 	classifier := o.(*libsveltosv1alpha1.Classifier)
