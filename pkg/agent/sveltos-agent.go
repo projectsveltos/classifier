@@ -70,7 +70,6 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   name: sveltos-agent-manager-role
 rules:
 - apiGroups:
@@ -418,7 +417,7 @@ spec:
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: projectsveltos/sveltos-agent-amd64:main
+        image: projectsveltos/sveltos-agent-amd64:v0.12.0
         livenessProbe:
           httpGet:
             path: /healthz
