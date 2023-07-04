@@ -50,7 +50,8 @@ var _ = Describe("Classifier Deployer", func() {
 			classifierReport2,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		Expect(controllers.RemoveClassifierReports(context.TODO(), c, classifier, klogr.New())).To(Succeed())
 
@@ -81,7 +82,8 @@ var _ = Describe("Classifier Deployer", func() {
 			classifierReport2,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		Expect(controllers.RemoveClusterClassifierReports(context.TODO(), c, clusterNamespace, clusterName,
 			clusterType, klogr.New())).To(Succeed())

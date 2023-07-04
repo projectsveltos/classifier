@@ -55,7 +55,8 @@ var _ = Describe("Classifier: Reconciler", func() {
 			classifier,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
@@ -101,7 +102,8 @@ var _ = Describe("Classifier: Reconciler", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		classifierName := client.ObjectKey{
 			Name: classifier.Name,
@@ -184,7 +186,8 @@ var _ = Describe("Classifier: Reconciler", func() {
 			classifierReport2,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
@@ -235,7 +238,8 @@ var _ = Describe("Classifier: Reconciler", func() {
 			classifierReport1,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		manager, err := keymanager.GetKeyManagerInstance(ctx, c)
 		Expect(err).To(BeNil())
@@ -307,7 +311,8 @@ var _ = Describe("Classifier: Reconciler", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
@@ -377,7 +382,8 @@ var _ = Describe("Classifier: Reconciler", func() {
 			classifier,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		manager, err := keymanager.GetKeyManagerInstance(ctx, c)
 		Expect(err).To(BeNil())
@@ -431,7 +437,8 @@ var _ = Describe("Classifier: Reconciler", func() {
 			classifier, otherClassifier, cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		manager, err := keymanager.GetKeyManagerInstance(ctx, c)
 		Expect(err).To(BeNil())
@@ -503,7 +510,7 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
 			classifierList := controllers.RequeueClassifierForCluster(clusterProfileReconciler,
-				cluster)
+				context.TODO(), cluster)
 			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: classifier.Name}}
 			for i := range classifierList {
 				if classifierList[i] == result {
@@ -548,7 +555,7 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
 			classifierList := controllers.RequeueClassifierForMachine(clusterProfileReconciler,
-				cpMachine)
+				context.TODO(), cpMachine)
 			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: classifier.Name}}
 			for i := range classifierList {
 				if classifierList[i] == result {
