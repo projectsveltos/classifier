@@ -162,8 +162,8 @@ endif
 
 KIND_CONFIG ?= kind-cluster.yaml
 CONTROL_CLUSTER_NAME ?= sveltos-management
-WORKLOAD_CLUSTER_NAME ?= sveltos-management-workload
-KIND_CLUSTER_YAML ?= test/sveltos-management-workload.yaml
+WORKLOAD_CLUSTER_NAME ?= clusterapi-workload
+KIND_CLUSTER_YAML ?= test/clusterapi-workload.yaml
 TIMEOUT ?= 10m
 NUM_NODES ?= 5
 
@@ -194,7 +194,7 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	@echo "Deploying access manager"
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/access-manager/$(TAG)/manifest/manifest.yaml
 	@echo "wait for cluster to be provisioned"
-	$(KUBECTL) wait cluster sveltos-management-workload -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
+	$(KUBECTL) wait cluster $(WORKLOAD_CLUSTER_NAME) -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
 
 	@echo "sleep allowing control plane to be ready"
 	sleep 60
