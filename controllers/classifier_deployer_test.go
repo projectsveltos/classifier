@@ -170,6 +170,28 @@ var _ = Describe("Classifier Deployer", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 	})
 
+	It("deployReloaderCRD deploys Reloader CRD", func() {
+		Expect(controllers.DeployReloaderCRD(context.TODO(), testEnv.Config, klogr.New())).To(Succeed())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			reloaderCRD := &apiextensionsv1.CustomResourceDefinition{}
+			return testEnv.Get(context.TODO(),
+				types.NamespacedName{Name: "reloaders.lib.projectsveltos.io"}, reloaderCRD)
+		}, timeout, pollingInterval).Should(BeNil())
+	})
+
+	It("deployReloaderReportCRD deploys ReloaderReport CRD", func() {
+		Expect(controllers.DeployReloaderReportCRD(context.TODO(), testEnv.Config, klogr.New())).To(Succeed())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			reloaderReportCRD := &apiextensionsv1.CustomResourceDefinition{}
+			return testEnv.Get(context.TODO(),
+				types.NamespacedName{Name: "reloaderreports.lib.projectsveltos.io"}, reloaderReportCRD)
+		}, timeout, pollingInterval).Should(BeNil())
+	})
+
 	It("deployClassifierInstance creates Classifier instance", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 

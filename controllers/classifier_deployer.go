@@ -355,10 +355,10 @@ func updateSecretWithAccessManagementKubeconfig(ctx context.Context, c client.Cl
 	return remoteClient.Update(ctx, secret)
 }
 
+// deployCRDs deploys all Sveltos CRDs needed by sveltos-agent
 func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
 	clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
 
-	// Deploy Classifier CRD and the Classifier instance
 	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 		"", "", clusterType, logger)
 	if err != nil {
@@ -367,50 +367,55 @@ func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterN
 	}
 
 	logger.V(logs.LogDebug).Info("deploy classifier CRD")
-	// Deploy Classifier CRD
 	err = deployClassifierCRD(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy classifierReport CRD")
-	// Deploy ClassifierReport CRD
 	err = deployClassifierReportCRD(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy healthCheck CRD")
-	// Deploy HealthCheck CRD
 	err = deployHealthCheckCRD(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy healthCheckReport CRD")
-	// Deploy HealthCheckReport CRD
 	err = deployHealthCheckReportCRD(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy eventsource CRD")
-	// Deploy EventSource CRD
 	err = deployEventSourceCRD(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy eventReport CRD")
-	// Deploy EventReport CRD
 	err = deployEventReportCRD(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy debuggingConfiguration CRD")
-	// Deploy DebuggingConfiguration CRD
 	err = deployDebuggingConfigurationCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("deploy reloader CRD")
+	err = deployReloaderCRD(ctx, remoteRestConfig, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("deploy reloaderReport CRD")
+	err = deployReloaderReportCRD(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
@@ -1065,6 +1070,60 @@ func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest
 	_, err = dr.Apply(ctx, dcCRD.GetName(), dcCRD, options)
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply DebuggingConfiguration CRD: %v", err))
+		return err
+	}
+
+	return nil
+}
+
+func deployReloaderCRD(ctx context.Context, remoteRestConfig *rest.Config, logger logr.Logger) error {
+	// Deploy Reloader CRD
+	reloaderCRD, err := utils.GetUnstructured(crd.GetReloaderCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get Reloader CRD unstructured: %v", err))
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, reloaderCRD.GroupVersionKind(), "")
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(
+			fmt.Sprintf("failed to get dynamic client: %v", err))
+		return err
+	}
+
+	options := metav1.ApplyOptions{
+		FieldManager: "application/apply-patch",
+	}
+	_, err = dr.Apply(ctx, reloaderCRD.GetName(), reloaderCRD, options)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply Reloader CRD: %v", err))
+		return err
+	}
+
+	return nil
+}
+
+func deployReloaderReportCRD(ctx context.Context, remoteRestConfig *rest.Config, logger logr.Logger) error {
+	// Deploy Reloader CRD
+	reloaderReportCRD, err := utils.GetUnstructured(crd.GetReloaderReportCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(
+			fmt.Sprintf("failed to get ReloaderReport CRD unstructured: %v", err))
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, reloaderReportCRD.GroupVersionKind(), "")
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+		return err
+	}
+
+	options := metav1.ApplyOptions{
+		FieldManager: "application/apply-patch",
+	}
+	_, err = dr.Apply(ctx, reloaderReportCRD.GetName(), reloaderReportCRD, options)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply ReloaderReport CRD: %v", err))
 		return err
 	}
 

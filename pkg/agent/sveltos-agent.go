@@ -113,8 +113,6 @@ rules:
   resources:
   - classifiers
   verbs:
-  - create
-  - delete
   - get
   - list
   - patch
@@ -125,14 +123,6 @@ rules:
   resources:
   - classifiers/finalizers
   verbs:
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - classifiers/status
-  verbs:
-  - get
-  - patch
   - update
 - apiGroups:
   - lib.projectsveltos.io
@@ -173,8 +163,6 @@ rules:
   resources:
   - eventsources
   verbs:
-  - create
-  - delete
   - get
   - list
   - patch
@@ -185,14 +173,6 @@ rules:
   resources:
   - eventsources/finalizers
   verbs:
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - eventsources/status
-  verbs:
-  - get
-  - patch
   - update
 - apiGroups:
   - lib.projectsveltos.io
@@ -225,8 +205,6 @@ rules:
   resources:
   - healthchecks
   verbs:
-  - create
-  - delete
   - get
   - list
   - patch
@@ -241,15 +219,7 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
-  - healthchecks/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - projectsveltos.io
-  resources:
-  - nodes
+  - reloaderreports
   verbs:
   - create
   - delete
@@ -259,19 +229,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - projectsveltos.io
+  - lib.projectsveltos.io
   resources:
-  - nodes/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - projectsveltos.io
-  resources:
-  - nodes/status
+  - reloaders
   verbs:
   - get
-  - patch
-  - update
+  - list
+  - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -417,7 +381,7 @@ spec:
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: projectsveltos/sveltos-agent-amd64:main
+        image: projectsveltos/sveltos-agent-amd64:dev
         livenessProbe:
           httpGet:
             path: /healthz

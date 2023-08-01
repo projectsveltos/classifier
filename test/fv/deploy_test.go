@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -46,19 +47,8 @@ var _ = Describe("Classifier: deployment", func() {
 		Expect(err).To(BeNil())
 		Expect(workloadClient).ToNot(BeNil())
 
-		Byf("Verifying Classifier CRD is installed in the workload cluster")
-		Eventually(func() error {
-			classifierCRD := &apiextensionsv1.CustomResourceDefinition{}
-			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: "classifiers.lib.projectsveltos.io"}, classifierCRD)
-		}, timeout, pollingInterval).Should(BeNil())
-
-		Byf("Verifying ClassifierReport CRD is installed in the workload cluster")
-		Eventually(func() error {
-			classifierReportCRD := &apiextensionsv1.CustomResourceDefinition{}
-			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: "classifierreports.lib.projectsveltos.io"}, classifierReportCRD)
-		}, timeout, pollingInterval).Should(BeNil())
+		Byf("Verifying CRDs are installed in the workload cluster")
+		verifyCRDs(workloadClient)
 
 		Byf("Verifying Classifier instance is deployed in the workload cluster")
 		Eventually(func() error {
@@ -91,5 +81,69 @@ var _ = Describe("Classifier: deployment", func() {
 
 		removeLabels(classifier)
 	})
-
 })
+
+func verifyCRDs(workloadClient client.Client) {
+	Byf("Verifying DebuggingConfiguration CRD is installed in the workload cluster")
+	Eventually(func() error {
+		dcCRD := &apiextensionsv1.CustomResourceDefinition{}
+		return workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: "debuggingconfigurations.lib.projectsveltos.io"}, dcCRD)
+	}, timeout, pollingInterval).Should(BeNil())
+
+	Byf("Verifying Classifier CRD is installed in the workload cluster")
+	Eventually(func() error {
+		classifierCRD := &apiextensionsv1.CustomResourceDefinition{}
+		return workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: "classifiers.lib.projectsveltos.io"}, classifierCRD)
+	}, timeout, pollingInterval).Should(BeNil())
+
+	Byf("Verifying ClassifierReport CRD is installed in the workload cluster")
+	Eventually(func() error {
+		classifierReportCRD := &apiextensionsv1.CustomResourceDefinition{}
+		return workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: "classifierreports.lib.projectsveltos.io"}, classifierReportCRD)
+	}, timeout, pollingInterval).Should(BeNil())
+
+	Byf("Verifying HealthCheck CRD is installed in the workload cluster")
+	Eventually(func() error {
+		hcCRD := &apiextensionsv1.CustomResourceDefinition{}
+		return workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: "healthchecks.lib.projectsveltos.io"}, hcCRD)
+	}, timeout, pollingInterval).Should(BeNil())
+
+	Byf("Verifying HealthCheckReport CRD is installed in the workload cluster")
+	Eventually(func() error {
+		hcReportCRD := &apiextensionsv1.CustomResourceDefinition{}
+		return workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: "healthcheckreports.lib.projectsveltos.io"}, hcReportCRD)
+	}, timeout, pollingInterval).Should(BeNil())
+
+	Byf("Verifying EventSource CRD is installed in the workload cluster")
+	Eventually(func() error {
+		eventSourceCRD := &apiextensionsv1.CustomResourceDefinition{}
+		return workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: "eventsources.lib.projectsveltos.io"}, eventSourceCRD)
+	}, timeout, pollingInterval).Should(BeNil())
+
+	Byf("Verifying EventSourceReport CRD is installed in the workload cluster")
+	Eventually(func() error {
+		eventSourceReportCRD := &apiextensionsv1.CustomResourceDefinition{}
+		return workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: "eventreports.lib.projectsveltos.io"}, eventSourceReportCRD)
+	}, timeout, pollingInterval).Should(BeNil())
+
+	Byf("Verifying Reloader CRD is installed in the workload cluster")
+	Eventually(func() error {
+		reloaderCRD := &apiextensionsv1.CustomResourceDefinition{}
+		return workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: "reloaders.lib.projectsveltos.io"}, reloaderCRD)
+	}, timeout, pollingInterval).Should(BeNil())
+
+	Byf("Verifying ReloaderReport CRD is installed in the workload cluster")
+	Eventually(func() error {
+		reloaderReportCRD := &apiextensionsv1.CustomResourceDefinition{}
+		return workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: "reloaderreports.lib.projectsveltos.io"}, reloaderReportCRD)
+	}, timeout, pollingInterval).Should(BeNil())
+}
