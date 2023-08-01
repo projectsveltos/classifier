@@ -23,6 +23,8 @@ var (
 	DeployHealthCheckReportCRD          = deployHealthCheckReportCRD
 	DeployEventSourceCRD                = deployEventSourceCRD
 	DeployEventReportCRD                = deployEventReportCRD
+	DeployReloaderCRD                   = deployReloaderCRD
+	DeployReloaderReportCRD             = deployReloaderReportCRD
 	DeployDebuggingConfigurationCRD     = deployDebuggingConfigurationCRD
 	DeployClassifierInstance            = deployClassifierInstance
 	DeploySveltosAgent                  = deploySveltosAgent
