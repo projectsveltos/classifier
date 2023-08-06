@@ -231,6 +231,14 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - reloaderreports/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
   - reloaders
   verbs:
   - get
