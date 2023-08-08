@@ -389,7 +389,7 @@ spec:
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: projectsveltos/sveltos-agent-amd64:dev
+        image: projectsveltos/sveltos-agent-amd64:v0.15.0
         livenessProbe:
           httpGet:
             path: /healthz
