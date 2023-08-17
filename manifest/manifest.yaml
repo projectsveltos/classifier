@@ -319,7 +319,7 @@ spec:
         - --v=5
         command:
         - /manager
-        image: projectsveltos/classifier-amd64:v0.15.0
+        image: projectsveltos/classifier-amd64:v0.15.1
         livenessProbe:
           httpGet:
             path: /healthz
