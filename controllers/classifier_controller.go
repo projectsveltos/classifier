@@ -439,6 +439,16 @@ func (r *ClassifierReconciler) updateMatchingClustersAndRegistrations(ctx contex
 	currentMatchingClusters := make(map[corev1.ObjectReference]bool)
 	for i := range classifierReportList.Items {
 		report := &classifierReportList.Items[i]
+		// If Sveltos is managing the management cluster as well,
+		// there will be two types of ClassifierReports:
+		// 1. created by sveltos-agent running in the management cluster.
+		// Those will have Spec.ClusterNamespace not set
+		// 2. pulled by classifier or pushed by sveltos-agent running
+		// in the managed cluster. Those will have Spec.ClusterNamespace set
+		// Consider only type #2
+		if report.Spec.ClusterNamespace == "" {
+			continue
+		}
 		if report.Spec.Match {
 			cluster := getClusterRefFromClassifierReport(report)
 			l := logger.WithValues("cluster", fmt.Sprintf("type: %s cluster %s/%s", report.Spec.ClusterType, cluster.Namespace, cluster.Name))
