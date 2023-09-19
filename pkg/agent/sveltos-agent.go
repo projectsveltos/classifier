@@ -19,8 +19,6 @@ package agent
 var sveltosAgentYAML = []byte(`apiVersion: v1
 kind: Namespace
 metadata:
-  labels:
-    control-plane: sveltos-agent
   name: projectsveltos
 ---
 apiVersion: v1
@@ -397,7 +395,7 @@ spec:
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: projectsveltos/sveltos-agent-amd64:main
+        image: projectsveltos/sveltos-agent-amd64:dev
         livenessProbe:
           httpGet:
             path: /healthz
