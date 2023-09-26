@@ -19,8 +19,6 @@ package agent
 var sveltosAgentYAML = []byte(`apiVersion: v1
 kind: Namespace
 metadata:
-  labels:
-    control-plane: sveltos-agent
   name: projectsveltos
 ---
 apiVersion: v1
