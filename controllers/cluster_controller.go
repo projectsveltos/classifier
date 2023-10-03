@@ -48,7 +48,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	cluster := &clusterv1.Cluster{}
 	if err := r.Get(ctx, req.NamespacedName, cluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			return removeClassifierReportForDeletedCluster(ctx, r.Client, req.Namespace, req.Name,
+			return cleanClusterStaleResources(ctx, r.Client, req.Namespace, req.Name,
 				libsveltosv1alpha1.ClusterTypeCapi, logger)
 		}
 		logger.Error(err, "Failed to fetch Cluster")
@@ -61,7 +61,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// Handle deleted cluster
 	if !cluster.DeletionTimestamp.IsZero() {
-		return removeClassifierReportForDeletedCluster(ctx, r.Client, req.Namespace, req.Name,
+		return cleanClusterStaleResources(ctx, r.Client, req.Namespace, req.Name,
 			libsveltosv1alpha1.ClusterTypeCapi, logger)
 	}
 

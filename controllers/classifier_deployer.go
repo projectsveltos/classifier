@@ -29,9 +29,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -53,6 +56,10 @@ type feature struct {
 	currentHash getCurrentHash
 	deploy      deployer.RequestHandler
 	undeploy    deployer.RequestHandler
+}
+
+func getSveltosAgentNamespace() string {
+	return "projectsveltos"
 }
 
 func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierScope *scope.ClassifierScope,
@@ -468,7 +475,8 @@ func deployClassifierWithKubeconfigInCluster(ctx context.Context, c client.Clien
 
 	logger.V(logs.LogDebug).Info("Deploying sveltos agent")
 	// Deploy SveltosAgent
-	err = deploySveltosAgent(ctx, remoteRestConfig, clusterNamespace, clusterName, "send-reports", clusterType, logger)
+	err = deploySveltosAgentInManagedCluster(ctx, remoteRestConfig, clusterNamespace, clusterName,
+		"send-reports", clusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -495,24 +503,15 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
 	clusterType libsveltosv1alpha1.ClusterType, options deployer.Options, logger logr.Logger) error {
 
-	logger = logger.WithValues("classifier", applicant)
-	logger.V(logs.LogDebug).Info("deploy classifier: do not send reports mode")
+	logger.V(logs.LogDebug).Info("deploy CRDs: do not send reports mode")
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
-		"", "", clusterType, logger)
-	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
-		return err
-	}
-
-	err = deployCRDs(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	err := deployCRDs(ctx, c, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
 		return err
 	}
 
-	logger.V(logs.LogDebug).Info("Deploying sveltos agent")
-	// Deploy SveltosAgent
-	err = deploySveltosAgent(ctx, remoteRestConfig, clusterNamespace, clusterName, "do-not-send-reports", clusterType, logger)
+	logger.V(logs.LogDebug).Info("deploy sveltos-agent: do not send reports mode")
+	err = deploySveltosAgent(ctx, c, clusterNamespace, clusterName, clusterType, options, logger)
 	if err != nil {
 		return err
 	}
@@ -541,7 +540,7 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 	clusterType libsveltosv1alpha1.ClusterType, options deployer.Options, logger logr.Logger) error {
 
 	logger = logger.WithValues("classifier", applicant)
-	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName))
+	logger = logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", clusterType, clusterNamespace, clusterName))
 	logger.V(logs.LogDebug).Info("Undeploy classifier")
 
 	// Get Cluster
@@ -752,6 +751,8 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 	cpEndpoint string, cluster *corev1.ObjectReference, f feature, logger logr.Logger,
 ) (*libsveltosv1alpha1.ClusterInfo, error) {
 
+	logger = logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", cluster.Kind, cluster.Namespace, cluster.Name))
+
 	// Get Classifier Spec hash (at this very precise moment)
 	currentHash, err := r.getCurrentHash(ctx, classifierScope, cpEndpoint, cluster, f, logger)
 	if err != nil {
@@ -821,12 +822,15 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 		s := libsveltosv1alpha1.SveltosStatusProvisioning
 		status = &s
 
-		options := deployer.Options{}
+		options := deployer.Options{HandlerOptions: map[string]string{}}
+		if r.AgentInMgmtCluster {
+			options.HandlerOptions[sveltosAgentInMgtmCluster] = "management"
+		}
 		var handler deployer.RequestHandler
 		handler = deployClassifierInCluster
 		if r.ClassifierReportMode == AgentSendReportsNoGateway {
 			handler = deployClassifierWithKubeconfigInCluster
-			options.HandlerOptions = map[string]string{controlplaneendpoint: r.ControlPlaneEndpoint}
+			options.HandlerOptions[controlplaneendpoint] = r.ControlPlaneEndpoint
 		}
 		// Getting here means either Classifier failed to be deployed or Classifier has changed.
 		// Classifier must be (re)deployed.
@@ -1130,10 +1134,8 @@ func deployReloaderReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
 	return nil
 }
 
-func deploySveltosAgent(ctx context.Context, remoteRestConfig *rest.Config,
-	clusterNamespace, clusterName, mode string, clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
-
-	agentYAML := string(agent.GetSveltosAgentYAML())
+func prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode string,
+	clusterType libsveltosv1alpha1.ClusterType) string {
 
 	if mode != "do-not-send-reports" {
 		agentYAML = strings.ReplaceAll(agentYAML, "do-not-send-reports", "send-reports")
@@ -1142,6 +1144,113 @@ func deploySveltosAgent(ctx context.Context, remoteRestConfig *rest.Config,
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-namespace=", fmt.Sprintf("cluster-namespace=%s", clusterNamespace))
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-name=", fmt.Sprintf("cluster-name=%s", clusterName))
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-type=", fmt.Sprintf("cluster-type=%s", clusterType))
+
+	return agentYAML
+}
+
+// createSveltosAgentNamespaceInManagedCluster creates the namespace where sveltos-agent will
+// store all its reports
+func createSveltosAgentNamespaceInManagedCluster(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
+
+	// Create the projectsveltos namespace in the remote client
+	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
+		"", "", clusterType, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
+		return err
+	}
+
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: getSveltosAgentNamespace(),
+		},
+	}
+
+	err = remoteClient.Create(ctx, ns)
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+
+	return nil
+}
+
+// deploySveltosAgent deploys sveltos-agent.
+// Sveltos-agent can be deployed in either the managed or the management cluster depending
+// on options
+func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
+	clusterType libsveltosv1alpha1.ClusterType, options deployer.Options, logger logr.Logger) error {
+
+	startInMgmtCluster := startSveltosAgentInMgmtCluster(options)
+
+	// Deploy SveltosAgent
+	if startInMgmtCluster {
+		// in the managed cluster, create the namespace where sveltos-agent will store all its reports
+		err := createSveltosAgentNamespaceInManagedCluster(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+		if err != nil {
+			return err
+		}
+		// Use management cluster restConfig
+		restConfig := getManagementClusterConfig()
+		return deploySveltosAgentInManagementCluster(ctx, restConfig, c, clusterNamespace,
+			clusterName, "do-not-send-reports", clusterType, logger)
+	} else {
+		// Use managed cluster restConfig
+		remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+			"", "", clusterType, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
+			return err
+		}
+		err = deploySveltosAgentInManagedCluster(ctx, remoteRestConfig, clusterNamespace,
+			clusterName, "do-not-send-reports", clusterType, logger)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deploySveltosAgentInManagedCluster(ctx context.Context, remoteRestConfig *rest.Config,
+	clusterNamespace, clusterName, mode string, clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
+
+	logger.V(logs.LogDebug).Info("deploy sveltos-agent in the managed cluster")
+
+	agentYAML := string(agent.GetSveltosAgentYAML())
+	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode, clusterType)
+
+	return deploySveltosAgentResources(ctx, remoteRestConfig, agentYAML, nil, logger)
+}
+
+func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest.Config, c client.Client,
+	clusterNamespace, clusterName, mode string, clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
+
+	logger.V(logs.LogDebug).Info("deploy sveltos-agent in the management cluster")
+
+	agentYAML := string(agent.GetSveltosAgentInMgmtClusterYAML())
+	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode, clusterType)
+
+	// Following labels are added on the objects representing the drift-detection-manager
+	// for this cluster.
+	lbls := getSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
+
+	name, create, err := getSveltosAgentDeploymentName(ctx, restConfig, lbls)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(
+			fmt.Sprintf("failed to get name for sveltos-agent deployment: %v", err))
+		return err
+	}
+
+	if create {
+		agentYAML = strings.ReplaceAll(agentYAML, "$NAME", name)
+		return deploySveltosAgentResources(ctx, restConfig, agentYAML, lbls, logger)
+	}
+
+	return nil
+}
+
+func deploySveltosAgentResources(ctx context.Context, restConfig *rest.Config,
+	agentYAML string, lbls map[string]string, logger logr.Logger) error {
 
 	const separator = "---"
 	elements := strings.Split(agentYAML, separator)
@@ -1152,7 +1261,19 @@ func deploySveltosAgent(ctx context.Context, remoteRestConfig *rest.Config,
 			return err
 		}
 
-		dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, policy.GroupVersionKind(), policy.GetNamespace())
+		if lbls != nil {
+			// Add extra labels
+			currentLabels := policy.GetLabels()
+			if currentLabels == nil {
+				currentLabels = make(map[string]string)
+			}
+			for k := range lbls {
+				currentLabels[k] = lbls[k]
+			}
+			policy.SetLabels(currentLabels)
+		}
+
+		dr, err := utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 			return err
@@ -1167,6 +1288,124 @@ func deploySveltosAgent(ctx context.Context, remoteRestConfig *rest.Config,
 			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply policy Kind: %s Name: %s: %v",
 				policy.GetKind(), policy.GetName(), err))
 			return err
+		}
+	}
+
+	return nil
+}
+
+func getSveltosAgentLabels(clusterNamespace, clusterName string,
+	clusterType libsveltosv1alpha1.ClusterType) map[string]string {
+
+	// Following labels are added on the objects representing the
+	// sveltos-agent for this cluster.
+	lbls := make(map[string]string)
+	lbls["cluster-namespace"] = clusterNamespace
+	lbls["cluster-name"] = clusterName
+	lbls["cluster-type"] = strings.ToLower(string(clusterType))
+	return lbls
+}
+
+// Generate unique name for sveltos-agent
+
+// getSveltosAgentDeploymentName returns the name for a given sveltos-agent deployment
+// started in the management cluster for a given cluster.
+func getSveltosAgentDeploymentName(ctx context.Context, restConfig *rest.Config, lbls map[string]string,
+) (name string, create bool, err error) {
+
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: lbls,
+	}
+
+	// Create a new ListOptions object.
+	listOptions := metav1.ListOptions{
+		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+	}
+
+	// Create a new ClientSet using the RESTConfig.
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return "", false, err
+	}
+
+	// using client and a List would require permission at cluster level. So using clientset instead
+	deployments, err := clientset.AppsV1().Deployments(getSveltosAgentNamespace()).List(ctx, listOptions)
+	if err != nil {
+		return "", false, err
+	}
+
+	objects := make([]client.Object, len(deployments.Items))
+	for i := range deployments.Items {
+		objects[i] = &deployments.Items[i]
+	}
+
+	return getInstantiatedObjectName(objects)
+}
+
+func getInstantiatedObjectName(objects []client.Object) (name string, create bool, err error) {
+	prefix := "sveltos-agent-"
+	switch len(objects) {
+	case 0:
+		// no cluster exist yet. Return random name.
+		// If one clusterProfile with this name already exists,
+		// a conflict will happen. On retry different name will
+		// be picked
+		const nameLength = 20
+		name = prefix + util.RandomString(nameLength)
+		create = true
+		err = nil
+	case 1:
+		name = objects[0].GetName()
+		create = false
+		err = nil
+	default:
+		err = fmt.Errorf("more than one resource")
+	}
+	return name, create, err
+}
+
+// removeSveltosAgentFromManagementCluster removes the sveltos-agent resources
+// installed in the management cluster for the cluster: clusterType:clusterNamespace/clusterName
+func removeSveltosAgentFromManagementCluster(ctx context.Context,
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
+	logger logr.Logger) error {
+
+	// Get YAML containing sveltos-agent resources
+	agentYAML := string(agent.GetSveltosAgentInMgmtClusterYAML())
+	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, "", clusterType)
+
+	// Classifier deploys sveltos-agent resources for each cluster.
+	lbls := getSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
+	name, _, err := getSveltosAgentDeploymentName(ctx, getManagementClusterConfig(), lbls)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(
+			fmt.Sprintf("failed to get name for sveltos-agent deployment name: %v", err))
+		return err
+	}
+
+	agentYAML = strings.ReplaceAll(agentYAML, "$NAME", name)
+
+	restConfig := getManagementClusterConfig()
+
+	const separator = "---"
+	elements := strings.Split(agentYAML, separator)
+	for i := range elements {
+		policy, err := utils.GetUnstructured([]byte(elements[i]))
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse sveltos-agent yaml: %v", err))
+			return err
+		}
+
+		dr, err := utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
+		if err != nil {
+			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+			return err
+		}
+
+		err = dr.Delete(ctx, policy.GetName(), metav1.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to delete resource %s:%s/%s: %v",
+				policy.GetKind(), policy.GetNamespace(), policy.GetName(), err))
 		}
 	}
 
