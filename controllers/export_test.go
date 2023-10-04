@@ -17,23 +17,27 @@ limitations under the License.
 package controllers
 
 var (
-	DeployClassifierCRD                 = deployClassifierCRD
-	DeployClassifierReportCRD           = deployClassifierReportCRD
-	DeployHealthCheckCRD                = deployHealthCheckCRD
-	DeployHealthCheckReportCRD          = deployHealthCheckReportCRD
-	DeployEventSourceCRD                = deployEventSourceCRD
-	DeployEventReportCRD                = deployEventReportCRD
-	DeployReloaderCRD                   = deployReloaderCRD
-	DeployReloaderReportCRD             = deployReloaderReportCRD
-	DeployDebuggingConfigurationCRD     = deployDebuggingConfigurationCRD
-	DeployClassifierInstance            = deployClassifierInstance
-	DeploySveltosAgent                  = deploySveltosAgent
-	ClassifierHash                      = classifierHash
-	DeployClassifierInCluster           = deployClassifierInCluster
-	UndeployClassifierFromCluster       = undeployClassifierFromCluster
-	RemoveClassifierReports             = removeClassifierReports
-	RemoveClusterClassifierReports      = removeClusterClassifierReports
-	CollectClassifierReportsFromCluster = collectClassifierReportsFromCluster
+	DeployClassifierCRD                     = deployClassifierCRD
+	DeployClassifierReportCRD               = deployClassifierReportCRD
+	DeployHealthCheckCRD                    = deployHealthCheckCRD
+	DeployHealthCheckReportCRD              = deployHealthCheckReportCRD
+	DeployEventSourceCRD                    = deployEventSourceCRD
+	DeployEventReportCRD                    = deployEventReportCRD
+	DeployReloaderCRD                       = deployReloaderCRD
+	DeployReloaderReportCRD                 = deployReloaderReportCRD
+	DeployDebuggingConfigurationCRD         = deployDebuggingConfigurationCRD
+	DeployClassifierInstance                = deployClassifierInstance
+	DeploySveltosAgentInManagedCluster      = deploySveltosAgentInManagedCluster
+	ClassifierHash                          = classifierHash
+	DeployClassifierInCluster               = deployClassifierInCluster
+	UndeployClassifierFromCluster           = undeployClassifierFromCluster
+	RemoveClassifierReports                 = removeClassifierReports
+	RemoveClusterClassifierReports          = removeClusterClassifierReports
+	CollectClassifierReportsFromCluster     = collectClassifierReportsFromCluster
+	DeploySveltosAgentInManagementCluster   = deploySveltosAgentInManagementCluster
+	RemoveSveltosAgentFromManagementCluster = removeSveltosAgentFromManagementCluster
+	GetSveltosAgentLabels                   = getSveltosAgentLabels
+	GetSveltosAgentNamespace                = getSveltosAgentNamespace
 
 	CreateAccessRequest                        = createAccessRequest
 	GetAccessRequestName                       = getAccessRequestName

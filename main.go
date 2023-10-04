@@ -45,14 +45,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
+	"github.com/projectsveltos/classifier/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
-
-	"github.com/projectsveltos/classifier/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -63,6 +62,7 @@ var (
 	probeAddr                             string
 	concurrentReconciles                  int
 	workers                               int
+	agentInMgmtCluster                    bool
 	reportMode                            controllers.ReportMode
 	tmpReportMode                         int
 	managementClusterControlPlaneEndpoint string
@@ -116,6 +116,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	controllers.SetManagementClusterAccess(mgr.GetConfig())
+
 	// Setup the context that's going to be used in controllers and for the manager.
 	ctx := ctrl.SetupSignalHandler()
 
@@ -141,6 +143,7 @@ func main() {
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClassifierMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 		Deployer:             d,
+		AgentInMgmtCluster:   agentInMgmtCluster,
 		ClassifierReportMode: reportMode,
 		ControlPlaneEndpoint: managementClusterControlPlaneEndpoint,
 		Mux:                  sync.Mutex{},
@@ -179,6 +182,11 @@ func initFlags(fs *pflag.FlagSet) {
 		"report-mode",
 		defaulReportMode,
 		"Indicates how ClassifierReport needs to be collected")
+
+	fs.BoolVar(&agentInMgmtCluster,
+		"agent-in-mgmt-cluster",
+		false,
+		"When set, indicates drift-detection-manager needs to be started in the management cluster")
 
 	fs.StringVar(&managementClusterControlPlaneEndpoint,
 		"control-plane-endpoint",
