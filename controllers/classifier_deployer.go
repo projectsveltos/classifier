@@ -1303,6 +1303,7 @@ func getSveltosAgentLabels(clusterNamespace, clusterName string,
 	lbls["cluster-namespace"] = clusterNamespace
 	lbls["cluster-name"] = clusterName
 	lbls["cluster-type"] = strings.ToLower(string(clusterType))
+	lbls["feature"] = "sveltos-agent"
 	return lbls
 }
 
