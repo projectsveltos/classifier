@@ -14,14 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package agent
+package controllers
 
-//go:generate go run ../../generator.go
+import (
+	"k8s.io/client-go/rest"
+)
 
-func GetSveltosAgentYAML() []byte {
-	return sveltosAgentYAML
+var (
+	managementClusterConfig *rest.Config
+)
+
+func SetManagementClusterAccess(config *rest.Config) {
+	managementClusterConfig = config
 }
 
-func GetSveltosAgentInMgmtClusterYAML() []byte {
-	return sveltosAgentInMgmtClusterYAML
+func getManagementClusterConfig() *rest.Config {
+	return managementClusterConfig
 }

@@ -218,6 +218,7 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 sveltos-agent:
 	@echo "Downloading sveltos agent yaml"
 	curl -L https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/manifest.yaml -o ./pkg/agent/sveltos-agent.yaml
+	curl -L https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/agent/sveltos-agent-in-mgmt-cluster.yaml	
 	cd pkg/agent; go generate
 
 .PHONY: build

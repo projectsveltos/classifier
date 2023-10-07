@@ -81,6 +81,7 @@ type ClassifierReconciler struct {
 	Deployer             deployer.DeployerInterface
 	ConcurrentReconciles int
 	ClassifierReportMode ReportMode
+	AgentInMgmtCluster   bool // if true, indicates sveltos-agent needs to be started in the management cluster
 	// Management cluster controlplane endpoint. This is needed when mode is AgentSendReportsNoGateway.
 	// It will be used by classifier-agent to send classifierreports back to management cluster.
 	ControlPlaneEndpoint string
@@ -266,6 +267,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 	r.updateMaps(classifierScope)
 
 	f := getHandlersForFeature(libsveltosv1alpha1.FeatureClassifier)
+
 	if err := r.deployClassifier(ctx, classifierScope, f, logger); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to deploy")
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
@@ -690,4 +692,21 @@ func (r *ClassifierReconciler) classifyLabels(ctx context.Context, classifier *l
 	}
 
 	return managed, unManaged, nil
+}
+
+const (
+	sveltosAgentInMgtmCluster = "sveltosAgentInMgtmCluster"
+)
+
+func startSveltosAgentInMgmtCluster(o deployer.Options) bool {
+	if o.HandlerOptions == nil {
+		return false
+	}
+
+	runInMgtmCluster := false
+	if _, ok := o.HandlerOptions[sveltosAgentInMgtmCluster]; ok {
+		runInMgtmCluster = true
+	}
+
+	return runInMgtmCluster
 }

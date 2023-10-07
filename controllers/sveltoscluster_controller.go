@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -48,7 +49,7 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	sveltosCluster := &libsveltosv1alpha1.SveltosCluster{}
 	if err := r.Get(ctx, req.NamespacedName, sveltosCluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			return removeClassifierReportForDeletedCluster(ctx, r.Client, req.Namespace, req.Name,
+			return cleanClusterStaleResources(ctx, r.Client, req.Namespace, req.Name,
 				libsveltosv1alpha1.ClusterTypeSveltos, logger)
 		}
 		logger.Error(err, "Failed to fetch SveltosCluster")
@@ -61,7 +62,7 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Handle deleted SveltosCluster
 	if !sveltosCluster.DeletionTimestamp.IsZero() {
-		return removeClassifierReportForDeletedCluster(ctx, r.Client, req.Namespace, req.Name,
+		return cleanClusterStaleResources(ctx, r.Client, req.Namespace, req.Name,
 			libsveltosv1alpha1.ClusterTypeSveltos, logger)
 	}
 
@@ -75,13 +76,29 @@ func (r *SveltosClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func removeClassifierReportForDeletedCluster(ctx context.Context, c client.Client,
-	clusterNamespace, cluserName string, clusterType libsveltosv1alpha1.ClusterType,
+// cleanClusterStaleResources removes:
+// - any classifierReport coming from this cluster
+// - if sveltos-agent was deployed in the management cluster, sveltos-agent resources
+// created for this cluster are removed from the management cluster
+func cleanClusterStaleResources(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
 	logger logr.Logger) (ctrl.Result, error) {
 
-	err := removeClusterClassifierReports(ctx, c, clusterNamespace, cluserName, clusterType, logger)
+	err := removeClusterClassifierReports(ctx, c, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
+		logger.V(logs.LogInfo).Info(
+			fmt.Sprintf("failed to remove classifier reports from management cluster: %v", err))
 		return reconcile.Result{}, err
 	}
+
+	// If sveltos-agent was deployed in the management cluster, removes any resource
+	// referring to this cluster
+	err = removeSveltosAgentFromManagementCluster(ctx, clusterNamespace, clusterName, clusterType, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(
+			fmt.Sprintf("failed to remove sveltos-agent resources from management cluster: %v", err))
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+	}
+
 	return reconcile.Result{}, nil
 }
