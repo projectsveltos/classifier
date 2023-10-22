@@ -118,14 +118,21 @@ func removeClusterClassifierReports(ctx context.Context, c client.Client, cluste
 	return nil
 }
 
-// Periodically collects ClassifierReports from each CAPI cluster.
-func collectClassifierReports(c client.Client, logger logr.Logger) {
-	const interval = 20 * time.Second
+// Periodically collects ClassifierReports from each cluster.
+// If sharding is used, it will collect only from clusters matching shard.
+func collectClassifierReports(c client.Client, shardKey string, logger logr.Logger) {
+	interval := 20 * time.Second
+	if shardKey != "" {
+		// This controller will only fetch ClassifierReport instances
+		// so it can be more aggressive
+		interval = 10 * time.Second
+	}
 
 	ctx := context.TODO()
 	for {
 		logger.V(logs.LogDebug).Info("collecting ClassifierReports")
-		clusterList, err := clusterproxy.GetListOfClusters(ctx, c, logger)
+		// Get a selectors that matches everything
+		clusterList, err := clusterproxy.GetListOfClustersForShardKey(ctx, c, shardKey, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
 		}
