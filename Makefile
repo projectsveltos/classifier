@@ -60,6 +60,7 @@ KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 CLUSTERCTL := $(TOOLS_BIN_DIR)/clusterctl
 
 GOLANGCI_LINT_VERSION := "v1.52.2"
+CLUSTERCTL_VERSION := "v1.5.2"
 
 $(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod # Build controller-gen from tools folder.
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) sigs.k8s.io/controller-tools/cmd/controller-gen
@@ -83,7 +84,8 @@ $(KIND): $(TOOLS_DIR)/go.mod
 	cd $(TOOLS_DIR) && $(GOBUILD) -tags tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) sigs.k8s.io/kind
 
 $(CLUSTERCTL): $(TOOLS_DIR)/go.mod ## Build clusterctl binary
-	cd $(TOOLS_DIR); $(GOBUILD) -trimpath  -ldflags $(CLUSTERAPI_LDFLAGS) -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) sigs.k8s.io/cluster-api/cmd/clusterctl
+	curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/$(CLUSTERCTL_VERSION)/clusterctl-$(OS)-$(ARCH) -o $@
+	chmod +x $@
 	mkdir -p $(HOME)/.cluster-api # create cluster api init directory, if not present	
 
 $(KUBECTL):
