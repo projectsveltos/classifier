@@ -130,6 +130,7 @@ manifests: $(CONTROLLER_GEN) $(KUSTOMIZE) $(ENVSUBST) ## Generate WebhookConfigu
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) $(MAKE) set-manifest-image
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) > manifest/manifest.yaml
+	./scripts/extract_deployment.sh manifest/manifest.yaml manifest/deployment-shard.yaml
 	
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -179,7 +180,9 @@ fv: $(GINKGO) ## Run Sveltos Controller tests using existing cluster
 .PHONY: fv-sharding
 fv-sharding: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
 	$(KUBECTL) patch cluster  clusterapi-workload  -n default --type json -p '[{ "op": "add", "path": "/metadata/annotations/sharding.projectsveltos.io~1key", "value": "shard1" }]'
-	$(KUBECTL) apply -f test/classifier-shard.yaml
+	sed -e "s/{{.SHARD}}/shard1/g"  manifest/deployment-shard.yaml > test/classifier-deployment-shard.yaml
+	$(KUBECTL) apply -f test/classifier-deployment-shard.yaml
+	rm -f test/classifier-deployment-shard.yaml
 	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
 
 .PHONY: test

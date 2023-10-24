@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   labels:
     control-plane: classifier
-  name: classifier-shard-manager
+  name: classifier-manager-{{.SHARD}}
   namespace: projectsveltos
 spec:
   replicas: 1
@@ -22,7 +22,7 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
         - --report-mode=0
-        - --shard-key=shard1
+        - --shard-key={{.SHARD}}
         - --v=5
         command:
         - /manager
