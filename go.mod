@@ -5,11 +5,11 @@ go 1.20
 require (
 	github.com/TwiN/go-color v1.4.1
 	github.com/gdexlab/go-render v1.0.1
-	github.com/go-logr/logr v1.2.4
+	github.com/go-logr/logr v1.3.0
 	github.com/onsi/ginkgo/v2 v2.13.0
-	github.com/onsi/gomega v1.28.1
+	github.com/onsi/gomega v1.29.0
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.18.1-0.20231023065531-aeab1b467c08
+	github.com/projectsveltos/libsveltos v0.19.0
 	github.com/prometheus/client_golang v1.17.0
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/text v0.13.0
@@ -20,7 +20,7 @@ require (
 	k8s.io/component-base v0.28.2
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
-	sigs.k8s.io/cluster-api v1.5.2
+	sigs.k8s.io/cluster-api v1.5.3
 	sigs.k8s.io/controller-runtime v0.15.1
 )
 
