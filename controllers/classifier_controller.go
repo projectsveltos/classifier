@@ -85,6 +85,7 @@ type ClassifierReconciler struct {
 	// Management cluster controlplane endpoint. This is needed when mode is AgentSendReportsNoGateway.
 	// It will be used by classifier-agent to send classifierreports back to management cluster.
 	ControlPlaneEndpoint string
+	ShardKey             string // when set, only clusters matching the ShardKey will be reconciled
 	// use a Mutex to update in-memory structure as MaxConcurrentReconciles is higher than one
 	Mux sync.Mutex
 	// key: Sveltos/CAPI Cluster namespace/name; value: set of all Classifiers deployed int the Cluster
@@ -121,6 +122,13 @@ type ClassifierReconciler struct {
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *ClassifierReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	if r.ShardKey != "" {
+		// Only the default classifier deployment will reconcile classifiers.
+		// The other classifier deployments will fetch classifierReports from the clusters
+		// matching their shard
+		return reconcile.Result{}, nil
+	}
+
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(logs.LogInfo).Info("Reconciling")
 
@@ -330,7 +338,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 	}
 
 	if r.ClassifierReportMode == CollectFromManagementCluster {
-		go collectClassifierReports(mgr.GetClient(), mgr.GetLogger())
+		go collectClassifierReports(mgr.GetClient(), r.ShardKey, mgr.GetLogger())
 	}
 
 	return c, nil
