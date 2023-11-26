@@ -161,7 +161,7 @@ func getClassifierReport(classifierName, clusterNamespace, clusterName string) *
 		ObjectMeta: metav1.ObjectMeta{
 			Name: randomString(),
 			Labels: map[string]string{
-				libsveltosv1alpha1.ClassifierLabelName: classifierName,
+				libsveltosv1alpha1.ClassifierlNameLabel: classifierName,
 			},
 		},
 		Spec: libsveltosv1alpha1.ClassifierReportSpec{

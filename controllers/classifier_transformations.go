@@ -121,7 +121,7 @@ func (r *ClassifierReconciler) requeueClassifierForSecret(
 	if secret.Labels == nil {
 		return nil
 	}
-	if _, ok := secret.Labels[libsveltosv1alpha1.AccessRequestLabelName]; !ok {
+	if _, ok := secret.Labels[libsveltosv1alpha1.AccessRequestNameLabel]; !ok {
 		return nil
 	}
 

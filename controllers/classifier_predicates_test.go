@@ -612,7 +612,7 @@ var _ = Describe("Classifier Predicates: SecretPredicates", func() {
 		secretPredicate := controllers.SecretPredicates(logger)
 
 		secret.Labels = map[string]string{
-			libsveltosv1alpha1.AccessRequestLabelName: randomString(),
+			libsveltosv1alpha1.AccessRequestNameLabel: randomString(),
 		}
 
 		e := event.CreateEvent{
@@ -652,7 +652,7 @@ var _ = Describe("Classifier Predicates: SecretPredicates", func() {
 			randomString(): []byte(randomString()),
 		}
 		secret.Labels = map[string]string{
-			libsveltosv1alpha1.AccessRequestLabelName: randomString(),
+			libsveltosv1alpha1.AccessRequestNameLabel: randomString(),
 		}
 
 		oldSecret := &corev1.Secret{
@@ -679,7 +679,7 @@ var _ = Describe("Classifier Predicates: SecretPredicates", func() {
 			randomString(): []byte(randomString()),
 		}
 		secret.Labels = map[string]string{
-			libsveltosv1alpha1.AccessRequestLabelName: randomString(),
+			libsveltosv1alpha1.AccessRequestNameLabel: randomString(),
 		}
 
 		oldSecret := &corev1.Secret{

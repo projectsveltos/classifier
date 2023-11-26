@@ -303,7 +303,7 @@ func SecretPredicates(logger logr.Logger) predicate.Funcs {
 				return false
 			}
 
-			if _, ok := newSecret.Labels[libsveltosv1alpha1.AccessRequestLabelName]; !ok {
+			if _, ok := newSecret.Labels[libsveltosv1alpha1.AccessRequestNameLabel]; !ok {
 				log.V(logs.LogVerbose).Info("Secret with no AccessRequestLabelName.  Will not attempt to reconcile associated Classifiers.")
 				return false
 			}
@@ -337,7 +337,7 @@ func SecretPredicates(logger logr.Logger) predicate.Funcs {
 				return false
 			}
 
-			if _, ok := secret.Labels[libsveltosv1alpha1.AccessRequestLabelName]; !ok {
+			if _, ok := secret.Labels[libsveltosv1alpha1.AccessRequestNameLabel]; !ok {
 				log.V(logs.LogVerbose).Info("Secret with no AccessRequestLabelName.  Will not attempt to reconcile associated Classifiers.")
 				return false
 			}
