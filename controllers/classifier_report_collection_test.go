@@ -159,7 +159,7 @@ func validateClassifierReports(classifierName string, cluster *clusterv1.Cluster
 			By("Spec ClusterNamespace and ClusterName not set")
 			return false
 		}
-		v, ok := currentClassifierReport.Labels[libsveltosv1alpha1.ClassifierLabelName]
+		v, ok := currentClassifierReport.Labels[libsveltosv1alpha1.ClassifierlNameLabel]
 		return ok && v == classifierName
 	}, timeout, pollingInterval).Should(BeTrue())
 }

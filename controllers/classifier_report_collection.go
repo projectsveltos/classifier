@@ -67,7 +67,7 @@ func removeClassifierReports(ctx context.Context, c client.Client, classifier *l
 
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
-			libsveltosv1alpha1.ClassifierLabelName: classifier.Name,
+			libsveltosv1alpha1.ClassifierlNameLabel: classifier.Name,
 		},
 	}
 
@@ -215,7 +215,7 @@ func updateClassifierReport(ctx context.Context, c client.Client, cluster *corev
 		return errors.New(msg)
 	}
 
-	classifierName, ok := classiferReport.Labels[libsveltosv1alpha1.ClassifierLabelName]
+	classifierName, ok := classiferReport.Labels[libsveltosv1alpha1.ClassifierlNameLabel]
 	if !ok {
 		msg := "classifierReport is malformed. Label missing"
 		logger.V(logs.LogInfo).Info(msg)
