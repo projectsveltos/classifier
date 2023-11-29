@@ -431,7 +431,7 @@ func (r *ClassifierReconciler) updateMatchingClustersAndRegistrations(ctx contex
 
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
-			libsveltosv1alpha1.ClassifierLabelName: classifierScope.Classifier.Name,
+			libsveltosv1alpha1.ClassifierlNameLabel: classifierScope.Classifier.Name,
 		},
 	}
 
