@@ -27,7 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -130,7 +130,8 @@ var _ = Describe("Classifier: Reconciler", func() {
 
 		Expect(c.Status().Update(context.TODO(), currentClassifier)).To(Succeed())
 
-		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
+		dep := fakedeployer.GetClient(context.TODO(),
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Client)
 		Expect(dep.RegisterFeatureID(libsveltosv1alpha1.FeatureClassifier)).To(Succeed())
 
 		reconciler := &controllers.ClassifierReconciler{
@@ -199,14 +200,14 @@ var _ = Describe("Classifier: Reconciler", func() {
 
 		classifierScope, err := scope.NewClassifierScope(scope.ClassifierScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			Classifier:     classifier,
 			ControllerName: "classifier",
 		})
 		Expect(err).To(BeNil())
 
-		Expect(controllers.UpdateMatchingClustersAndRegistrations(reconciler, context.TODO(),
-			classifierScope, klogr.New())).To(Succeed())
+		Expect(controllers.UpdateMatchingClustersAndRegistrations(reconciler, context.TODO(), classifierScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
 
 		Expect(classifier.Status.MachingClusterStatuses).ToNot(BeNil())
 		Expect(len(classifier.Status.MachingClusterStatuses)).To(Equal(1))
@@ -259,14 +260,14 @@ var _ = Describe("Classifier: Reconciler", func() {
 
 		classifierScope, err := scope.NewClassifierScope(scope.ClassifierScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			Classifier:     classifier,
 			ControllerName: "classifier",
 		})
 		Expect(err).To(BeNil())
 
-		Expect(controllers.UpdateMatchingClustersAndRegistrations(reconciler, context.TODO(),
-			classifierScope, klogr.New())).To(Succeed())
+		Expect(controllers.UpdateMatchingClustersAndRegistrations(reconciler, context.TODO(), classifierScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
 
 		Expect(classifier.Status.MachingClusterStatuses).ToNot(BeNil())
 		Expect(len(classifier.Status.MachingClusterStatuses)).To(Equal(1))
@@ -324,7 +325,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 
 		classifierScope, err := scope.NewClassifierScope(scope.ClassifierScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			Classifier:     classifier,
 			ControllerName: "classifier",
 		})
@@ -337,11 +338,11 @@ var _ = Describe("Classifier: Reconciler", func() {
 			{Namespace: cluster.Namespace, Name: cluster.Name, APIVersion: cluster.APIVersion, Kind: cluster.Kind}: true,
 		}
 		oldMatchingClusters := map[corev1.ObjectReference]bool{}
-		Expect(controllers.HandleLabelRegistrations(reconciler, context.TODO(), classifier,
-			currentMatchingClusters, oldMatchingClusters, klogr.New())).To(Succeed())
+		Expect(controllers.HandleLabelRegistrations(reconciler, context.TODO(), classifier, currentMatchingClusters,
+			oldMatchingClusters, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
 
-		Expect(controllers.UpdateLabelsOnMatchingClusters(reconciler, context.TODO(),
-			classifierScope, klogr.New())).To(Succeed())
+		Expect(controllers.UpdateLabelsOnMatchingClusters(reconciler, context.TODO(), classifierScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
 
 		currentCluster := &clusterv1.Cluster{}
 		Expect(c.Get(context.TODO(),
@@ -401,14 +402,16 @@ var _ = Describe("Classifier: Reconciler", func() {
 
 		classifierScope, err := scope.NewClassifierScope(scope.ClassifierScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			Classifier:     classifier,
 			ControllerName: "classifier",
 		})
 		Expect(err).To(BeNil())
 
-		Expect(controllers.RemoveAllRegistrations(reconciler, context.TODO(), classifierScope, klogr.New())).To(Succeed())
-		Expect(manager.CanManageLabel(classifier, clusterNamespace, clusterName, label, libsveltosv1alpha1.ClusterTypeCapi)).To(BeFalse())
+		Expect(controllers.RemoveAllRegistrations(reconciler, context.TODO(), classifierScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
+		Expect(manager.CanManageLabel(classifier, clusterNamespace, clusterName, label,
+			libsveltosv1alpha1.ClusterTypeCapi)).To(BeFalse())
 	})
 
 	It("classifyLabels divides labels in managed and unmanaged", func() {
@@ -463,7 +466,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 		}
 
 		managed, unManaged, err := controllers.ClassifyLabels(reconciler, context.TODO(), classifier,
-			clusterRef, klogr.New())
+			clusterRef, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
 		Expect(err).To(BeNil())
 		Expect(len(managed)).To(Equal(1))
 		Expect(len(unManaged)).To(Equal(1))
@@ -498,7 +501,8 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 			Name: classifier.Name,
 		}
 
-		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			testEnv.Client)
 		Expect(dep.RegisterFeatureID(libsveltosv1alpha1.FeatureClassifier)).To(Succeed())
 
 		clusterProfileReconciler := getClassifierReconciler(testEnv.Client, dep)
@@ -543,7 +547,8 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 			Name: classifier.Name,
 		}
 
-		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			testEnv.Client)
 		Expect(dep.RegisterFeatureID(libsveltosv1alpha1.FeatureClassifier)).To(Succeed())
 
 		clusterProfileReconciler := getClassifierReconciler(testEnv.Client, dep)

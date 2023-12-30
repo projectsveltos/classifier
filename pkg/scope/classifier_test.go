@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -57,7 +57,7 @@ var _ = Describe("ClassifierScope", func() {
 	It("Return nil,error if Classifier is not specified", func() {
 		params := scope.ClassifierScopeParams{
 			Client: c,
-			Logger: klogr.New(),
+			Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 		}
 
 		scope, err := scope.NewClassifierScope(params)
@@ -68,7 +68,7 @@ var _ = Describe("ClassifierScope", func() {
 	It("Return nil,error if client is not specified", func() {
 		params := scope.ClassifierScopeParams{
 			Classifier: classifier,
-			Logger:     klogr.New(),
+			Logger:     textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 		}
 
 		scope, err := scope.NewClassifierScope(params)
@@ -80,7 +80,7 @@ var _ = Describe("ClassifierScope", func() {
 		params := scope.ClassifierScopeParams{
 			Client:     c,
 			Classifier: classifier,
-			Logger:     klogr.New(),
+			Logger:     textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 		}
 
 		scope, err := scope.NewClassifierScope(params)
@@ -94,7 +94,7 @@ var _ = Describe("ClassifierScope", func() {
 		params := scope.ClassifierScopeParams{
 			Client:     c,
 			Classifier: classifier,
-			Logger:     klogr.New(),
+			Logger:     textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 		}
 
 		scope, err := scope.NewClassifierScope(params)
@@ -122,7 +122,7 @@ var _ = Describe("ClassifierScope", func() {
 		params := scope.ClassifierScopeParams{
 			Client:     c,
 			Classifier: classifier,
-			Logger:     klogr.New(),
+			Logger:     textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 		}
 
 		scope, err := scope.NewClassifierScope(params)
