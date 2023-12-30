@@ -196,6 +196,12 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	@echo wait for capd-system pod
 	$(KUBECTL) wait --for=condition=Available deployment/capd-controller-manager -n capd-system --timeout=$(TIMEOUT)
 
+	@echo wait for capi-kubeadm-bootstrap-system pod
+	$(KUBECTL) wait --for=condition=Available deployment/capi-kubeadm-bootstrap-controller-manager -n capi-kubeadm-bootstrap-system --timeout=$(TIMEOUT)
+
+	@echo wait for capi-kubeadm-control-plane-system pod
+	$(KUBECTL) wait --for=condition=Available deployment/capi-kubeadm-control-plane-controller-manager -n capi-kubeadm-control-plane-system --timeout=$(TIMEOUT)
+
 	@echo "Create a workload cluster"
 	$(KUBECTL) apply -f $(KIND_CLUSTER_YAML)
 
