@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -323,7 +322,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 	// need to be reconciled.
 	if err := c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.SveltosCluster{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForCluster),
-		SveltosClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
+		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
 	); err != nil {
 		return nil, err
 	}
@@ -395,7 +394,7 @@ func (r *ClassifierReconciler) updateClusterInfo(ctx context.Context, classifier
 		return fmt.Sprintf("%s:%s/%s", clusterproxy.GetClusterType(&cluster), cluster.Namespace, cluster.Name)
 	}
 
-	matchingCluster, err := clusterproxy.GetListOfClusters(ctx, r.Client, classifierScope.Logger)
+	matchingCluster, err := clusterproxy.GetListOfClusters(ctx, r.Client, "", classifierScope.Logger)
 	if err != nil {
 		return err
 	}

@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,7 +36,7 @@ func (r *ClassifierReconciler) requeueClassifierForCluster(
 ) []reconcile.Request {
 
 	cluster := o
-	logger := klogr.New().WithValues(
+	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
 		"objectMapper",
 		"requeueClassifierForCluster",
 		"namespace",
@@ -71,7 +71,7 @@ func (r *ClassifierReconciler) requeueClassifierForMachine(
 ) []reconcile.Request {
 
 	machine := o.(*clusterv1.Machine)
-	logger := klogr.New().WithValues(
+	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
 		"objectMapper",
 		"requeueClassifierForMachine",
 		"namespace",
@@ -104,7 +104,7 @@ func (r *ClassifierReconciler) requeueClassifierForSecret(
 ) []reconcile.Request {
 
 	secret := o.(*corev1.Secret)
-	logger := klogr.New().WithValues(
+	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
 		"objectMapper",
 		"requeueClassifierForSecret",
 		"namespace",
@@ -144,7 +144,7 @@ func (r *ClassifierReconciler) requeueClassifierForClassifierReport(
 ) []reconcile.Request {
 
 	report := o.(*libsveltosv1alpha1.ClassifierReport)
-	logger := klogr.New().WithValues(
+	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
 		"objectMapper",
 		"requeueClassifierForClassifierReport",
 		"namespace",
@@ -174,7 +174,7 @@ func (r *ClassifierReconciler) requeueClassifierForClassifier(
 ) []reconcile.Request {
 
 	classifier := o.(*libsveltosv1alpha1.Classifier)
-	logger := klogr.New().WithValues(
+	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
 		"objectMapper",
 		"requeueClassifierForClassifier",
 		"classifier",
