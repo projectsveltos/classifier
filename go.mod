@@ -1,6 +1,6 @@
 module github.com/projectsveltos/classifier
 
-go 1.20
+go 1.21
 
 require (
 	github.com/TwiN/go-color v1.4.1
@@ -9,17 +9,17 @@ require (
 	github.com/onsi/ginkgo/v2 v2.13.2
 	github.com/onsi/gomega v1.30.0
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.20.1-0.20231229144857-dccc45740911
+	github.com/projectsveltos/libsveltos v0.20.1-0.20231231155220-e39cb8a6ef82
 	github.com/prometheus/client_golang v1.18.0
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/text v0.14.0
-	k8s.io/api v0.28.4
-	k8s.io/apiextensions-apiserver v0.28.4
-	k8s.io/apimachinery v0.28.4
-	k8s.io/client-go v0.28.4
-	k8s.io/component-base v0.28.4
+	k8s.io/api v0.28.5
+	k8s.io/apiextensions-apiserver v0.28.5
+	k8s.io/apimachinery v0.28.5
+	k8s.io/client-go v0.28.5
+	k8s.io/component-base v0.28.5
 	k8s.io/klog/v2 v2.110.1
-	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
+	k8s.io/utils v0.0.0-20231127182322-b307cd553661
 	sigs.k8s.io/cluster-api v1.6.0
 	sigs.k8s.io/controller-runtime v0.16.3
 )
@@ -73,7 +73,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9 // indirect
-	k8s.io/kubectl v0.28.4 // indirect
+	k8s.io/kubectl v0.28.5 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
