@@ -132,7 +132,7 @@ func collectClassifierReports(c client.Client, shardKey string, logger logr.Logg
 	for {
 		logger.V(logs.LogDebug).Info("collecting ClassifierReports")
 		// Get a selectors that matches everything
-		clusterList, err := clusterproxy.GetListOfClustersForShardKey(ctx, c, shardKey, logger)
+		clusterList, err := clusterproxy.GetListOfClustersForShardKey(ctx, c, "", shardKey, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
 		}
