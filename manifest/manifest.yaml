@@ -234,6 +234,7 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
+        - --version=mainmain
         command:
         - /manager
         image: projectsveltos/classifier-amd64:main

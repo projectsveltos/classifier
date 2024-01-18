@@ -171,6 +171,7 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 func classifierHash(classifier *libsveltosv1alpha1.Classifier) []byte {
 	h := sha256.New()
 	var config string
+	config += getVersion() // Use the version. This will cause Classifier, Sveltos CRDs and agent to be redeployed on upgrade
 	config += render.AsCode(classifier.Spec)
 	h.Write([]byte(config))
 	return h.Sum(nil)

@@ -74,6 +74,7 @@ var (
 	restConfigBurst                       int
 	webhookPort                           int
 	syncPeriod                            time.Duration
+	version                               string
 )
 
 const (
@@ -165,6 +166,8 @@ func main() {
 
 	setupChecks(mgr)
 
+	controllers.SetVersion(version)
+
 	go capiWatchers(ctx, mgr,
 		classifierReconciler, classifierController,
 		setupLog)
@@ -216,6 +219,11 @@ func initFlags(fs *pflag.FlagSet) {
 		"concurrent-reconciles",
 		defaultReconcilers,
 		"concurrent reconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 10")
+
+	fs.StringVar(&version,
+		"version",
+		"",
+		"current sveltos version")
 
 	const defautlRestConfigQPS = 20
 	fs.Float32Var(&restConfigQPS, "kube-api-qps", defautlRestConfigQPS,
