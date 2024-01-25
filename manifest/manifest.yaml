@@ -234,10 +234,10 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=mainmain
+        - --version=v0.22.0mainmain
         command:
         - /manager
-        image: projectsveltos/classifier-amd64:dev
+        image: projectsveltos/classifier-amd64:v0.22.0
         livenessProbe:
           httpGet:
             path: /healthz
