@@ -24,7 +24,7 @@ spec:
         - --report-mode=0
         - --shard-key={{.SHARD}}
         - --v=5
-        - --version=v0.22.0mainmain
+        - --version=v0.22.0
         command:
         - /manager
         image: projectsveltos/classifier-amd64:v0.22.0
