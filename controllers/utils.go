@@ -34,6 +34,10 @@ const (
 	accessRequestClassifierLabel = "projectsveltos.io/classifierrequest"
 )
 
+var (
+	version string
+)
+
 func InitScheme() (*runtime.Scheme, error) {
 	s := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(s); err != nil {
@@ -97,4 +101,12 @@ func getClusterRefFromClassifierReport(report *libsveltosv1alpha1.ClassifierRepo
 		panic(1)
 	}
 	return &cluster
+}
+
+func SetVersion(v string) {
+	version = v
+}
+
+func getVersion() string {
+	return version
 }
