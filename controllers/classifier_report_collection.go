@@ -121,11 +121,11 @@ func removeClusterClassifierReports(ctx context.Context, c client.Client, cluste
 // Periodically collects ClassifierReports from each cluster.
 // If sharding is used, it will collect only from clusters matching shard.
 func collectClassifierReports(c client.Client, shardKey string, logger logr.Logger) {
-	interval := 20 * time.Second
+	interval := 10 * time.Second
 	if shardKey != "" {
 		// This controller will only fetch ClassifierReport instances
 		// so it can be more aggressive
-		interval = 10 * time.Second
+		interval = 5 * time.Second
 	}
 
 	ctx := context.TODO()
