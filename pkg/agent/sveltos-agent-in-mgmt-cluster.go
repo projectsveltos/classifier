@@ -16,23 +16,7 @@ limitations under the License.
 */
 package agent
 
-var sveltosAgentInMgmtClusterYAML = []byte(`apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    control-plane: $NAME
-  name: $NAME-metrics-service
-  namespace: projectsveltos
-spec:
-  ports:
-  - name: https
-    port: 8443
-    protocol: TCP
-    targetPort: https
-  selector:
-    control-plane: $NAME
----
-apiVersion: apps/v1
+var sveltosAgentInMgmtClusterYAML = []byte(`apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
@@ -53,28 +37,38 @@ spec:
     spec:
       containers:
       - args:
-        - --health-probe-bind-address=:8081
-        - --metrics-bind-address=127.0.0.1:8080
+        - --diagnostics-address=:8443
         - --v=5
         - --cluster-namespace=
         - --cluster-name=
         - --cluster-type=
-        - --current-cluster=management-cluster        
+        - --current-cluster=management-cluster
         - --run-mode=do-not-send-reports
         command:
         - /manager
         image: projectsveltos/sveltos-agent-amd64:v0.25.0
         livenessProbe:
+          failureThreshold: 3
           httpGet:
             path: /healthz
-            port: 8081
+            port: healthz
+            scheme: HTTP
           initialDelaySeconds: 15
           periodSeconds: 20
         name: manager
+        ports:
+        - containerPort: 8443
+          name: metrics
+          protocol: TCP
+        - containerPort: 9440
+          name: healthz
+          protocol: TCP
         readinessProbe:
+          failureThreshold: 3
           httpGet:
             path: /readyz
-            port: 8081
+            port: healthz
+            scheme: HTTP
           initialDelaySeconds: 5
           periodSeconds: 10
         resources:
