@@ -59,6 +59,17 @@ type instance struct {
 	//   - per Label (key)
 	//     - list of Classifier Names
 	perClusterLabelMap map[string]map[string][]string
+
+	// When in agentless mode, Sveltos deploy a sveltos-agent per managed cluster in the management cluster.
+	// Name is randomly generated. Flow consists in first querying all existing sveltos-agent deployments and
+	// only if no sveltos-agent deployment exists for a given managed cluster, create a new one.
+	// If two or more Classifier instances are deployed in a managed cluster in parallel it can happen that both query
+	// simultaneously and find no sveltos-agent deployment for such managed cluster. In order to avoid both from creating
+	// a different sveltos-agent instace, following variables are used. Only one instance will be able to register the
+	// sveltos-agent deployment name for a given managed cluster. Any other classifier instance will fail such registration
+	// and will retry at which point will find an existing sveltos-agent deployment in the management cluster.
+	sveltosAgentNames   map[string]string
+	sveltosAgentNameMux sync.Mutex
 }
 
 var (
@@ -77,8 +88,10 @@ func GetKeyManagerInstance(ctx context.Context, c client.Client) (*instance, err
 		defer lock.Unlock()
 		if managerInstance == nil {
 			managerInstance = &instance{
-				perClusterLabelMap: make(map[string]map[string][]string),
-				chartMux:           sync.Mutex{},
+				perClusterLabelMap:  make(map[string]map[string][]string),
+				chartMux:            sync.Mutex{},
+				sveltosAgentNames:   make(map[string]string),
+				sveltosAgentNameMux: sync.Mutex{},
 			}
 
 			if err := managerInstance.rebuildRegistrations(ctx, c); err != nil {
@@ -89,6 +102,30 @@ func GetKeyManagerInstance(ctx context.Context, c client.Client) (*instance, err
 	}
 
 	return managerInstance, nil
+}
+
+func (m *instance) RegisterSveltosAgentDeploymentName(name, clusterNamespace, clusterName string,
+	clusterType libsveltosv1alpha1.ClusterType) error {
+
+	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
+	m.sveltosAgentNameMux.Lock()
+	defer m.sveltosAgentNameMux.Unlock()
+
+	v, ok := managerInstance.sveltosAgentNames[clusterKey]
+	if ok && v != name {
+		return fmt.Errorf("there is a different name already registered")
+	}
+
+	managerInstance.sveltosAgentNames[clusterKey] = name
+	return nil
+}
+
+func (m *instance) RemoveSveltosAgentDeploymentName(clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType) {
+	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
+	m.sveltosAgentNameMux.Lock()
+	defer m.sveltosAgentNameMux.Unlock()
+
+	delete(managerInstance.sveltosAgentNames, clusterKey)
 }
 
 // RegisterClassifierForLabels registers Classifier as one requestor to manage all Spec.ClassifierLabels in

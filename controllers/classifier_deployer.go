@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectsveltos/classifier/controllers/keymanager"
 	"github.com/projectsveltos/classifier/pkg/agent"
 	"github.com/projectsveltos/classifier/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
@@ -1235,7 +1236,7 @@ func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest
 	// for this cluster.
 	lbls := getSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
 
-	name, create, err := getSveltosAgentDeploymentName(ctx, restConfig, lbls)
+	name, create, err := getSveltosAgentDeploymentName(ctx, restConfig, clusterNamespace, clusterName, clusterType, lbls)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(
 			fmt.Sprintf("failed to get name for sveltos-agent deployment: %v", err))
@@ -1312,7 +1313,8 @@ func getSveltosAgentLabels(clusterNamespace, clusterName string,
 
 // getSveltosAgentDeploymentName returns the name for a given sveltos-agent deployment
 // started in the management cluster for a given cluster.
-func getSveltosAgentDeploymentName(ctx context.Context, restConfig *rest.Config, lbls map[string]string,
+func getSveltosAgentDeploymentName(ctx context.Context, restConfig *rest.Config,
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType, lbls map[string]string,
 ) (name string, create bool, err error) {
 
 	labelSelector := metav1.LabelSelector{
@@ -1341,19 +1343,32 @@ func getSveltosAgentDeploymentName(ctx context.Context, restConfig *rest.Config,
 		objects[i] = &deployments.Items[i]
 	}
 
-	return getInstantiatedObjectName(objects)
+	return getInstantiatedObjectName(ctx, objects, clusterNamespace, clusterName, clusterType)
 }
 
-func getInstantiatedObjectName(objects []client.Object) (name string, create bool, err error) {
+func getInstantiatedObjectName(ctx context.Context, objects []client.Object, clusterNamespace, clusterName string,
+	clusterType libsveltosv1alpha1.ClusterType) (name string, create bool, err error) {
+
 	prefix := "sveltos-agent-"
 	switch len(objects) {
 	case 0:
 		// no cluster exist yet. Return random name.
-		// If one clusterProfile with this name already exists,
-		// a conflict will happen. On retry different name will
-		// be picked
 		const nameLength = 20
 		name = prefix + util.RandomString(nameLength)
+
+		manager, tmpErr := keymanager.GetKeyManagerInstance(ctx, getManagementClusterClient())
+		if tmpErr != nil {
+			return "", false, tmpErr
+		}
+		// Register the name with keymanager. This makes sure only one name can be register per
+		// managed cluster. If following returns an error, it means from the time this Classifier instance
+		// queried for existence of the sveltos-agent deployment, till here, another Classifier instance
+		// created the sveltos-agent deployment. In such a case, return an error from here so next reconciliation
+		// will use the existing sveltos-agent deployment.
+		err = manager.RegisterSveltosAgentDeploymentName(name, clusterNamespace, clusterName, clusterType)
+		if err != nil {
+			return "", false, err
+		}
 		create = true
 		err = nil
 	case 1:
@@ -1378,7 +1393,8 @@ func removeSveltosAgentFromManagementCluster(ctx context.Context,
 
 	// Classifier deploys sveltos-agent resources for each cluster.
 	lbls := getSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
-	name, _, err := getSveltosAgentDeploymentName(ctx, getManagementClusterConfig(), lbls)
+	name, _, err := getSveltosAgentDeploymentName(ctx, getManagementClusterConfig(),
+		clusterNamespace, clusterName, clusterType, lbls)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(
 			fmt.Sprintf("failed to get name for sveltos-agent deployment name: %v", err))
@@ -1409,6 +1425,12 @@ func removeSveltosAgentFromManagementCluster(ctx context.Context,
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to delete resource %s:%s/%s: %v",
 				policy.GetKind(), policy.GetNamespace(), policy.GetName(), err))
 		}
+	}
+
+	if manager, err := keymanager.GetKeyManagerInstance(ctx, getManagementClusterClient()); err != nil {
+		return err
+	} else {
+		manager.RemoveSveltosAgentDeploymentName(clusterNamespace, clusterName, clusterType)
 	}
 
 	return nil

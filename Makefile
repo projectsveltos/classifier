@@ -45,7 +45,7 @@ ARCH ?= amd64
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= main
+TAG ?= dev
 
 ## Tool Binaries
 CONTROLLER_GEN := $(TOOLS_BIN_DIR)/controller-gen
@@ -130,7 +130,8 @@ manifests: $(CONTROLLER_GEN) $(KUSTOMIZE) $(ENVSUBST) ## Generate WebhookConfigu
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) $(MAKE) set-manifest-image
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) > manifest/manifest.yaml
-	./scripts/extract_deployment.sh manifest/manifest.yaml manifest/deployment-shard.yaml
+	./scripts/extract_shard-deployment.sh manifest/manifest.yaml manifest/deployment-shard.yaml
+	./scripts/extract_agentless-deployment.sh manifest/manifest.yaml manifest/deployment-agentless.yaml
 	
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -185,6 +186,17 @@ fv-sharding: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing
 	rm -f test/classifier-deployment-shard.yaml
 	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
 
+.PHONY: fv-agentless
+fv-agentless: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_common_manifest.yaml
+	$(KUBECTL) apply -f manifest/sveltos_agent_rbac.yaml 
+	cp manifest/deployment-agentless.yaml test/classifier-deployment-agentless.yaml	
+	$(KUBECTL) apply -f test/classifier-deployment-agentless.yaml	
+	@echo "Waiting for projectsveltos classifier to be available..."
+	$(KUBECTL) wait --for=condition=Available deployment/classifier-manager -n projectsveltos --timeout=$(TIMEOUT)
+	rm -f test/classifier-deployment-agentless.yaml	
+	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
+
 .PHONY: test
 test: manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.
 	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test $(shell go list ./... |grep -v test/fv |grep -v test/helpers) $(TEST_ARGS) -coverprofile cover.out 
@@ -192,15 +204,6 @@ test: manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.
 .PHONY: create-cluster
 create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kind cluster designed for development
 	$(MAKE) create-control-cluster
-
-	@echo wait for capd-system pod
-	$(KUBECTL) wait --for=condition=Available deployment/capd-controller-manager -n capd-system --timeout=$(TIMEOUT)
-
-	@echo wait for capi-kubeadm-bootstrap-system pod
-	$(KUBECTL) wait --for=condition=Available deployment/capi-kubeadm-bootstrap-controller-manager -n capi-kubeadm-bootstrap-system --timeout=$(TIMEOUT)
-
-	@echo wait for capi-kubeadm-control-plane-system pod
-	$(KUBECTL) wait --for=condition=Available deployment/capi-kubeadm-control-plane-controller-manager -n capi-kubeadm-control-plane-system --timeout=$(TIMEOUT)
 
 	@echo "sleep allowing webhook to be ready"
 	sleep 10
