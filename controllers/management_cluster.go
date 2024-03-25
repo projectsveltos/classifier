@@ -18,16 +18,22 @@ package controllers
 
 import (
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
 	managementClusterConfig *rest.Config
+	managementClusterClient client.Client
 )
 
-func SetManagementClusterAccess(config *rest.Config) {
+func SetManagementClusterAccess(config *rest.Config, c client.Client) {
 	managementClusterConfig = config
 }
 
 func getManagementClusterConfig() *rest.Config {
 	return managementClusterConfig
+}
+
+func getManagementClusterClient() client.Client {
+	return managementClusterClient
 }

@@ -130,7 +130,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	controllers.SetManagementClusterAccess(mgr.GetConfig())
+	controllers.SetManagementClusterAccess(mgr.GetConfig(), mgr.GetClient())
 
 	// Setup the context that's going to be used in controllers and for the manager.
 	ctx := ctrl.SetupSignalHandler()
