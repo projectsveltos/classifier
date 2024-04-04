@@ -191,7 +191,7 @@ spec:
         - --version=dev
         command:
         - /manager
-        image: projectsveltos/classifier-amd64:dev
+        image: projectsveltos/classifier:dev
         livenessProbe:
           failureThreshold: 3
           httpGet:
