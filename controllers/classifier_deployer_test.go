@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectsveltos/classifier/controllers"
+	"github.com/projectsveltos/classifier/controllers/keymanager"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	fakedeployer "github.com/projectsveltos/libsveltos/lib/deployer/fake"
@@ -578,6 +579,9 @@ var _ = Describe("Classifier Deployer", func() {
 		clusterNamespace := randomString()
 		clusterName := randomString()
 		clusterType := libsveltosv1alpha1.ClusterTypeSveltos
+
+		_, err := keymanager.GetKeyManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
 
 		Expect(controllers.DeploySveltosAgentInManagementCluster(context.TODO(), testEnv.Config,
 			testEnv.Client, clusterNamespace, clusterName, "", clusterType, logger)).To(Succeed())

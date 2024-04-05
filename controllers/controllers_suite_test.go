@@ -99,7 +99,7 @@ var _ = BeforeSuite(func() {
 		panic(err)
 	}
 
-	controllers.SetManagementClusterAccess(testEnv.Config)
+	controllers.SetManagementClusterAccess(testEnv.Config, testEnv.Client)
 	controllers.CreatFeatureHandlerMaps()
 
 	go func() {
