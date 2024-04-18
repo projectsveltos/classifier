@@ -790,7 +790,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 	var result deployer.Result
 
 	if isConfigSame {
-		logger.V(logs.LogInfo).Info("classifier and kubeconfig have has not changed")
+		logger.V(logs.LogInfo).Info("classifier and kubeconfig have not changed")
 		result = r.Deployer.GetResult(ctx, cluster.Namespace, cluster.Name, classifier.Name, f.id,
 			clusterproxy.GetClusterType(cluster), false)
 		status = r.convertResultStatus(result)
@@ -870,6 +870,7 @@ func deployClassifierCRD(ctx context.Context, remoteRestConfig *rest.Config,
 
 	options := metav1.ApplyOptions{
 		FieldManager: "application/apply-patch",
+		Force:        true,
 	}
 	_, err = dr.Apply(ctx, classifierCRD.GetName(), classifierCRD, options)
 	if err != nil {
@@ -899,6 +900,7 @@ func deployClassifierReportCRD(ctx context.Context, remoteRestConfig *rest.Confi
 
 	options := metav1.ApplyOptions{
 		FieldManager: "application/apply-patch",
+		Force:        true,
 	}
 	_, err = dr.Apply(ctx, classifierReportCRD.GetName(), classifierReportCRD, options)
 	if err != nil {
@@ -927,6 +929,7 @@ func deployHealthCheckCRD(ctx context.Context, remoteRestConfig *rest.Config,
 
 	options := metav1.ApplyOptions{
 		FieldManager: "application/apply-patch",
+		Force:        true,
 	}
 	_, err = dr.Apply(ctx, healthCheckCRD.GetName(), healthCheckCRD, options)
 	if err != nil {
@@ -956,6 +959,7 @@ func deployHealthCheckReportCRD(ctx context.Context, remoteRestConfig *rest.Conf
 
 	options := metav1.ApplyOptions{
 		FieldManager: "application/apply-patch",
+		Force:        true,
 	}
 	_, err = dr.Apply(ctx, healthCheckReportCRD.GetName(), healthCheckReportCRD, options)
 	if err != nil {
@@ -984,6 +988,7 @@ func deployEventSourceCRD(ctx context.Context, remoteRestConfig *rest.Config,
 
 	options := metav1.ApplyOptions{
 		FieldManager: "application/apply-patch",
+		Force:        true,
 	}
 	_, err = dr.Apply(ctx, eventSourceCRD.GetName(), eventSourceCRD, options)
 	if err != nil {
@@ -1013,10 +1018,11 @@ func deployEventReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
 
 	options := metav1.ApplyOptions{
 		FieldManager: "application/apply-patch",
+		Force:        true,
 	}
 	_, err = dr.Apply(ctx, eventReportCRD.GetName(), eventReportCRD, options)
 	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply ClassifierReport CRD: %v", err))
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply EventReport CRD: %v", err))
 		return err
 	}
 
@@ -1072,6 +1078,7 @@ func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest
 
 	options := metav1.ApplyOptions{
 		FieldManager: "application/apply-patch",
+		Force:        true,
 	}
 	_, err = dr.Apply(ctx, dcCRD.GetName(), dcCRD, options)
 	if err != nil {
@@ -1099,6 +1106,7 @@ func deployReloaderCRD(ctx context.Context, remoteRestConfig *rest.Config, logge
 
 	options := metav1.ApplyOptions{
 		FieldManager: "application/apply-patch",
+		Force:        true,
 	}
 	_, err = dr.Apply(ctx, reloaderCRD.GetName(), reloaderCRD, options)
 	if err != nil {
@@ -1126,6 +1134,7 @@ func deployReloaderReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
 
 	options := metav1.ApplyOptions{
 		FieldManager: "application/apply-patch",
+		Force:        true,
 	}
 	_, err = dr.Apply(ctx, reloaderReportCRD.GetName(), reloaderReportCRD, options)
 	if err != nil {
@@ -1283,6 +1292,7 @@ func deploySveltosAgentResources(ctx context.Context, restConfig *rest.Config,
 
 		options := metav1.ApplyOptions{
 			FieldManager: "application/apply-patch",
+			Force:        true,
 		}
 
 		_, err = dr.Apply(ctx, policy.GetName(), policy, options)
