@@ -117,173 +117,175 @@ func SveltosClusterPredicates(logger logr.Logger) predicate.Funcs {
 	}
 }
 
-// ClusterPredicates predicates for v1Cluster. ClassifierReconciler watches v1Cluster events
-// and react to those by reconciling itself based on following predicates
-func ClusterPredicates(logger logr.Logger) predicate.Funcs {
-	return predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			newCluster := e.ObjectNew.(*clusterv1.Cluster)
-			oldCluster := e.ObjectOld.(*clusterv1.Cluster)
-			log := logger.WithValues("predicate", "updateEvent",
-				"namespace", newCluster.Namespace,
-				"cluster", newCluster.Name,
-			)
-
-			if oldCluster == nil {
-				log.V(logs.LogVerbose).Info("Old Cluster is nil. Reconcile Classifier")
-				return true
-			}
-
-			// return true if Cluster.Spec.Paused has changed from true to false
-			if oldCluster.Spec.Paused && !newCluster.Spec.Paused {
-				log.V(logs.LogVerbose).Info(
-					"Cluster was unpaused. Will attempt to reconcile associated Classifiers.")
-				return true
-			}
-
-			if oldCluster.Status.ControlPlaneReady != newCluster.Status.ControlPlaneReady {
-				log.V(logs.LogVerbose).Info(
-					"Cluster ControlPlaneReady changed. Will attempt to reconcile associated Classifiers.",
-				)
-				return true
-			}
-
-			if oldCluster.Status.InfrastructureReady != newCluster.Status.InfrastructureReady {
-				log.V(logs.LogVerbose).Info(
-					"Cluster InfrastructureReady changed. Will attempt to reconcile associated Classifiers.",
-				)
-				return true
-			}
-
-			if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
-				log.V(logs.LogVerbose).Info(
-					"Cluster labels changed. Will attempt to reconcile associated Classifiers.",
-				)
-				return true
-			}
-
-			// otherwise, return false
-			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
-			return false
-		},
-		CreateFunc: func(e event.CreateEvent) bool {
-			cluster := e.Object.(*clusterv1.Cluster)
-			log := logger.WithValues("predicate", "createEvent",
-				"namespace", cluster.Namespace,
-				"cluster", cluster.Name,
-			)
-
-			// Only need to trigger a reconcile if the Cluster.Spec.Paused is false
-			if !cluster.Spec.Paused {
-				log.V(logs.LogVerbose).Info(
-					"Cluster is not paused.  Will attempt to reconcile associated Classifiers.",
-				)
-				return true
-			}
-			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
-			return false
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			log := logger.WithValues("predicate", "deleteEvent",
-				"namespace", e.Object.GetNamespace(),
-				"cluster", e.Object.GetName(),
-			)
-			log.V(logs.LogVerbose).Info(
-				"Cluster deleted.  Will attempt to reconcile associated Classifiers.")
-			return true
-		},
-		GenericFunc: func(e event.GenericEvent) bool {
-			log := logger.WithValues("predicate", "genericEvent",
-				"namespace", e.Object.GetNamespace(),
-				"cluster", e.Object.GetName(),
-			)
-			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
-			return false
-		},
-	}
+type ClusterPredicate struct {
+	Logger logr.Logger
 }
 
-// MachinePredicates predicates for v1Machine. ClassifierReconciler watches v1Machine events
-// and react to those by reconciling itself based on following predicates
-func MachinePredicates(logger logr.Logger) predicate.Funcs {
-	return predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			newMachine := e.ObjectNew.(*clusterv1.Machine)
-			oldMachine := e.ObjectOld.(*clusterv1.Machine)
-			log := logger.WithValues("predicate", "updateEvent",
-				"namespace", newMachine.Namespace,
-				"machine", newMachine.Name,
-			)
+func (p ClusterPredicate) Create(obj event.TypedCreateEvent[*clusterv1.Cluster]) bool {
+	cluster := obj.Object
+	log := p.Logger.WithValues("predicate", "createEvent",
+		"namespace", cluster.Namespace,
+		"cluster", cluster.Name,
+	)
 
-			// React only to ControlPlane machine
-			if !isControlPlaneMachine(newMachine) {
-				return false
-			}
-
-			if newMachine.Status.GetTypedPhase() != clusterv1.MachinePhaseRunning {
-				return false
-			}
-
-			if oldMachine == nil {
-				log.V(logs.LogVerbose).Info("Old Machine is nil. Reconcile Classifier")
-				return true
-			}
-
-			// return true if Machine.Status.Phase has changed from not running to running
-			if oldMachine.Status.GetTypedPhase() != newMachine.Status.GetTypedPhase() {
-				log.V(logs.LogVerbose).Info(
-					"Machine was not in Running Phase. Will attempt to reconcile associated Classifiers.")
-				return true
-			}
-
-			// otherwise, return false
-			log.V(logs.LogVerbose).Info(
-				"Machine did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
-			return false
-		},
-		CreateFunc: func(e event.CreateEvent) bool {
-			machine := e.Object.(*clusterv1.Machine)
-			log := logger.WithValues("predicate", "createEvent",
-				"namespace", machine.Namespace,
-				"machine", machine.Name,
-			)
-
-			// React only to ControlPlane machine
-			if !isControlPlaneMachine(machine) {
-				return false
-			}
-
-			// Only need to trigger a reconcile if the Machine.Status.Phase is Running
-			if machine.Status.GetTypedPhase() == clusterv1.MachinePhaseRunning {
-				return true
-			}
-
-			log.V(logs.LogVerbose).Info(
-				"Machine did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
-			return false
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			log := logger.WithValues("predicate", "deleteEvent",
-				"namespace", e.Object.GetNamespace(),
-				"machine", e.Object.GetName(),
-			)
-			log.V(logs.LogVerbose).Info(
-				"Machine did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
-			return false
-		},
-		GenericFunc: func(e event.GenericEvent) bool {
-			log := logger.WithValues("predicate", "genericEvent",
-				"namespace", e.Object.GetNamespace(),
-				"machine", e.Object.GetName(),
-			)
-			log.V(logs.LogVerbose).Info(
-				"Machine did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
-			return false
-		},
+	// Only need to trigger a reconcile if the Cluster.Spec.Paused is false
+	if !cluster.Spec.Paused {
+		log.V(logs.LogVerbose).Info(
+			"Cluster is not paused.  Will attempt to reconcile associated Classifiers.",
+		)
+		return true
 	}
+	log.V(logs.LogVerbose).Info(
+		"Cluster did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
+	return false
+}
+
+func (p ClusterPredicate) Update(obj event.TypedUpdateEvent[*clusterv1.Cluster]) bool {
+	newCluster := obj.ObjectNew
+	oldCluster := obj.ObjectOld
+	log := p.Logger.WithValues("predicate", "updateEvent",
+		"namespace", newCluster.Namespace,
+		"cluster", newCluster.Name,
+	)
+
+	if oldCluster == nil {
+		log.V(logs.LogVerbose).Info("Old Cluster is nil. Reconcile Classifier")
+		return true
+	}
+
+	// return true if Cluster.Spec.Paused has changed from true to false
+	if oldCluster.Spec.Paused && !newCluster.Spec.Paused {
+		log.V(logs.LogVerbose).Info(
+			"Cluster was unpaused. Will attempt to reconcile associated Classifiers.")
+		return true
+	}
+
+	if oldCluster.Status.ControlPlaneReady != newCluster.Status.ControlPlaneReady {
+		log.V(logs.LogVerbose).Info(
+			"Cluster ControlPlaneReady changed. Will attempt to reconcile associated Classifiers.",
+		)
+		return true
+	}
+
+	if oldCluster.Status.InfrastructureReady != newCluster.Status.InfrastructureReady {
+		log.V(logs.LogVerbose).Info(
+			"Cluster InfrastructureReady changed. Will attempt to reconcile associated Classifiers.",
+		)
+		return true
+	}
+
+	if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
+		log.V(logs.LogVerbose).Info(
+			"Cluster labels changed. Will attempt to reconcile associated Classifiers.",
+		)
+		return true
+	}
+
+	// otherwise, return false
+	log.V(logs.LogVerbose).Info(
+		"Cluster did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
+	return false
+}
+
+func (p ClusterPredicate) Delete(obj event.TypedDeleteEvent[*clusterv1.Cluster]) bool {
+	log := p.Logger.WithValues("predicate", "deleteEvent",
+		"namespace", obj.Object.GetNamespace(),
+		"cluster", obj.Object.GetName(),
+	)
+	log.V(logs.LogVerbose).Info(
+		"Cluster deleted.  Will attempt to reconcile associated Classifiers.")
+	return true
+}
+
+func (p ClusterPredicate) Generic(obj event.TypedGenericEvent[*clusterv1.Cluster]) bool {
+	log := p.Logger.WithValues("predicate", "genericEvent",
+		"namespace", obj.Object.GetNamespace(),
+		"cluster", obj.Object.GetName(),
+	)
+	log.V(logs.LogVerbose).Info(
+		"Cluster did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
+	return false
+}
+
+type MachinePredicate struct {
+	Logger logr.Logger
+}
+
+func (p MachinePredicate) Create(obj event.TypedCreateEvent[*clusterv1.Machine]) bool {
+	machine := obj.Object
+	log := p.Logger.WithValues("predicate", "createEvent",
+		"namespace", machine.Namespace,
+		"machine", machine.Name,
+	)
+
+	// React only to ControlPlane machine
+	if !isControlPlaneMachine(machine) {
+		return false
+	}
+
+	// Only need to trigger a reconcile if the Machine.Status.Phase is Running
+	if machine.Status.GetTypedPhase() == clusterv1.MachinePhaseRunning {
+		return true
+	}
+
+	log.V(logs.LogVerbose).Info(
+		"Machine did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
+	return false
+}
+
+func (p MachinePredicate) Update(obj event.TypedUpdateEvent[*clusterv1.Machine]) bool {
+	newMachine := obj.ObjectNew
+	oldMachine := obj.ObjectOld
+	log := p.Logger.WithValues("predicate", "updateEvent",
+		"namespace", newMachine.Namespace,
+		"machine", newMachine.Name,
+	)
+
+	// React only to ControlPlane machine
+	if !isControlPlaneMachine(newMachine) {
+		return false
+	}
+
+	if newMachine.Status.GetTypedPhase() != clusterv1.MachinePhaseRunning {
+		return false
+	}
+
+	if oldMachine == nil {
+		log.V(logs.LogVerbose).Info("Old Machine is nil. Reconcile Classifier")
+		return true
+	}
+
+	// return true if Machine.Status.Phase has changed from not running to running
+	if oldMachine.Status.GetTypedPhase() != newMachine.Status.GetTypedPhase() {
+		log.V(logs.LogVerbose).Info(
+			"Machine was not in Running Phase. Will attempt to reconcile associated Classifiers.")
+		return true
+	}
+
+	// otherwise, return false
+	log.V(logs.LogVerbose).Info(
+		"Machine did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
+	return false
+}
+
+func (p MachinePredicate) Delete(obj event.TypedDeleteEvent[*clusterv1.Machine]) bool {
+	log := p.Logger.WithValues("predicate", "deleteEvent",
+		"namespace", obj.Object.GetNamespace(),
+		"machine", obj.Object.GetName(),
+	)
+	log.V(logs.LogVerbose).Info(
+		"Machine did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
+	return false
+}
+
+func (p MachinePredicate) Generic(obj event.TypedGenericEvent[*clusterv1.Machine]) bool {
+	log := p.Logger.WithValues("predicate", "genericEvent",
+		"namespace", obj.Object.GetNamespace(),
+		"machine", obj.Object.GetName(),
+	)
+	log.V(logs.LogVerbose).Info(
+		"Machine did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
+	return false
 }
 
 // SecretPredicates predicates for Secret. ClassifierReconciler watches Secret events
