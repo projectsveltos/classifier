@@ -31,8 +31,21 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
-func (r *ClassifierReconciler) requeueClassifierForCluster(
+func (r *ClassifierReconciler) requeueClassifierForSveltosCluster(
 	ctx context.Context, o client.Object,
+) []reconcile.Request {
+
+	return r.requeueClassifierForACluster(o)
+}
+
+func (r *ClassifierReconciler) requeueClassifierForCluster(
+	ctx context.Context, cluster *clusterv1.Cluster,
+) []reconcile.Request {
+
+	return r.requeueClassifierForACluster(cluster)
+}
+
+func (r *ClassifierReconciler) requeueClassifierForACluster(o client.Object,
 ) []reconcile.Request {
 
 	cluster := o
@@ -67,10 +80,9 @@ func (r *ClassifierReconciler) requeueClassifierForCluster(
 }
 
 func (r *ClassifierReconciler) requeueClassifierForMachine(
-	ctx context.Context, o client.Object,
+	ctx context.Context, machine *clusterv1.Machine,
 ) []reconcile.Request {
 
-	machine := o.(*clusterv1.Machine)
 	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
 		"objectMapper",
 		"requeueClassifierForMachine",
