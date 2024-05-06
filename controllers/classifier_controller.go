@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -286,12 +287,38 @@ func (r *ClassifierReconciler) reconcileNormal(
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Controller, error) {
+	// When Classifier changes, according to ClassifierPredicates,
+	// all Classifier with at least one conflict needs to be reconciled
+
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&libsveltosv1alpha1.Classifier{}).
-		WithEventFilter(ifNewDeletedOrSpecChange(mgr.GetLogger())).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
+		Watches(&libsveltosv1alpha1.ClassifierReport{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifierReport),
+			builder.WithPredicates(
+				ClassifierReportPredicate(mgr.GetLogger().WithValues("predicate", "classifierreportpredicate")),
+			),
+		).
+		Watches(&libsveltosv1alpha1.Classifier{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifier),
+			builder.WithPredicates(
+				ClassifierPredicate(mgr.GetLogger().WithValues("predicate", "classifiepredicate")),
+			),
+		).
+		Watches(&libsveltosv1alpha1.SveltosCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForSveltosCluster),
+			builder.WithPredicates(
+				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
+			),
+		).
+		Watches(&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForSecret),
+			builder.WithPredicates(
+				SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
+			),
+		).
 		Build(r)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating controller")
@@ -299,42 +326,6 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 
 	// At this point we don't know yet whether CAPI is present in the cluster.
 	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
-
-	// When classifierReport changes, according to ClassifierReportPredicates,
-	// one Classifier needs to be reconciled
-	if err := c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.ClassifierReport{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifierReport),
-		ClassifierReportPredicate(mgr.GetLogger().WithValues("predicate", "classifierreportpredicate")),
-	); err != nil {
-		return nil, err
-	}
-
-	// When Classifier changes, according to ClassifierPredicates,
-	// all Classifier with at least one conflict needs to be reconciled
-	if err := c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.Classifier{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifier),
-		ClassifierPredicate(mgr.GetLogger().WithValues("predicate", "classifiepredicate")),
-	); err != nil {
-		return nil, err
-	}
-
-	// When Sveltos Cluster changes (from paused to unpaused), one or more ClusterSummaries
-	// need to be reconciled.
-	if err := c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.SveltosCluster{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForCluster),
-		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
-	); err != nil {
-		return nil, err
-	}
-
-	// When Secret changes, according to SecretPredicates,
-	// Classifiers need to be reconciled.
-	if err := c.Watch(source.Kind(mgr.GetCache(), &corev1.Secret{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForSecret),
-		SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
-	); err != nil {
-		return nil, err
-	}
 
 	if r.ClassifierReportMode == CollectFromManagementCluster {
 		go collectClassifierReports(mgr.GetClient(), r.ShardKey, mgr.GetLogger())
@@ -346,19 +337,29 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 func (r *ClassifierReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
 	// When cluster-api cluster changes, according to ClusterPredicates,
 	// one or more Classifiers need to be reconciled.
-	if err := c.Watch(source.Kind(mgr.GetCache(), &clusterv1.Cluster{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForCluster),
-		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
-	); err != nil {
+	sourceCluster := source.Kind[*clusterv1.Cluster](
+		mgr.GetCache(),
+		&clusterv1.Cluster{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClassifierForCluster),
+		ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
+	)
+	if err := c.Watch(sourceCluster); err != nil {
 		return err
 	}
 
 	// When cluster-api machine changes, according to ClusterPredicates,
 	// one or more ClusterProfiles need to be reconciled.
-	return c.Watch(source.Kind(mgr.GetCache(), &clusterv1.Machine{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForMachine),
-		MachinePredicates(mgr.GetLogger().WithValues("predicate", "machinepredicate")),
+	machineCluster := source.Kind[*clusterv1.Machine](
+		mgr.GetCache(),
+		&clusterv1.Machine{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClassifierForMachine),
+		MachinePredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
 	)
+	if err := c.Watch(machineCluster); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *ClassifierReconciler) getClusterMapForEntry(entry *corev1.ObjectReference) *libsveltosset.Set {
@@ -371,7 +372,7 @@ func (r *ClassifierReconciler) getClusterMapForEntry(entry *corev1.ObjectReferen
 }
 
 func (r *ClassifierReconciler) addFinalizer(ctx context.Context, classifierScope *scope.ClassifierScope) error {
-	// If the SveltosCluster doesn't have our finalizer, add it.
+	// If the Classifier doesn't have our finalizer, add it.
 	controllerutil.AddFinalizer(classifierScope.Classifier, libsveltosv1alpha1.ClassifierFinalizer)
 	// Register the finalizer immediately to avoid orphaning clusterprofile resources on delete
 	if err := classifierScope.PatchObject(ctx); err != nil {
