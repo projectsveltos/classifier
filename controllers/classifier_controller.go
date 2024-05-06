@@ -292,7 +292,6 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&libsveltosv1alpha1.Classifier{}).
-		WithEventFilter(ifNewDeletedOrSpecChange(mgr.GetLogger())).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
@@ -373,7 +372,7 @@ func (r *ClassifierReconciler) getClusterMapForEntry(entry *corev1.ObjectReferen
 }
 
 func (r *ClassifierReconciler) addFinalizer(ctx context.Context, classifierScope *scope.ClassifierScope) error {
-	// If the SveltosCluster doesn't have our finalizer, add it.
+	// If the Classifier doesn't have our finalizer, add it.
 	controllerutil.AddFinalizer(classifierScope.Classifier, libsveltosv1alpha1.ClassifierFinalizer)
 	// Register the finalizer immediately to avoid orphaning clusterprofile resources on delete
 	if err := classifierScope.PatchObject(ctx); err != nil {

@@ -498,51 +498,6 @@ func ClassifierPredicate(logger logr.Logger) predicate.Funcs {
 	}
 }
 
-// ifNewDeletedOrSpecChange returns a predicate that returns true only if Spec changes or object is new/deleted
-func ifNewDeletedOrSpecChange(logger logr.Logger) predicate.Funcs {
-	return predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			newClassifer := e.ObjectNew.(*libsveltosv1alpha1.Classifier)
-			oldClassifier := e.ObjectOld.(*libsveltosv1alpha1.Classifier)
-
-			log := logger.WithValues("predicate", "updateEvent",
-				"name", newClassifer.Name,
-			)
-
-			if oldClassifier == nil {
-				logger.V(logs.LogVerbose).Info("Old Classifier is nil. Reconcile Classifier")
-				return true
-			}
-
-			// return true if Classifier.Status has changed
-			if !reflect.DeepEqual(oldClassifier.Spec, newClassifer.Spec) {
-				log.V(logs.LogVerbose).Info(
-					"Classifier Spec changed. Will attempt to reconcile associated Classifiers.")
-				return true
-			}
-
-			if !newClassifer.DeletionTimestamp.IsZero() && oldClassifier.DeletionTimestamp.IsZero() {
-				log.V(logs.LogVerbose).Info(
-					"Classifier Deletion timestamp. Will attempt to reconcile associated Classifiers.")
-				return true
-			}
-
-			log.V(logs.LogVerbose).Info(
-				"Classifier did not match expected conditions.  Will attempt to reconcile associated Classifiers.")
-			return false
-		},
-		CreateFunc: func(e event.CreateEvent) bool {
-			return true
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			return true
-		},
-		GenericFunc: func(e event.GenericEvent) bool {
-			return false
-		},
-	}
-}
-
 func isControlPlaneMachine(machine *clusterv1.Machine) bool {
 	// React only to ControlPlane machine
 	if machine.Labels == nil {
