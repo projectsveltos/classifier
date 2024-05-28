@@ -268,7 +268,7 @@ spec:
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: projectsveltos/sveltos-agent:main
+        image: projectsveltos/sveltos-agent:v0.31.0
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -296,7 +296,7 @@ spec:
         resources:
           limits:
             cpu: 500m
-            memory: 256Mi
+            memory: 512Mi
           requests:
             cpu: 10m
             memory: 128Mi
