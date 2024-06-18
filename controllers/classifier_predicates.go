@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -34,8 +34,8 @@ import (
 func SveltosClusterPredicates(logger logr.Logger) predicate.Funcs {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			newCluster := e.ObjectNew.(*libsveltosv1alpha1.SveltosCluster)
-			oldCluster := e.ObjectOld.(*libsveltosv1alpha1.SveltosCluster)
+			newCluster := e.ObjectNew.(*libsveltosv1beta1.SveltosCluster)
+			oldCluster := e.ObjectOld.(*libsveltosv1beta1.SveltosCluster)
 			log := logger.WithValues("predicate", "updateEvent",
 				"namespace", newCluster.Namespace,
 				"cluster", newCluster.Name,
@@ -79,7 +79,7 @@ func SveltosClusterPredicates(logger logr.Logger) predicate.Funcs {
 			return false
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
-			cluster := e.Object.(*libsveltosv1alpha1.SveltosCluster)
+			cluster := e.Object.(*libsveltosv1beta1.SveltosCluster)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", cluster.Namespace,
 				"cluster", cluster.Name,
@@ -305,7 +305,7 @@ func SecretPredicates(logger logr.Logger) predicate.Funcs {
 				return false
 			}
 
-			if _, ok := newSecret.Labels[libsveltosv1alpha1.AccessRequestNameLabel]; !ok {
+			if _, ok := newSecret.Labels[libsveltosv1beta1.AccessRequestNameLabel]; !ok {
 				log.V(logs.LogVerbose).Info("Secret with no AccessRequestLabelName.  Will not attempt to reconcile associated Classifiers.")
 				return false
 			}
@@ -339,7 +339,7 @@ func SecretPredicates(logger logr.Logger) predicate.Funcs {
 				return false
 			}
 
-			if _, ok := secret.Labels[libsveltosv1alpha1.AccessRequestNameLabel]; !ok {
+			if _, ok := secret.Labels[libsveltosv1beta1.AccessRequestNameLabel]; !ok {
 				log.V(logs.LogVerbose).Info("Secret with no AccessRequestLabelName.  Will not attempt to reconcile associated Classifiers.")
 				return false
 			}
@@ -374,8 +374,8 @@ func SecretPredicates(logger logr.Logger) predicate.Funcs {
 func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			newReport := e.ObjectNew.(*libsveltosv1alpha1.ClassifierReport)
-			oldReport := e.ObjectOld.(*libsveltosv1alpha1.ClassifierReport)
+			newReport := e.ObjectNew.(*libsveltosv1beta1.ClassifierReport)
+			oldReport := e.ObjectOld.(*libsveltosv1beta1.ClassifierReport)
 			log := logger.WithValues("predicate", "updateEvent",
 				"namespace", newReport.Namespace,
 				"name", newReport.Name,
@@ -399,7 +399,7 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 			return false
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
-			report := e.Object.(*libsveltosv1alpha1.ClassifierReport)
+			report := e.Object.(*libsveltosv1beta1.ClassifierReport)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", report.Namespace,
 				"name", report.Name,
@@ -410,7 +410,7 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 			return true
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			report := e.Object.(*libsveltosv1alpha1.ClassifierReport)
+			report := e.Object.(*libsveltosv1beta1.ClassifierReport)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", report.Namespace,
 				"name", report.Name,
@@ -421,7 +421,7 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 			return true
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
-			report := e.Object.(*libsveltosv1alpha1.ClassifierReport)
+			report := e.Object.(*libsveltosv1beta1.ClassifierReport)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", report.Namespace,
 				"name", report.Name,
@@ -439,8 +439,8 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 func ClassifierPredicate(logger logr.Logger) predicate.Funcs {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			newClassifer := e.ObjectNew.(*libsveltosv1alpha1.Classifier)
-			oldClassifier := e.ObjectOld.(*libsveltosv1alpha1.Classifier)
+			newClassifer := e.ObjectNew.(*libsveltosv1beta1.Classifier)
+			oldClassifier := e.ObjectOld.(*libsveltosv1beta1.Classifier)
 			log := logger.WithValues("predicate", "updateEvent",
 				"name", newClassifer.Name,
 			)
@@ -463,7 +463,7 @@ func ClassifierPredicate(logger logr.Logger) predicate.Funcs {
 			return false
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
-			classifier := e.Object.(*libsveltosv1alpha1.Classifier)
+			classifier := e.Object.(*libsveltosv1beta1.Classifier)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", classifier.Namespace,
 				"name", classifier.Name,
@@ -474,7 +474,7 @@ func ClassifierPredicate(logger logr.Logger) predicate.Funcs {
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			classifier := e.Object.(*libsveltosv1alpha1.Classifier)
+			classifier := e.Object.(*libsveltosv1beta1.Classifier)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", classifier.Namespace,
 				"name", classifier.Name,
@@ -485,7 +485,7 @@ func ClassifierPredicate(logger logr.Logger) predicate.Funcs {
 			return true
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
-			classifier := e.Object.(*libsveltosv1alpha1.Classifier)
+			classifier := e.Object.(*libsveltosv1beta1.Classifier)
 			log := logger.WithValues("predicate", "createEvent",
 				"namespace", classifier.Namespace,
 				"name", classifier.Name,

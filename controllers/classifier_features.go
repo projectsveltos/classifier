@@ -22,7 +22,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 )
 
@@ -31,7 +31,7 @@ var (
 )
 
 func RegisterFeatures(d deployer.DeployerInterface, setupLog logr.Logger) {
-	err := d.RegisterFeatureID(libsveltosv1alpha1.FeatureClassifier)
+	err := d.RegisterFeatureID(libsveltosv1beta1.FeatureClassifier)
 	if err != nil {
 		setupLog.Error(err, "failed to register feature FeatureClassifier")
 		os.Exit(1)
@@ -43,7 +43,7 @@ func RegisterFeatures(d deployer.DeployerInterface, setupLog logr.Logger) {
 func creatFeatureHandlerMaps() {
 	featuresHandlers = make(map[string]feature)
 
-	featuresHandlers[libsveltosv1alpha1.FeatureClassifier] = feature{id: libsveltosv1alpha1.FeatureClassifier,
+	featuresHandlers[libsveltosv1beta1.FeatureClassifier] = feature{id: libsveltosv1beta1.FeatureClassifier,
 		currentHash: classifierHash, deploy: deployClassifierInCluster, undeploy: undeployClassifierFromCluster}
 }
 

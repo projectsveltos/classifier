@@ -33,11 +33,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectsveltos/classifier/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 var _ = Describe("Classifier Deployer", func() {
-	var classifier *libsveltosv1alpha1.Classifier
+	var classifier *libsveltosv1beta1.Classifier
 	var logger logr.Logger
 
 	BeforeEach(func() {
@@ -58,26 +58,26 @@ var _ = Describe("Classifier Deployer", func() {
 
 		Expect(controllers.RemoveClassifierReports(context.TODO(), c, classifier, logger)).To(Succeed())
 
-		classifierReportList := &libsveltosv1alpha1.ClassifierReportList{}
+		classifierReportList := &libsveltosv1beta1.ClassifierReportList{}
 		Expect(c.List(context.TODO(), classifierReportList)).To(Succeed())
 		Expect(len(classifierReportList.Items)).To(BeZero())
 	})
 
 	It("removeClusterClassifierReports deletes all ClassifierReport for a given cluster instance", func() {
-		clusterType := libsveltosv1alpha1.ClusterTypeCapi
+		clusterType := libsveltosv1beta1.ClusterTypeCapi
 		clusterNamespace := randomString()
 		clusterName := randomString()
 
 		// Create a classifierReport from clusterNamespace/clusterName for a random Classifier (classifierName)
 		classifierName := randomString()
 		classifierReport1 := getClassifierReport(classifierName, clusterNamespace, clusterName)
-		classifierReport1.Labels = libsveltosv1alpha1.GetClassifierReportLabels(
+		classifierReport1.Labels = libsveltosv1beta1.GetClassifierReportLabels(
 			classifier.Name, clusterName, &clusterType)
 
 		// Create a classifierReport from clusterNamespace/clusterName for a random Classifier (classifierName)
 		classifierName = randomString()
 		classifierReport2 := getClassifierReport(classifierName, clusterNamespace, clusterName)
-		classifierReport2.Labels = libsveltosv1alpha1.GetClassifierReportLabels(
+		classifierReport2.Labels = libsveltosv1beta1.GetClassifierReportLabels(
 			classifier.Name, clusterName, &clusterType)
 
 		initObjects := []client.Object{
@@ -91,7 +91,7 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(controllers.RemoveClusterClassifierReports(context.TODO(), c, clusterNamespace, clusterName,
 			clusterType, logger)).To(Succeed())
 
-		classifierReportList := &libsveltosv1alpha1.ClassifierReportList{}
+		classifierReportList := &libsveltosv1beta1.ClassifierReportList{}
 		Expect(c.List(context.TODO(), classifierReportList)).To(Succeed())
 		Expect(len(classifierReportList.Items)).To(BeZero())
 	})
@@ -127,7 +127,7 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(controllers.CollectClassifierReportsFromCluster(context.TODO(), testEnv.Client, getClusterRef(cluster),
 			logger)).To(Succeed())
 
-		clusterType := libsveltosv1alpha1.ClusterTypeCapi
+		clusterType := libsveltosv1beta1.ClusterTypeCapi
 
 		validateClassifierReports(classifierName, cluster, &clusterType)
 
@@ -140,12 +140,12 @@ var _ = Describe("Classifier Deployer", func() {
 
 })
 
-func validateClassifierReports(classifierName string, cluster *clusterv1.Cluster, clusterType *libsveltosv1alpha1.ClusterType) {
+func validateClassifierReports(classifierName string, cluster *clusterv1.Cluster, clusterType *libsveltosv1beta1.ClusterType) {
 	// Verify ClassifierReport is created
 	// Eventual loop so testEnv Cache is synced
 	Eventually(func() bool {
-		classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifierName, cluster.Name, clusterType)
-		currentClassifierReport := &libsveltosv1alpha1.ClassifierReport{}
+		classifierReportName := libsveltosv1beta1.GetClassifierReportName(classifierName, cluster.Name, clusterType)
+		currentClassifierReport := &libsveltosv1beta1.ClassifierReport{}
 		err := testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: classifierReportName}, currentClassifierReport)
 		if err != nil {
@@ -162,7 +162,7 @@ func validateClassifierReports(classifierName string, cluster *clusterv1.Cluster
 			By("Spec ClusterNamespace and ClusterName not set")
 			return false
 		}
-		v, ok := currentClassifierReport.Labels[libsveltosv1alpha1.ClassifierlNameLabel]
+		v, ok := currentClassifierReport.Labels[libsveltosv1beta1.ClassifierlNameLabel]
 		return ok && v == classifierName
 	}, timeout, pollingInterval).Should(BeTrue())
 }

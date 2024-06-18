@@ -41,7 +41,7 @@ import (
 	"github.com/projectsveltos/classifier/controllers/keymanager"
 	"github.com/projectsveltos/classifier/pkg/agent"
 	"github.com/projectsveltos/classifier/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -50,7 +50,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
-type getCurrentHash func(classifier *libsveltosv1alpha1.Classifier) []byte
+type getCurrentHash func(classifier *libsveltosv1beta1.Classifier) []byte
 
 type feature struct {
 	id          string
@@ -73,7 +73,7 @@ func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierS
 
 	var errorSeen error
 	allDeployed := true
-	clusterInfo := make([]libsveltosv1alpha1.ClusterInfo, 0)
+	clusterInfo := make([]libsveltosv1beta1.ClusterInfo, 0)
 	for i := range classifier.Status.ClusterInfo {
 		c := classifier.Status.ClusterInfo[i]
 		cInfo, err := r.processClassifier(ctx, classifierScope, r.ControlPlaneEndpoint, &c.Cluster, f, logger)
@@ -82,7 +82,7 @@ func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierS
 		}
 		if cInfo != nil {
 			clusterInfo = append(clusterInfo, *cInfo)
-			if cInfo.Status != libsveltosv1alpha1.SveltosStatusProvisioned {
+			if cInfo.Status != libsveltosv1beta1.SveltosStatusProvisioned {
 				allDeployed = false
 			}
 		}
@@ -137,24 +137,24 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 		clusters = append(clusters, c)
 	}
 
-	clusterInfo := make([]libsveltosv1alpha1.ClusterInfo, 0)
+	clusterInfo := make([]libsveltosv1beta1.ClusterInfo, 0)
 	for i := range clusters {
 		c := clusters[i]
 		err := r.removeClassifier(ctx, classifierScope, c, f, logger)
 		if err != nil {
 			failureMessage := err.Error()
-			clusterInfo = append(clusterInfo, libsveltosv1alpha1.ClusterInfo{
+			clusterInfo = append(clusterInfo, libsveltosv1beta1.ClusterInfo{
 				Cluster:        *c,
-				Status:         libsveltosv1alpha1.SveltosStatusRemoving,
+				Status:         libsveltosv1beta1.SveltosStatusRemoving,
 				FailureMessage: &failureMessage,
 			})
 		}
 	}
 
 	if len(clusterInfo) != 0 {
-		matchingClusterStatuses := make([]libsveltosv1alpha1.MachingClusterStatus, len(clusterInfo))
+		matchingClusterStatuses := make([]libsveltosv1beta1.MachingClusterStatus, len(clusterInfo))
 		for i := range clusterInfo {
-			matchingClusterStatuses[i] = libsveltosv1alpha1.MachingClusterStatus{
+			matchingClusterStatuses[i] = libsveltosv1beta1.MachingClusterStatus{
 				ClusterRef: clusterInfo[i].Cluster,
 			}
 		}
@@ -169,7 +169,7 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 }
 
 // classifierHash returns the Classifier hash
-func classifierHash(classifier *libsveltosv1alpha1.Classifier) []byte {
+func classifierHash(classifier *libsveltosv1beta1.Classifier) []byte {
 	h := sha256.New()
 	var config string
 	config += getVersion() // Use the version. This will cause Classifier, Sveltos CRDs and agent to be redeployed on upgrade
@@ -183,11 +183,11 @@ func classifierHash(classifier *libsveltosv1alpha1.Classifier) []byte {
 // Returns an err if Classifier or associated Sveltos/CAPI Cluster are marked for deletion, or if an
 // error occurs while getting resources.
 func getClassifierAndClusterClient(ctx context.Context, clusterNamespace, clusterName, classifierName string,
-	clusterType libsveltosv1alpha1.ClusterType, c client.Client, logger logr.Logger,
-) (*libsveltosv1alpha1.Classifier, client.Client, error) {
+	clusterType libsveltosv1beta1.ClusterType, c client.Client, logger logr.Logger,
+) (*libsveltosv1beta1.Classifier, client.Client, error) {
 
 	// Get Classifier that requested this
-	classifier := &libsveltosv1alpha1.Classifier{}
+	classifier := &libsveltosv1beta1.Classifier{}
 	if err := c.Get(ctx,
 		types.NamespacedName{Name: classifierName}, classifier); err != nil {
 		return nil, nil, err
@@ -220,12 +220,12 @@ func getClassifierAndClusterClient(ctx context.Context, clusterNamespace, cluste
 	return classifier, clusterClient, nil
 }
 
-func getAccessRequestName(clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
+func getAccessRequestName(clusterName string, clusterType libsveltosv1beta1.ClusterType) string {
 	return fmt.Sprintf("%s-%s", strings.ToLower(string(clusterType)), clusterName)
 }
 
 func createAccessRequest(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	options deployer.Options) error {
 
 	// Currently there is one AccessRequest per cluster for all classifier-agents
@@ -245,7 +245,7 @@ func createAccessRequest(ctx context.Context, c client.Client,
 	info := strings.Split(cpEndpoint, ":")
 	port, _ := strconv.ParseInt(info[2], 10, 32)
 
-	accessRequest := &libsveltosv1alpha1.AccessRequest{}
+	accessRequest := &libsveltosv1beta1.AccessRequest{}
 	err := c.Get(ctx,
 		types.NamespacedName{Namespace: clusterNamespace, Name: getAccessRequestName(clusterName, clusterType)}, accessRequest)
 	if err != nil {
@@ -255,10 +255,10 @@ func createAccessRequest(ctx context.Context, c client.Client,
 			accessRequest.Labels = map[string]string{
 				accessRequestClassifierLabel: "ok",
 			}
-			accessRequest.Spec = libsveltosv1alpha1.AccessRequestSpec{
+			accessRequest.Spec = libsveltosv1beta1.AccessRequestSpec{
 				Namespace: clusterNamespace,
 				Name:      clusterName,
-				Type:      libsveltosv1alpha1.SveltosAgentRequest,
+				Type:      libsveltosv1beta1.SveltosAgentRequest,
 				ControlPlaneEndpoint: clusterv1.APIEndpoint{
 					Host: fmt.Sprintf("%s:%s", info[0], info[1]),
 					Port: int32(port),
@@ -274,9 +274,9 @@ func createAccessRequest(ctx context.Context, c client.Client,
 
 // getKubeconfigFromAccessRequest gets the Kubeconfig from AccessRequest
 func getKubeconfigFromAccessRequest(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) ([]byte, error) {
+	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) ([]byte, error) {
 
-	accessRequest := &libsveltosv1alpha1.AccessRequest{}
+	accessRequest := &libsveltosv1beta1.AccessRequest{}
 	err := c.Get(ctx,
 		types.NamespacedName{Namespace: clusterNamespace, Name: getAccessRequestName(clusterName, clusterType)}, accessRequest)
 	if err != nil {
@@ -308,10 +308,10 @@ func getKubeconfigFromAccessRequest(ctx context.Context, c client.Client, cluste
 
 func createSecretNamespace(ctx context.Context, c client.Client) error {
 	ns := &corev1.Namespace{}
-	err := c.Get(ctx, types.NamespacedName{Name: libsveltosv1alpha1.ClassifierSecretNamespace}, ns)
+	err := c.Get(ctx, types.NamespacedName{Name: libsveltosv1beta1.ClassifierSecretNamespace}, ns)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			ns.Name = libsveltosv1alpha1.ClassifierSecretNamespace
+			ns.Name = libsveltosv1beta1.ClassifierSecretNamespace
 			return c.Create(ctx, ns)
 		}
 		return err
@@ -322,7 +322,7 @@ func createSecretNamespace(ctx context.Context, c client.Client) error {
 // updateSecretWithAccessManagementKubeconfig creates (or updates) secret in the managed cluster
 // containing the Kubeconfig for classifier-agent to access management cluster
 func updateSecretWithAccessManagementKubeconfig(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName, applicant string, clusterType libsveltosv1alpha1.ClusterType,
+	clusterNamespace, clusterName, applicant string, clusterType libsveltosv1beta1.ClusterType,
 	kubeconfig []byte, logger logr.Logger) error {
 
 	// Get Classifier that requested this
@@ -340,15 +340,15 @@ func updateSecretWithAccessManagementKubeconfig(ctx context.Context, c client.Cl
 
 	secret := &corev1.Secret{}
 	key := client.ObjectKey{
-		Namespace: libsveltosv1alpha1.ClassifierSecretNamespace,
-		Name:      libsveltosv1alpha1.ClassifierSecretName,
+		Namespace: libsveltosv1beta1.ClassifierSecretNamespace,
+		Name:      libsveltosv1beta1.ClassifierSecretName,
 	}
 
 	dataKey := "kubeconfig"
 	err = remoteClient.Get(ctx, key, secret)
 	if err != nil {
-		secret.Namespace = libsveltosv1alpha1.ClassifierSecretNamespace
-		secret.Name = libsveltosv1alpha1.ClassifierSecretName
+		secret.Namespace = libsveltosv1beta1.ClassifierSecretNamespace
+		secret.Name = libsveltosv1beta1.ClassifierSecretName
 		secret.Data = map[string][]byte{
 			dataKey: kubeconfig,
 		}
@@ -366,7 +366,7 @@ func updateSecretWithAccessManagementKubeconfig(ctx context.Context, c client.Cl
 
 // deployCRDs deploys all Sveltos CRDs needed by sveltos-agent
 func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
+	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
 
 	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 		"", "", clusterType, logger)
@@ -439,7 +439,7 @@ func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterN
 // - deploy classifier-agent
 func deployClassifierWithKubeconfigInCluster(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
-	clusterType libsveltosv1alpha1.ClusterType, options deployer.Options, logger logr.Logger) error {
+	clusterType libsveltosv1beta1.ClusterType, options deployer.Options, logger logr.Logger) error {
 
 	logger = logger.WithValues("classifier", applicant)
 	logger.V(logs.LogDebug).Info("deploy classifier: send reports mode")
@@ -503,7 +503,7 @@ func deployClassifierWithKubeconfigInCluster(ctx context.Context, c client.Clien
 
 func deployClassifierInCluster(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
-	clusterType libsveltosv1alpha1.ClusterType, options deployer.Options, logger logr.Logger) error {
+	clusterType libsveltosv1beta1.ClusterType, options deployer.Options, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy CRDs: do not send reports mode")
 
@@ -539,7 +539,7 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 // undeployClassifierFromCluster deletes Classifier instance from cluster
 func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
-	clusterType libsveltosv1alpha1.ClusterType, options deployer.Options, logger logr.Logger) error {
+	clusterType libsveltosv1beta1.ClusterType, options deployer.Options, logger logr.Logger) error {
 
 	logger = logger.WithValues("classifier", applicant)
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", clusterType, clusterNamespace, clusterName))
@@ -569,7 +569,7 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 
 	logger.V(logs.LogDebug).Info("Undeploy classifier from cluster")
 
-	currentClassifier := &libsveltosv1alpha1.Classifier{}
+	currentClassifier := &libsveltosv1beta1.Classifier{}
 	err = remoteClient.Get(ctx, types.NamespacedName{Name: applicant}, currentClassifier)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -584,19 +584,19 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 	return remoteClient.Delete(ctx, currentClassifier)
 }
 
-func (r *ClassifierReconciler) convertResultStatus(result deployer.Result) *libsveltosv1alpha1.SveltosFeatureStatus {
+func (r *ClassifierReconciler) convertResultStatus(result deployer.Result) *libsveltosv1beta1.SveltosFeatureStatus {
 	switch result.ResultStatus {
 	case deployer.Deployed:
-		s := libsveltosv1alpha1.SveltosStatusProvisioned
+		s := libsveltosv1beta1.SveltosStatusProvisioned
 		return &s
 	case deployer.Failed:
-		s := libsveltosv1alpha1.SveltosStatusFailed
+		s := libsveltosv1beta1.SveltosStatusFailed
 		return &s
 	case deployer.InProgress:
-		s := libsveltosv1alpha1.SveltosStatusProvisioning
+		s := libsveltosv1beta1.SveltosStatusProvisioning
 		return &s
 	case deployer.Removed:
-		s := libsveltosv1alpha1.SveltosStatusRemoved
+		s := libsveltosv1beta1.SveltosStatusRemoved
 		return &s
 	case deployer.Unavailable:
 		return nil
@@ -607,8 +607,8 @@ func (r *ClassifierReconciler) convertResultStatus(result deployer.Result) *libs
 
 // getClassifierInClusterHashAndStatus returns the hash of the Classifier that was deployed in a given
 // Cluster (if ever deployed)
-func (r *ClassifierReconciler) getClassifierInClusterHashAndStatus(classifier *libsveltosv1alpha1.Classifier,
-	cluster *corev1.ObjectReference) ([]byte, *libsveltosv1alpha1.SveltosFeatureStatus) {
+func (r *ClassifierReconciler) getClassifierInClusterHashAndStatus(classifier *libsveltosv1beta1.Classifier,
+	cluster *corev1.ObjectReference) ([]byte, *libsveltosv1beta1.SveltosFeatureStatus) {
 
 	for i := range classifier.Status.ClusterInfo {
 		cInfo := &classifier.Status.ClusterInfo[i]
@@ -626,7 +626,7 @@ func (r *ClassifierReconciler) getClassifierInClusterHashAndStatus(classifier *l
 
 // isPaused returns true if Sveltos/CAPI Cluster is paused or ClusterSummary has paused annotation.
 func (r *ClassifierReconciler) isPaused(ctx context.Context, cluster *corev1.ObjectReference,
-	classifier *libsveltosv1alpha1.Classifier) (bool, error) {
+	classifier *libsveltosv1beta1.Classifier) (bool, error) {
 
 	isClusterPaused, err := clusterproxy.IsClusterPaused(ctx, r.Client, cluster.Namespace, cluster.Name,
 		clusterproxy.GetClusterType(cluster))
@@ -673,10 +673,10 @@ func (r *ClassifierReconciler) removeClassifier(ctx context.Context, classifierS
 	status := r.convertResultStatus(result)
 
 	if status != nil {
-		if *status == libsveltosv1alpha1.SveltosStatusProvisioning {
+		if *status == libsveltosv1beta1.SveltosStatusProvisioning {
 			return fmt.Errorf("feature is still being removed")
 		}
-		if *status == libsveltosv1alpha1.SveltosStatusRemoved {
+		if *status == libsveltosv1beta1.SveltosStatusRemoved {
 			return nil
 		}
 	} else {
@@ -751,7 +751,7 @@ func (r *ClassifierReconciler) getCurrentHash(ctx context.Context, classifierSco
 // processClassifier detect whether it is needed to deploy Classifier in current passed cluster.
 func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifierScope *scope.ClassifierScope,
 	cpEndpoint string, cluster *corev1.ObjectReference, f feature, logger logr.Logger,
-) (*libsveltosv1alpha1.ClusterInfo, error) {
+) (*libsveltosv1beta1.ClusterInfo, error) {
 
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", cluster.Kind, cluster.Namespace, cluster.Name))
 
@@ -786,7 +786,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 			currentHash, hash))
 	}
 
-	var status *libsveltosv1alpha1.SveltosFeatureStatus
+	var status *libsveltosv1beta1.SveltosFeatureStatus
 	var result deployer.Result
 
 	if isConfigSame {
@@ -802,26 +802,26 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 		if result.Err != nil {
 			errorMessage = result.Err.Error()
 		}
-		clusterInfo := &libsveltosv1alpha1.ClusterInfo{
+		clusterInfo := &libsveltosv1beta1.ClusterInfo{
 			Cluster:        *cluster,
 			Status:         *status,
 			Hash:           currentHash,
 			FailureMessage: &errorMessage,
 		}
 
-		if *status == libsveltosv1alpha1.SveltosStatusProvisioned {
+		if *status == libsveltosv1beta1.SveltosStatusProvisioned {
 			return clusterInfo, nil
 		}
-		if *status == libsveltosv1alpha1.SveltosStatusProvisioning {
+		if *status == libsveltosv1beta1.SveltosStatusProvisioning {
 			return clusterInfo, fmt.Errorf("classifier is still being provisioned")
 		}
-	} else if isConfigSame && currentStatus != nil && *currentStatus == libsveltosv1alpha1.SveltosStatusProvisioned {
+	} else if isConfigSame && currentStatus != nil && *currentStatus == libsveltosv1beta1.SveltosStatusProvisioned {
 		logger.V(logs.LogInfo).Info("already deployed")
-		s := libsveltosv1alpha1.SveltosStatusProvisioned
+		s := libsveltosv1beta1.SveltosStatusProvisioned
 		status = &s
 	} else {
 		logger.V(logs.LogInfo).Info("no result is available. queue job and mark status as provisioning")
-		s := libsveltosv1alpha1.SveltosStatusProvisioning
+		s := libsveltosv1beta1.SveltosStatusProvisioning
 		status = &s
 
 		options := deployer.Options{HandlerOptions: map[string]string{}}
@@ -842,7 +842,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 		}
 	}
 
-	clusterInfo := &libsveltosv1alpha1.ClusterInfo{
+	clusterInfo := &libsveltosv1beta1.ClusterInfo{
 		Cluster:        *cluster,
 		Status:         *status,
 		Hash:           currentHash,
@@ -1030,19 +1030,19 @@ func deployEventReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
 }
 
 func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
-	classifier *libsveltosv1alpha1.Classifier, logger logr.Logger) error {
+	classifier *libsveltosv1beta1.Classifier, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy classifier instance")
-	currentClassifier := &libsveltosv1alpha1.Classifier{}
+	currentClassifier := &libsveltosv1beta1.Classifier{}
 	err := remoteClient.Get(ctx, types.NamespacedName{Name: classifier.Name}, currentClassifier)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.V(logsettings.LogDebug).Info("classifier instance not present. creating it.")
-			toDeployClassifier := &libsveltosv1alpha1.Classifier{
+			toDeployClassifier := &libsveltosv1beta1.Classifier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: classifier.Name,
 					Annotations: map[string]string{
-						libsveltosv1alpha1.DeployedBySveltosAnnotation: "true",
+						libsveltosv1beta1.DeployedBySveltosAnnotation: "true",
 					},
 				},
 				Spec: classifier.Spec,
@@ -1054,7 +1054,7 @@ func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 
 	currentClassifier.Spec = classifier.Spec
 	currentClassifier.Annotations = map[string]string{
-		libsveltosv1alpha1.DeployedBySveltosAnnotation: "true",
+		libsveltosv1beta1.DeployedBySveltosAnnotation: "true",
 	}
 	return remoteClient.Update(ctx, currentClassifier)
 }
@@ -1146,7 +1146,7 @@ func deployReloaderReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
 }
 
 func prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode string,
-	clusterType libsveltosv1alpha1.ClusterType) string {
+	clusterType libsveltosv1beta1.ClusterType) string {
 
 	if mode != "do-not-send-reports" {
 		agentYAML = strings.ReplaceAll(agentYAML, "do-not-send-reports", "send-reports")
@@ -1162,7 +1162,7 @@ func prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode stri
 // createSveltosAgentNamespaceInManagedCluster creates the namespace where sveltos-agent will
 // store all its reports
 func createSveltosAgentNamespaceInManagedCluster(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
 
 	// Create the projectsveltos namespace in the remote client
 	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
@@ -1190,7 +1190,7 @@ func createSveltosAgentNamespaceInManagedCluster(ctx context.Context, c client.C
 // Sveltos-agent can be deployed in either the managed or the management cluster depending
 // on options
 func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType, options deployer.Options, logger logr.Logger) error {
+	clusterType libsveltosv1beta1.ClusterType, options deployer.Options, logger logr.Logger) error {
 
 	startInMgmtCluster := startSveltosAgentInMgmtCluster(options)
 
@@ -1223,7 +1223,7 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 }
 
 func deploySveltosAgentInManagedCluster(ctx context.Context, remoteRestConfig *rest.Config,
-	clusterNamespace, clusterName, mode string, clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
+	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy sveltos-agent in the managed cluster")
 
@@ -1234,7 +1234,7 @@ func deploySveltosAgentInManagedCluster(ctx context.Context, remoteRestConfig *r
 }
 
 func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest.Config, c client.Client,
-	clusterNamespace, clusterName, mode string, clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
+	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy sveltos-agent in the management cluster")
 
@@ -1307,7 +1307,7 @@ func deploySveltosAgentResources(ctx context.Context, restConfig *rest.Config,
 }
 
 func getSveltosAgentLabels(clusterNamespace, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType) map[string]string {
+	clusterType libsveltosv1beta1.ClusterType) map[string]string {
 
 	// Following labels are added on the objects representing the
 	// sveltos-agent for this cluster.
@@ -1324,7 +1324,7 @@ func getSveltosAgentLabels(clusterNamespace, clusterName string,
 // getSveltosAgentDeploymentName returns the name for a given sveltos-agent deployment
 // started in the management cluster for a given cluster.
 func getSveltosAgentDeploymentName(ctx context.Context, restConfig *rest.Config,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType, lbls map[string]string,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType, lbls map[string]string,
 ) (name string, create bool, err error) {
 
 	labelSelector := metav1.LabelSelector{
@@ -1357,7 +1357,7 @@ func getSveltosAgentDeploymentName(ctx context.Context, restConfig *rest.Config,
 }
 
 func getInstantiatedObjectName(ctx context.Context, objects []client.Object, clusterNamespace, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType) (name string, create bool, err error) {
+	clusterType libsveltosv1beta1.ClusterType) (name string, create bool, err error) {
 
 	prefix := "sveltos-agent-"
 	switch len(objects) {
@@ -1394,7 +1394,7 @@ func getInstantiatedObjectName(ctx context.Context, objects []client.Object, clu
 // removeSveltosAgentFromManagementCluster removes the sveltos-agent resources
 // installed in the management cluster for the cluster: clusterType:clusterNamespace/clusterName
 func removeSveltosAgentFromManagementCluster(ctx context.Context,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) error {
 
 	// Get YAML containing sveltos-agent resources

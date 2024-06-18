@@ -43,7 +43,7 @@ import (
 	"github.com/projectsveltos/classifier/controllers"
 	"github.com/projectsveltos/classifier/internal/test/helpers"
 	"github.com/projectsveltos/classifier/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
@@ -136,7 +136,7 @@ var _ = AfterSuite(func() {
 
 func setupScheme() (*runtime.Scheme, error) {
 	s := runtime.NewScheme()
-	if err := libsveltosv1alpha1.AddToScheme(s); err != nil {
+	if err := libsveltosv1beta1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 	if err := clusterv1.AddToScheme(s); err != nil {
@@ -156,34 +156,34 @@ func randomString() string {
 	return util.RandomString(length)
 }
 
-func getClassifierReport(classifierName, clusterNamespace, clusterName string) *libsveltosv1alpha1.ClassifierReport {
-	return &libsveltosv1alpha1.ClassifierReport{
+func getClassifierReport(classifierName, clusterNamespace, clusterName string) *libsveltosv1beta1.ClassifierReport {
+	return &libsveltosv1beta1.ClassifierReport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: randomString(),
 			Labels: map[string]string{
-				libsveltosv1alpha1.ClassifierlNameLabel: classifierName,
+				libsveltosv1beta1.ClassifierlNameLabel: classifierName,
 			},
 		},
-		Spec: libsveltosv1alpha1.ClassifierReportSpec{
+		Spec: libsveltosv1beta1.ClassifierReportSpec{
 			ClusterNamespace: clusterNamespace,
 			ClusterName:      clusterName,
 			ClassifierName:   classifierName,
-			ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+			ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 		},
 	}
 }
 
-func getClassifierInstance(name string) *libsveltosv1alpha1.Classifier {
-	classifierLabels := []libsveltosv1alpha1.ClassifierLabel{{Key: "version", Value: "v1.25.2"}}
-	return &libsveltosv1alpha1.Classifier{
+func getClassifierInstance(name string) *libsveltosv1beta1.Classifier {
+	classifierLabels := []libsveltosv1beta1.ClassifierLabel{{Key: "version", Value: "v1.25.2"}}
+	return &libsveltosv1beta1.Classifier{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		Spec: libsveltosv1alpha1.ClassifierSpec{
-			KubernetesVersionConstraints: []libsveltosv1alpha1.KubernetesVersionConstraint{
+		Spec: libsveltosv1beta1.ClassifierSpec{
+			KubernetesVersionConstraints: []libsveltosv1beta1.KubernetesVersionConstraint{
 				{
 					Version:    "1.25.2",
-					Comparison: string(libsveltosv1alpha1.ComparisonEqual),
+					Comparison: string(libsveltosv1beta1.ComparisonEqual),
 				},
 			},
 			ClassifierLabels: classifierLabels,
@@ -203,7 +203,7 @@ func getClassifierReconciler(c client.Client, dep deployer.DeployerInterface) *c
 }
 
 func getClassifierScope(c client.Client, logger logr.Logger,
-	classifier *libsveltosv1alpha1.Classifier) *scope.ClassifierScope {
+	classifier *libsveltosv1beta1.Classifier) *scope.ClassifierScope {
 
 	classifierScope, err := scope.NewClassifierScope(scope.ClassifierScopeParams{
 		Client:         c,
