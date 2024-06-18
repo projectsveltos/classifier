@@ -38,13 +38,13 @@ import (
 	"github.com/projectsveltos/classifier/controllers"
 	"github.com/projectsveltos/classifier/controllers/keymanager"
 	"github.com/projectsveltos/classifier/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	fakedeployer "github.com/projectsveltos/libsveltos/lib/deployer/fake"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
 var _ = Describe("Classifier: Reconciler", func() {
-	var classifier *libsveltosv1alpha1.Classifier
+	var classifier *libsveltosv1beta1.Classifier
 
 	BeforeEach(func() {
 		classifier = getClassifierInstance(randomString())
@@ -74,19 +74,19 @@ var _ = Describe("Classifier: Reconciler", func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		currentClassifier := &libsveltosv1alpha1.Classifier{}
+		currentClassifier := &libsveltosv1beta1.Classifier{}
 		err = c.Get(context.TODO(), classifierName, currentClassifier)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(
 			controllerutil.ContainsFinalizer(
 				currentClassifier,
-				libsveltosv1alpha1.ClassifierFinalizer,
+				libsveltosv1beta1.ClassifierFinalizer,
 			),
 		).Should(BeTrue())
 	})
 
 	It("Remove finalizer", func() {
-		Expect(controllerutil.AddFinalizer(classifier, libsveltosv1alpha1.ClassifierFinalizer)).To(BeTrue())
+		Expect(controllerutil.AddFinalizer(classifier, libsveltosv1beta1.ClassifierFinalizer)).To(BeTrue())
 
 		cluster := &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -109,13 +109,13 @@ var _ = Describe("Classifier: Reconciler", func() {
 			Name: classifier.Name,
 		}
 
-		currentClassifier := &libsveltosv1alpha1.Classifier{}
+		currentClassifier := &libsveltosv1beta1.Classifier{}
 
 		Expect(c.Get(context.TODO(), classifierName, currentClassifier)).To(Succeed())
 		Expect(c.Delete(context.TODO(), currentClassifier)).To(Succeed())
 
 		Expect(c.Get(context.TODO(), classifierName, currentClassifier)).To(Succeed())
-		currentClassifier.Status.ClusterInfo = []libsveltosv1alpha1.ClusterInfo{
+		currentClassifier.Status.ClusterInfo = []libsveltosv1beta1.ClusterInfo{
 			{
 				Cluster: corev1.ObjectReference{
 					Namespace:  cluster.Namespace,
@@ -123,7 +123,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 					APIVersion: cluster.APIVersion,
 					Kind:       cluster.Kind,
 				},
-				Status: libsveltosv1alpha1.SveltosStatusProvisioned,
+				Status: libsveltosv1beta1.SveltosStatusProvisioned,
 				Hash:   []byte(randomString()),
 			},
 		}
@@ -132,7 +132,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 
 		dep := fakedeployer.GetClient(context.TODO(),
 			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Client)
-		Expect(dep.RegisterFeatureID(libsveltosv1alpha1.FeatureClassifier)).To(Succeed())
+		Expect(dep.RegisterFeatureID(libsveltosv1beta1.FeatureClassifier)).To(Succeed())
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
@@ -152,11 +152,11 @@ var _ = Describe("Classifier: Reconciler", func() {
 
 		err = c.Get(context.TODO(), classifierName, currentClassifier)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(controllerutil.ContainsFinalizer(currentClassifier, libsveltosv1alpha1.ClassifierFinalizer)).To(BeTrue())
+		Expect(controllerutil.ContainsFinalizer(currentClassifier, libsveltosv1beta1.ClassifierFinalizer)).To(BeTrue())
 
 		Expect(c.Get(context.TODO(), classifierName, currentClassifier)).To(Succeed())
 
-		currentClassifier.Status.ClusterInfo = []libsveltosv1alpha1.ClusterInfo{}
+		currentClassifier.Status.ClusterInfo = []libsveltosv1beta1.ClusterInfo{}
 		Expect(c.Status().Update(context.TODO(), currentClassifier)).To(Succeed())
 
 		// Because Classifier is currently deployed nowhere (Status.ClusterInfo is set
@@ -222,7 +222,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 		classifierReport0.Spec.Match = true
 
 		// Create a second classifier with same ClassifierLabels as first classifier
-		classifier1 := &libsveltosv1alpha1.Classifier{
+		classifier1 := &libsveltosv1beta1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
@@ -248,7 +248,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 		// Register classifier1 as manager for all labels in cluster
 		// because of this classifier won't be able to manage any of its labels on the
 		// cluster even though cluster is a match
-		manager.RegisterClassifierForLabels(classifier1, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi)
+		manager.RegisterClassifierForLabels(classifier1, clusterNamespace, clusterName, libsveltosv1beta1.ClusterTypeCapi)
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
@@ -295,7 +295,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			managedLabels = append(managedLabels, classifier.Spec.ClassifierLabels[i].Key)
 		}
 
-		classifier.Status.MachingClusterStatuses = []libsveltosv1alpha1.MachingClusterStatus{
+		classifier.Status.MachingClusterStatuses = []libsveltosv1beta1.MachingClusterStatus{
 			{
 				ClusterRef: corev1.ObjectReference{
 					Namespace:  cluster.Namespace,
@@ -364,10 +364,10 @@ var _ = Describe("Classifier: Reconciler", func() {
 		label := randomString()
 		clusterNamespace := randomString()
 		clusterName := randomString()
-		classifier.Spec.ClassifierLabels = []libsveltosv1alpha1.ClassifierLabel{
+		classifier.Spec.ClassifierLabels = []libsveltosv1beta1.ClassifierLabel{
 			{Key: label, Value: randomString()},
 		}
-		classifier.Status.MachingClusterStatuses = []libsveltosv1alpha1.MachingClusterStatus{
+		classifier.Status.MachingClusterStatuses = []libsveltosv1beta1.MachingClusterStatus{
 			{
 				ClusterRef: corev1.ObjectReference{
 					Namespace:  clusterNamespace,
@@ -389,8 +389,8 @@ var _ = Describe("Classifier: Reconciler", func() {
 		manager, err := keymanager.GetKeyManagerInstance(ctx, c)
 		Expect(err).To(BeNil())
 
-		manager.RegisterClassifierForLabels(classifier, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi)
-		Expect(manager.CanManageLabel(classifier, clusterNamespace, clusterName, label, libsveltosv1alpha1.ClusterTypeCapi)).To(BeTrue())
+		manager.RegisterClassifierForLabels(classifier, clusterNamespace, clusterName, libsveltosv1beta1.ClusterTypeCapi)
+		Expect(manager.CanManageLabel(classifier, clusterNamespace, clusterName, label, libsveltosv1beta1.ClusterTypeCapi)).To(BeTrue())
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
@@ -411,7 +411,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 		Expect(controllers.RemoveAllRegistrations(reconciler, context.TODO(), classifierScope,
 			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
 		Expect(manager.CanManageLabel(classifier, clusterNamespace, clusterName, label,
-			libsveltosv1alpha1.ClusterTypeCapi)).To(BeFalse())
+			libsveltosv1beta1.ClusterTypeCapi)).To(BeFalse())
 	})
 
 	It("classifyLabels divides labels in managed and unmanaged", func() {
@@ -424,15 +424,15 @@ var _ = Describe("Classifier: Reconciler", func() {
 			},
 		}
 
-		managedLabel := libsveltosv1alpha1.ClassifierLabel{Key: randomString(), Value: randomString()}
-		unManagedLabel := libsveltosv1alpha1.ClassifierLabel{Key: randomString(), Value: randomString()}
+		managedLabel := libsveltosv1beta1.ClassifierLabel{Key: randomString(), Value: randomString()}
+		unManagedLabel := libsveltosv1beta1.ClassifierLabel{Key: randomString(), Value: randomString()}
 
-		classifier.Spec.ClassifierLabels = []libsveltosv1alpha1.ClassifierLabel{
+		classifier.Spec.ClassifierLabels = []libsveltosv1beta1.ClassifierLabel{
 			managedLabel, unManagedLabel}
 
 		// Create an otherClassifier conflicting with first classifier for unManagedLabel
 		otherClassifier := getClassifierInstance(randomString())
-		otherClassifier.Spec.ClassifierLabels = []libsveltosv1alpha1.ClassifierLabel{
+		otherClassifier.Spec.ClassifierLabels = []libsveltosv1beta1.ClassifierLabel{
 			unManagedLabel,
 		}
 
@@ -447,8 +447,8 @@ var _ = Describe("Classifier: Reconciler", func() {
 		Expect(err).To(BeNil())
 		// Register in this order, so otherClassifier can manage "unManagedLabel"
 		// classifier can only manage "managedLabel" and has conflict for "unManagedLabel"
-		manager.RegisterClassifierForLabels(otherClassifier, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi)
-		manager.RegisterClassifierForLabels(classifier, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi)
+		manager.RegisterClassifierForLabels(otherClassifier, clusterNamespace, clusterName, libsveltosv1beta1.ClusterTypeCapi)
+		manager.RegisterClassifierForLabels(classifier, clusterNamespace, clusterName, libsveltosv1beta1.ClusterTypeCapi)
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
@@ -475,7 +475,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 })
 
 var _ = Describe("ClassifierReconciler: requeue methods", func() {
-	var classifier *libsveltosv1alpha1.Classifier
+	var classifier *libsveltosv1beta1.Classifier
 	var cluster *clusterv1.Cluster
 
 	BeforeEach(func() {
@@ -503,7 +503,7 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 
 		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			testEnv.Client)
-		Expect(dep.RegisterFeatureID(libsveltosv1alpha1.FeatureClassifier)).To(Succeed())
+		Expect(dep.RegisterFeatureID(libsveltosv1beta1.FeatureClassifier)).To(Succeed())
 
 		clusterProfileReconciler := getClassifierReconciler(testEnv.Client, dep)
 		_, err := clusterProfileReconciler.Reconcile(context.TODO(), ctrl.Request{
@@ -549,7 +549,7 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 
 		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			testEnv.Client)
-		Expect(dep.RegisterFeatureID(libsveltosv1alpha1.FeatureClassifier)).To(Succeed())
+		Expect(dep.RegisterFeatureID(libsveltosv1beta1.FeatureClassifier)).To(Succeed())
 
 		clusterProfileReconciler := getClassifierReconciler(testEnv.Client, dep)
 		_, err := clusterProfileReconciler.Reconcile(context.TODO(), ctrl.Request{

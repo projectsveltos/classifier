@@ -46,7 +46,7 @@ spec:
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: projectsveltos/sveltos-agent:main
+        image: projectsveltos/sveltos-agent:dev
         livenessProbe:
           failureThreshold: 3
           httpGet:

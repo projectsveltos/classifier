@@ -27,7 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 var _ = Describe("Classifier: deployment", func() {
@@ -52,20 +52,20 @@ var _ = Describe("Classifier: deployment", func() {
 
 		Byf("Verifying Classifier instance is deployed in the workload cluster")
 		Eventually(func() error {
-			currentClassifier := &libsveltosv1alpha1.Classifier{}
+			currentClassifier := &libsveltosv1beta1.Classifier{}
 			return workloadClient.Get(context.TODO(),
 				types.NamespacedName{Name: classifier.Name}, currentClassifier)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Deleting classifier instance %s in the management cluster", classifier.Name)
-		currentClassifier := &libsveltosv1alpha1.Classifier{}
+		currentClassifier := &libsveltosv1beta1.Classifier{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
 		Expect(k8sClient.Delete(context.TODO(), currentClassifier)).To(Succeed())
 
 		Byf("Verifying Classifier instance is removed from the workload cluster")
 		Eventually(func() bool {
-			currentClassifier := &libsveltosv1alpha1.Classifier{}
+			currentClassifier := &libsveltosv1beta1.Classifier{}
 			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Name: classifier.Name}, currentClassifier)
 			return err != nil && apierrors.IsNotFound(err)
@@ -73,7 +73,7 @@ var _ = Describe("Classifier: deployment", func() {
 
 		Byf("Verifying Classifier instance is removed from the management cluster")
 		Eventually(func() bool {
-			currentClassifier := &libsveltosv1alpha1.Classifier{}
+			currentClassifier := &libsveltosv1beta1.Classifier{}
 			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: classifier.Name}, currentClassifier)
 			return err != nil && apierrors.IsNotFound(err)

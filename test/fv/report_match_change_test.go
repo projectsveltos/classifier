@@ -27,7 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 var _ = Describe("Classifier: update cluster labels", func() {
@@ -39,10 +39,10 @@ var _ = Describe("Classifier: update cluster labels", func() {
 		clusterLabels := map[string]string{randomString(): randomString(), randomString(): randomString()}
 		classifier := getClassifier(namePrefix, clusterLabels)
 		// Cluster won't be a match for this Cassifier
-		classifier.Spec.KubernetesVersionConstraints = []libsveltosv1alpha1.KubernetesVersionConstraint{
+		classifier.Spec.KubernetesVersionConstraints = []libsveltosv1beta1.KubernetesVersionConstraint{
 			{
 				Version:    "1.25.0",
-				Comparison: string(libsveltosv1alpha1.ComparisonLessThan),
+				Comparison: string(libsveltosv1beta1.ComparisonLessThan),
 			},
 		}
 
@@ -63,7 +63,7 @@ var _ = Describe("Classifier: update cluster labels", func() {
 
 		Byf("Verifying Classifier instance is deployed in the workload cluster")
 		Eventually(func() error {
-			currentClassifier := &libsveltosv1alpha1.Classifier{}
+			currentClassifier := &libsveltosv1beta1.Classifier{}
 			return workloadClient.Get(context.TODO(),
 				types.NamespacedName{Name: classifier.Name}, currentClassifier)
 		}, timeout, pollingInterval).Should(BeNil())
@@ -93,13 +93,13 @@ var _ = Describe("Classifier: update cluster labels", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Change Classifier %s Kubernetes constraints so that cluster is a match", classifier.Name)
-		currentClassifier := &libsveltosv1alpha1.Classifier{}
+		currentClassifier := &libsveltosv1beta1.Classifier{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
-		currentClassifier.Spec.KubernetesVersionConstraints = []libsveltosv1alpha1.KubernetesVersionConstraint{
+		currentClassifier.Spec.KubernetesVersionConstraints = []libsveltosv1beta1.KubernetesVersionConstraint{
 			{
 				Version:    "1.25.0",
-				Comparison: string(libsveltosv1alpha1.ComparisonGreaterThanOrEqualTo),
+				Comparison: string(libsveltosv1beta1.ComparisonGreaterThanOrEqualTo),
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClassifier)).To(Succeed())
@@ -115,7 +115,7 @@ var _ = Describe("Classifier: update cluster labels", func() {
 
 		Byf("Verifying Classifier instance is removed from the workload cluster")
 		Eventually(func() bool {
-			currentClassifier := &libsveltosv1alpha1.Classifier{}
+			currentClassifier := &libsveltosv1beta1.Classifier{}
 			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Name: classifier.Name}, currentClassifier)
 			return err != nil && apierrors.IsNotFound(err)
@@ -123,7 +123,7 @@ var _ = Describe("Classifier: update cluster labels", func() {
 
 		Byf("Verifying Classifier instance is removed from the management cluster")
 		Eventually(func() bool {
-			currentClassifier := &libsveltosv1alpha1.Classifier{}
+			currentClassifier := &libsveltosv1beta1.Classifier{}
 			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: classifier.Name}, currentClassifier)
 			return err != nil && apierrors.IsNotFound(err)

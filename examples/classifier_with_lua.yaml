@@ -1,7 +1,7 @@
 # Following Classifier uses Lua script.
 # Any cluster with at least one ClusterIssuer containinghe
 # acme-staging-v02.api.letsencrypt.org in the server field, will be a match
-apiVersion: lib.projectsveltos.io/v1alpha1
+apiVersion: lib.projectsveltos.io/v1beta1
 kind: Classifier
 metadata:
   name: acme-staging-v02

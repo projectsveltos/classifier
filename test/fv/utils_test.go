@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -49,23 +49,23 @@ func randomString() string {
 	return util.RandomString(length)
 }
 
-func getClassifier(namePrefix string, clusterLabels map[string]string) *libsveltosv1alpha1.Classifier {
-	labels := make([]libsveltosv1alpha1.ClassifierLabel, 0)
+func getClassifier(namePrefix string, clusterLabels map[string]string) *libsveltosv1beta1.Classifier {
+	labels := make([]libsveltosv1beta1.ClassifierLabel, 0)
 
 	for k := range clusterLabels {
-		labels = append(labels, libsveltosv1alpha1.ClassifierLabel{Key: k, Value: clusterLabels[k]})
+		labels = append(labels, libsveltosv1beta1.ClassifierLabel{Key: k, Value: clusterLabels[k]})
 	}
 
-	classifier := &libsveltosv1alpha1.Classifier{
+	classifier := &libsveltosv1beta1.Classifier{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namePrefix + randomString(),
 		},
-		Spec: libsveltosv1alpha1.ClassifierSpec{
+		Spec: libsveltosv1beta1.ClassifierSpec{
 			ClassifierLabels: labels,
-			KubernetesVersionConstraints: []libsveltosv1alpha1.KubernetesVersionConstraint{
+			KubernetesVersionConstraints: []libsveltosv1beta1.KubernetesVersionConstraint{
 				{
 					Version:    "1.25.0",
-					Comparison: string(libsveltosv1alpha1.ComparisonGreaterThanOrEqualTo),
+					Comparison: string(libsveltosv1beta1.ComparisonGreaterThanOrEqualTo),
 				},
 			},
 		},
@@ -89,11 +89,11 @@ func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 }
 
 func verifyClassifierReport(classifierName string, isMatch bool) {
-	clusterType := libsveltosv1alpha1.ClusterTypeCapi
-	classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifierName, kindWorkloadCluster.Name, &clusterType)
+	clusterType := libsveltosv1beta1.ClusterTypeCapi
+	classifierReportName := libsveltosv1beta1.GetClassifierReportName(classifierName, kindWorkloadCluster.Name, &clusterType)
 	Byf("Verifing ClassifierReport %s for Classifier %s", classifierReportName, classifierName)
 	Eventually(func() bool {
-		currentClassifierReport := &libsveltosv1alpha1.ClassifierReport{}
+		currentClassifierReport := &libsveltosv1beta1.ClassifierReport{}
 		err := k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: classifierReportName},
 			currentClassifierReport)
@@ -101,7 +101,7 @@ func verifyClassifierReport(classifierName string, isMatch bool) {
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
-func verifyClusterLabels(classifier *libsveltosv1alpha1.Classifier) {
+func verifyClusterLabels(classifier *libsveltosv1beta1.Classifier) {
 	Byf("Verifying Cluster labels are updated with labels from Classifier %s", classifier.Name)
 	Eventually(func() bool {
 		currentCuster := &clusterv1.Cluster{}
@@ -128,7 +128,7 @@ func verifyClusterLabels(classifier *libsveltosv1alpha1.Classifier) {
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
-func removeLabels(classifier *libsveltosv1alpha1.Classifier) {
+func removeLabels(classifier *libsveltosv1beta1.Classifier) {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentCluster := &clusterv1.Cluster{}
 		Expect(k8sClient.Get(context.TODO(),

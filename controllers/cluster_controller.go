@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -49,7 +49,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := r.Get(ctx, req.NamespacedName, cluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			return cleanClusterStaleResources(ctx, r.Client, req.Namespace, req.Name,
-				libsveltosv1alpha1.ClusterTypeCapi, logger)
+				libsveltosv1beta1.ClusterTypeCapi, logger)
 		}
 		logger.Error(err, "Failed to fetch Cluster")
 		return reconcile.Result{}, errors.Wrapf(
@@ -62,7 +62,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Handle deleted cluster
 	if !cluster.DeletionTimestamp.IsZero() {
 		return cleanClusterStaleResources(ctx, r.Client, req.Namespace, req.Name,
-			libsveltosv1alpha1.ClusterTypeCapi, logger)
+			libsveltosv1beta1.ClusterTypeCapi, logger)
 	}
 
 	return ctrl.Result{}, nil

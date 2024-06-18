@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/projectsveltos/classifier/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
@@ -47,35 +47,35 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 
 		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
 
-		classifier0 := &libsveltosv1alpha1.Classifier{
+		classifier0 := &libsveltosv1beta1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: libsveltosv1alpha1.ClassifierSpec{
-				KubernetesVersionConstraints: []libsveltosv1alpha1.KubernetesVersionConstraint{
+			Spec: libsveltosv1beta1.ClassifierSpec{
+				KubernetesVersionConstraints: []libsveltosv1beta1.KubernetesVersionConstraint{
 					{
 						Version:    "1.24.0",
-						Comparison: string(libsveltosv1alpha1.ComparisonEqual),
+						Comparison: string(libsveltosv1beta1.ComparisonEqual),
 					},
 				},
-				ClassifierLabels: []libsveltosv1alpha1.ClassifierLabel{
+				ClassifierLabels: []libsveltosv1beta1.ClassifierLabel{
 					{Key: randomString(), Value: randomString()},
 				},
 			},
 		}
 
-		classifier1 := &libsveltosv1alpha1.Classifier{
+		classifier1 := &libsveltosv1beta1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: libsveltosv1alpha1.ClassifierSpec{
-				KubernetesVersionConstraints: []libsveltosv1alpha1.KubernetesVersionConstraint{
+			Spec: libsveltosv1beta1.ClassifierSpec{
+				KubernetesVersionConstraints: []libsveltosv1beta1.KubernetesVersionConstraint{
 					{
 						Version:    "1.24.0",
-						Comparison: string(libsveltosv1alpha1.ComparisonEqual),
+						Comparison: string(libsveltosv1beta1.ComparisonEqual),
 					},
 				},
-				ClassifierLabels: []libsveltosv1alpha1.ClassifierLabel{
+				ClassifierLabels: []libsveltosv1beta1.ClassifierLabel{
 					{Key: randomString(), Value: randomString()},
 				},
 			},
@@ -102,16 +102,16 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 			Kind: cluster.Kind, Namespace: cluster.Namespace, Name: cluster.Name, APIVersion: cluster.APIVersion}
 
 		set.Insert(&corev1.ObjectReference{
-			Kind: libsveltosv1alpha1.ClassifierKind, Name: classifier0.Name,
-			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+			Kind: libsveltosv1beta1.ClassifierKind, Name: classifier0.Name,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
 		})
 		reconciler.ClusterMap[key] = &set
 		reconciler.AllClassifierSet = libsveltosset.Set{}
 		reconciler.AllClassifierSet.Insert(
-			&corev1.ObjectReference{Kind: libsveltosv1alpha1.ClassifierKind, Name: classifier0.Name},
+			&corev1.ObjectReference{Kind: libsveltosv1beta1.ClassifierKind, Name: classifier0.Name},
 		)
 		reconciler.AllClassifierSet.Insert(
-			&corev1.ObjectReference{Kind: libsveltosv1alpha1.ClassifierKind, Name: classifier1.Name},
+			&corev1.ObjectReference{Kind: libsveltosv1beta1.ClassifierKind, Name: classifier1.Name},
 		)
 
 		requests := controllers.RequeueClassifierForCluster(reconciler, context.TODO(), cluster)
@@ -122,12 +122,12 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 var _ = Describe("ClassifierTransformations map functions", func() {
 	It("requeueClassifierForClassifierReport returns Classifier report is for", func() {
 		classifierName := randomString()
-		report := &libsveltosv1alpha1.ClassifierReport{
+		report := &libsveltosv1beta1.ClassifierReport{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: randomString(),
 			},
-			Spec: libsveltosv1alpha1.ClassifierReportSpec{
+			Spec: libsveltosv1beta1.ClassifierReportSpec{
 				ClusterNamespace: randomString(),
 				ClusterName:      randomString(),
 				ClassifierName:   classifierName,
@@ -169,14 +169,14 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 
 		classifierName1 := randomString()
 		classifierInfo1 := corev1.ObjectReference{
-			Kind: libsveltosv1alpha1.ClassifierKind, Name: classifierName1, APIVersion: libsveltosv1alpha1.GroupVersion.String()}
+			Kind: libsveltosv1beta1.ClassifierKind, Name: classifierName1, APIVersion: libsveltosv1beta1.GroupVersion.String()}
 		reconciler.ClassifierSet.Insert(&classifierInfo1)
 		classifierName2 := randomString()
 		classifierInfo2 := corev1.ObjectReference{
-			Kind: libsveltosv1alpha1.ClassifierKind, Name: classifierName2, APIVersion: libsveltosv1alpha1.GroupVersion.String()}
+			Kind: libsveltosv1beta1.ClassifierKind, Name: classifierName2, APIVersion: libsveltosv1beta1.GroupVersion.String()}
 		reconciler.ClassifierSet.Insert(&classifierInfo2)
 
-		classifier := &libsveltosv1alpha1.Classifier{
+		classifier := &libsveltosv1beta1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},

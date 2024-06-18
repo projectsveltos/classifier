@@ -29,14 +29,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
 // removeAccessRequest removes AccessRequest generated for SveltosAgent
 func removeAccessRequest(ctx context.Context, c client.Client, logger logr.Logger) error {
-	accessRequestList := &libsveltosv1alpha1.AccessRequestList{}
+	accessRequestList := &libsveltosv1beta1.AccessRequestList{}
 
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
@@ -62,16 +62,16 @@ func removeAccessRequest(ctx context.Context, c client.Client, logger logr.Logge
 }
 
 // removeClassifierReports deletes all ClassifierReport corresponding to Classifier instance
-func removeClassifierReports(ctx context.Context, c client.Client, classifier *libsveltosv1alpha1.Classifier,
+func removeClassifierReports(ctx context.Context, c client.Client, classifier *libsveltosv1beta1.Classifier,
 	logger logr.Logger) error {
 
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
-			libsveltosv1alpha1.ClassifierlNameLabel: classifier.Name,
+			libsveltosv1beta1.ClassifierlNameLabel: classifier.Name,
 		},
 	}
 
-	classifierReportList := &libsveltosv1alpha1.ClassifierReportList{}
+	classifierReportList := &libsveltosv1beta1.ClassifierReportList{}
 	err := c.List(ctx, classifierReportList, listOptions...)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list ClassifierReports. Err: %v", err))
@@ -91,16 +91,16 @@ func removeClassifierReports(ctx context.Context, c client.Client, classifier *l
 
 // removeClusterClassifierReports deletes all ClassifierReport corresponding to Cluster instance
 func removeClusterClassifierReports(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
+	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
 
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
-			libsveltosv1alpha1.ClassifierReportClusterNameLabel: clusterName,
-			libsveltosv1alpha1.ClassifierReportClusterTypeLabel: strings.ToLower(string(clusterType)),
+			libsveltosv1beta1.ClassifierReportClusterNameLabel: clusterName,
+			libsveltosv1beta1.ClassifierReportClusterTypeLabel: strings.ToLower(string(clusterType)),
 		},
 	}
 
-	classifierReportList := &libsveltosv1alpha1.ClassifierReportList{}
+	classifierReportList := &libsveltosv1beta1.ClassifierReportList{}
 	err := c.List(ctx, classifierReportList, listOptions...)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list ClassifierReports. Err: %v", err))
@@ -178,7 +178,7 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 	}
 
 	logger.V(logs.LogDebug).Info("collecting ClassifierReports from cluster")
-	classifierReportList := libsveltosv1alpha1.ClassifierReportList{}
+	classifierReportList := libsveltosv1beta1.ClassifierReportList{}
 	err = remoteClient.List(ctx, &classifierReportList)
 	if err != nil {
 		return err
@@ -207,7 +207,7 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 }
 
 func updateClassifierReport(ctx context.Context, c client.Client, cluster *corev1.ObjectReference,
-	classiferReport *libsveltosv1alpha1.ClassifierReport, logger logr.Logger) error {
+	classiferReport *libsveltosv1beta1.ClassifierReport, logger logr.Logger) error {
 
 	if classiferReport.Labels == nil {
 		msg := "classifierReport is malformed. Labels is empty"
@@ -215,7 +215,7 @@ func updateClassifierReport(ctx context.Context, c client.Client, cluster *corev
 		return errors.New(msg)
 	}
 
-	classifierName, ok := classiferReport.Labels[libsveltosv1alpha1.ClassifierlNameLabel]
+	classifierName, ok := classiferReport.Labels[libsveltosv1beta1.ClassifierlNameLabel]
 	if !ok {
 		msg := "classifierReport is malformed. Label missing"
 		logger.V(logs.LogInfo).Info(msg)
@@ -223,7 +223,7 @@ func updateClassifierReport(ctx context.Context, c client.Client, cluster *corev
 	}
 
 	// Verify Classifier still exists
-	currentClassifier := libsveltosv1alpha1.Classifier{}
+	currentClassifier := libsveltosv1beta1.Classifier{}
 	err := c.Get(ctx, types.NamespacedName{Name: classifierName}, &currentClassifier)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -235,9 +235,9 @@ func updateClassifierReport(ctx context.Context, c client.Client, cluster *corev
 	}
 
 	clusterType := clusterproxy.GetClusterType(cluster)
-	classifierReportName := libsveltosv1alpha1.GetClassifierReportName(classifierName, cluster.Name, &clusterType)
+	classifierReportName := libsveltosv1beta1.GetClassifierReportName(classifierName, cluster.Name, &clusterType)
 
-	currentClassifierReport := &libsveltosv1alpha1.ClassifierReport{}
+	currentClassifierReport := &libsveltosv1beta1.ClassifierReport{}
 	err = c.Get(ctx,
 		types.NamespacedName{Namespace: cluster.Namespace, Name: classifierReportName},
 		currentClassifierReport)
@@ -246,7 +246,7 @@ func updateClassifierReport(ctx context.Context, c client.Client, cluster *corev
 			logger.V(logs.LogDebug).Info("create ClassifierReport in management cluster")
 			currentClassifierReport.Namespace = cluster.Namespace
 			currentClassifierReport.Name = classifierReportName
-			currentClassifierReport.Labels = libsveltosv1alpha1.GetClassifierReportLabels(
+			currentClassifierReport.Labels = libsveltosv1beta1.GetClassifierReportLabels(
 				classifierName, cluster.Name, &clusterType)
 			currentClassifierReport.Spec = classiferReport.Spec
 			currentClassifierReport.Spec.ClusterNamespace = cluster.Namespace
@@ -262,7 +262,7 @@ func updateClassifierReport(ctx context.Context, c client.Client, cluster *corev
 	currentClassifierReport.Spec.ClusterNamespace = cluster.Namespace
 	currentClassifierReport.Spec.ClusterName = cluster.Name
 	currentClassifierReport.Spec.ClusterType = clusterType
-	currentClassifierReport.Labels = libsveltosv1alpha1.GetClassifierReportLabels(
+	currentClassifierReport.Labels = libsveltosv1beta1.GetClassifierReportLabels(
 		classifierName, cluster.Name, &clusterType)
 	return c.Update(ctx, currentClassifierReport)
 }
