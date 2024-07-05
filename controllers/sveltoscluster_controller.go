@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -46,11 +46,11 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	logger.V(logs.LogInfo).Info("Reconciling SveltosCluster")
 
 	// Fecth the SveltosCluster instance
-	sveltosCluster := &libsveltosv1alpha1.SveltosCluster{}
+	sveltosCluster := &libsveltosv1beta1.SveltosCluster{}
 	if err := r.Get(ctx, req.NamespacedName, sveltosCluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			return cleanClusterStaleResources(ctx, r.Client, req.Namespace, req.Name,
-				libsveltosv1alpha1.ClusterTypeSveltos, logger)
+				libsveltosv1beta1.ClusterTypeSveltos, logger)
 		}
 		logger.Error(err, "Failed to fetch SveltosCluster")
 		return reconcile.Result{}, errors.Wrapf(
@@ -63,7 +63,7 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// Handle deleted SveltosCluster
 	if !sveltosCluster.DeletionTimestamp.IsZero() {
 		return cleanClusterStaleResources(ctx, r.Client, req.Namespace, req.Name,
-			libsveltosv1alpha1.ClusterTypeSveltos, logger)
+			libsveltosv1beta1.ClusterTypeSveltos, logger)
 	}
 
 	return ctrl.Result{}, nil
@@ -72,7 +72,7 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // SetupWithManager sets up the controller with the Manager.
 func (r *SveltosClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&libsveltosv1alpha1.SveltosCluster{}).
+		For(&libsveltosv1beta1.SveltosCluster{}).
 		Complete(r)
 }
 
@@ -81,7 +81,7 @@ func (r *SveltosClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // - if sveltos-agent was deployed in the management cluster, sveltos-agent resources
 // created for this cluster are removed from the management cluster
 func cleanClusterStaleResources(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) (ctrl.Result, error) {
 
 	err := removeClusterClassifierReports(ctx, c, clusterNamespace, clusterName, clusterType, logger)

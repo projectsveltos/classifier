@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectsveltos/classifier/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -38,11 +38,11 @@ const (
 )
 
 var _ = Describe("ClassifierScope", func() {
-	var classifier *libsveltosv1alpha1.Classifier
+	var classifier *libsveltosv1beta1.Classifier
 	var c client.Client
 
 	BeforeEach(func() {
-		classifier = &libsveltosv1alpha1.Classifier{
+		classifier = &libsveltosv1beta1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: classifierNamePrefix + randomString(),
 			},
@@ -104,18 +104,18 @@ var _ = Describe("ClassifierScope", func() {
 		clusterNamespace := randomString()
 		clusterName := randomString()
 		hash := []byte(randomString())
-		clusterInfo := libsveltosv1alpha1.ClusterInfo{
+		clusterInfo := libsveltosv1beta1.ClusterInfo{
 			Cluster: corev1.ObjectReference{Namespace: clusterNamespace, Name: clusterName},
-			Status:  libsveltosv1alpha1.SveltosStatusProvisioned,
+			Status:  libsveltosv1beta1.SveltosStatusProvisioned,
 			Hash:    hash,
 		}
-		scope.SetClusterInfo([]libsveltosv1alpha1.ClusterInfo{clusterInfo})
+		scope.SetClusterInfo([]libsveltosv1beta1.ClusterInfo{clusterInfo})
 		Expect(classifier.Status.ClusterInfo).ToNot(BeNil())
 		Expect(len(classifier.Status.ClusterInfo)).To(Equal(1))
 		Expect(classifier.Status.ClusterInfo[0].Cluster.Namespace).To(Equal(clusterNamespace))
 		Expect(classifier.Status.ClusterInfo[0].Cluster.Name).To(Equal(clusterName))
 		Expect(classifier.Status.ClusterInfo[0].Hash).To(Equal(hash))
-		Expect(classifier.Status.ClusterInfo[0].Status).To(Equal(libsveltosv1alpha1.SveltosStatusProvisioned))
+		Expect(classifier.Status.ClusterInfo[0].Status).To(Equal(libsveltosv1beta1.SveltosStatusProvisioned))
 	})
 
 	It("SetMatchingClusters sets Classifier.Status.MatchingCluster", func() {
@@ -130,14 +130,14 @@ var _ = Describe("ClassifierScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		failureMessage := randomString()
-		machingClusterStatuses := []libsveltosv1alpha1.MachingClusterStatus{
+		machingClusterStatuses := []libsveltosv1beta1.MachingClusterStatus{
 			{
 				ClusterRef: corev1.ObjectReference{
 					Namespace: "t-" + randomString(),
 					Name:      "c-" + randomString(),
 				},
 				ManagedLabels: []string{randomString(), randomString()},
-				UnManagedLabels: []libsveltosv1alpha1.UnManagedLabel{
+				UnManagedLabels: []libsveltosv1beta1.UnManagedLabel{
 					{Key: randomString(), FailureMessage: &failureMessage},
 				},
 			},

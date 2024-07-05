@@ -19,7 +19,7 @@ Classifier currently supports the following classification criteria:
 For instance, this Classifier instance will match any cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.25.0"
 
 ```
-apiVersion: lib.projectsveltos.io/v1alpha1
+apiVersion: lib.projectsveltos.io/v1beta1
 kind: Classifier
 metadata:
   name: kubernetes-v1.24
@@ -50,12 +50,14 @@ And you want to deploy:
 
 You can create following ClusterProfiles and Classifiers in the management cluster:
 ```
-apiVersion: config.projectsveltos.io/v1alpha1
+apiVersion: config.projectsveltos.io/v1beta1
 kind: ClusterProfile
 metadata:
   name: deploy-gatekeeper-3-10
 spec:
-  clusterSelector: gatekeeper=v3-10
+  clusterSelector:
+    matchLabels:
+      gatekeeper: v3-10
   syncMode: Continuous
   helmCharts:
   - repositoryURL: https://open-policy-agent.github.io/gatekeeper/charts
@@ -68,12 +70,14 @@ spec:
 ```
 
 ```
-apiVersion: config.projectsveltos.io/v1alpha1
+apiVersion: config.projectsveltos.io/v1beta1
 kind: ClusterProfile
 metadata:
   name: deploy-gatekeeper-3-9
 spec:
-  clusterSelector: gatekeeper=v3-9
+  clusterSelector: 
+    matchLabels:
+      gatekeeper: v3-9
   syncMode: Continuous
   helmCharts:
   - repositoryURL: https://open-policy-agent.github.io/gatekeeper/charts
@@ -88,7 +92,7 @@ spec:
 Then create following Classifiers
 
 ```
-apiVersion: lib.projectsveltos.io/v1alpha1
+apiVersion: lib.projectsveltos.io/v1beta1
 kind: Classifier
 metadata:
   name: deploy-gatekeeper-3-10
@@ -102,7 +106,7 @@ spec:
 ```
 
 ```
-apiVersion: lib.projectsveltos.io/v1alpha1
+apiVersion: lib.projectsveltos.io/v1beta1
 kind: Classifier
 metadata:
   name: deploy-gatekeeper-3-9

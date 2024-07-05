@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -133,7 +133,7 @@ func (r *ClassifierReconciler) requeueClassifierForSecret(
 	if secret.Labels == nil {
 		return nil
 	}
-	if _, ok := secret.Labels[libsveltosv1alpha1.AccessRequestNameLabel]; !ok {
+	if _, ok := secret.Labels[libsveltosv1beta1.AccessRequestNameLabel]; !ok {
 		return nil
 	}
 
@@ -155,7 +155,7 @@ func (r *ClassifierReconciler) requeueClassifierForClassifierReport(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
-	report := o.(*libsveltosv1alpha1.ClassifierReport)
+	report := o.(*libsveltosv1beta1.ClassifierReport)
 	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
 		"objectMapper",
 		"requeueClassifierForClassifierReport",
@@ -185,7 +185,7 @@ func (r *ClassifierReconciler) requeueClassifierForClassifier(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
-	classifier := o.(*libsveltosv1alpha1.Classifier)
+	classifier := o.(*libsveltosv1beta1.Classifier)
 	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
 		"objectMapper",
 		"requeueClassifierForClassifier",

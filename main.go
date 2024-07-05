@@ -51,7 +51,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/projectsveltos/classifier/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -139,7 +139,7 @@ func main() {
 	controllers.RegisterFeatures(d, setupLog)
 
 	logs.RegisterForLogSettings(ctx,
-		libsveltosv1alpha1.ComponentClassifier, ctrl.Log.WithName("log-setter"),
+		libsveltosv1beta1.ComponentClassifier, ctrl.Log.WithName("log-setter"),
 		ctrl.GetConfigOrDie())
 
 	if managementClusterControlPlaneEndpoint != "" {

@@ -39,7 +39,7 @@ import (
 
 	"github.com/projectsveltos/classifier/controllers/keymanager"
 	"github.com/projectsveltos/classifier/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -133,7 +133,7 @@ func (r *ClassifierReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	logger.V(logs.LogInfo).Info("Reconciling")
 
 	// Fecth the Classifier instance
-	classifier := &libsveltosv1alpha1.Classifier{}
+	classifier := &libsveltosv1beta1.Classifier{}
 	if err := r.Get(ctx, req.NamespacedName, classifier); err != nil {
 		if apierrors.IsNotFound(err) {
 			return reconcile.Result{}, nil
@@ -194,7 +194,7 @@ func (r *ClassifierReconciler) reconcileDelete(
 		return reconcile.Result{}, err
 	}
 
-	f := getHandlersForFeature(libsveltosv1alpha1.FeatureClassifier)
+	f := getHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
 	err = r.undeployClassifier(ctx, classifierScope, f, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to undeploy")
@@ -231,8 +231,8 @@ func (r *ClassifierReconciler) reconcileDelete(
 	}
 	delete(r.ClassifierMap, *classifierInfo)
 
-	if controllerutil.ContainsFinalizer(classifierScope.Classifier, libsveltosv1alpha1.ClassifierFinalizer) {
-		controllerutil.RemoveFinalizer(classifierScope.Classifier, libsveltosv1alpha1.ClassifierFinalizer)
+	if controllerutil.ContainsFinalizer(classifierScope.Classifier, libsveltosv1beta1.ClassifierFinalizer) {
+		controllerutil.RemoveFinalizer(classifierScope.Classifier, libsveltosv1beta1.ClassifierFinalizer)
 	}
 
 	logger.V(logs.LogInfo).Info("Reconcile delete success")
@@ -247,7 +247,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 	logger := classifierScope.Logger
 	logger.V(logs.LogInfo).Info("Reconciling Classifier")
 
-	if !controllerutil.ContainsFinalizer(classifierScope.Classifier, libsveltosv1alpha1.ClassifierFinalizer) {
+	if !controllerutil.ContainsFinalizer(classifierScope.Classifier, libsveltosv1beta1.ClassifierFinalizer) {
 		if err := r.addFinalizer(ctx, classifierScope); err != nil {
 			logger.V(logs.LogDebug).Info("failed to update finalizer")
 			return reconcile.Result{}, err
@@ -274,7 +274,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 
 	r.updateMaps(classifierScope)
 
-	f := getHandlersForFeature(libsveltosv1alpha1.FeatureClassifier)
+	f := getHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
 
 	if err := r.deployClassifier(ctx, classifierScope, f, logger); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to deploy")
@@ -291,23 +291,23 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 	// all Classifier with at least one conflict needs to be reconciled
 
 	c, err := ctrl.NewControllerManagedBy(mgr).
-		For(&libsveltosv1alpha1.Classifier{}).
+		For(&libsveltosv1beta1.Classifier{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
-		Watches(&libsveltosv1alpha1.ClassifierReport{},
+		Watches(&libsveltosv1beta1.ClassifierReport{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifierReport),
 			builder.WithPredicates(
 				ClassifierReportPredicate(mgr.GetLogger().WithValues("predicate", "classifierreportpredicate")),
 			),
 		).
-		Watches(&libsveltosv1alpha1.Classifier{},
+		Watches(&libsveltosv1beta1.Classifier{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifier),
 			builder.WithPredicates(
 				ClassifierPredicate(mgr.GetLogger().WithValues("predicate", "classifiepredicate")),
 			),
 		).
-		Watches(&libsveltosv1alpha1.SveltosCluster{},
+		Watches(&libsveltosv1beta1.SveltosCluster{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForSveltosCluster),
 			builder.WithPredicates(
 				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
@@ -373,7 +373,7 @@ func (r *ClassifierReconciler) getClusterMapForEntry(entry *corev1.ObjectReferen
 
 func (r *ClassifierReconciler) addFinalizer(ctx context.Context, classifierScope *scope.ClassifierScope) error {
 	// If the Classifier doesn't have our finalizer, add it.
-	controllerutil.AddFinalizer(classifierScope.Classifier, libsveltosv1alpha1.ClassifierFinalizer)
+	controllerutil.AddFinalizer(classifierScope.Classifier, libsveltosv1beta1.ClassifierFinalizer)
 	// Register the finalizer immediately to avoid orphaning clusterprofile resources on delete
 	if err := classifierScope.PatchObject(ctx); err != nil {
 		classifierScope.Error(err, "Failed to add finalizer")
@@ -407,11 +407,11 @@ func (r *ClassifierReconciler) updateClusterInfo(ctx context.Context, classifier
 		clusterMap[getClusterID(c.Cluster)] = true
 	}
 
-	newClusterInfo := make([]libsveltosv1alpha1.ClusterInfo, 0)
+	newClusterInfo := make([]libsveltosv1beta1.ClusterInfo, 0)
 	for i := range matchingCluster {
 		c := matchingCluster[i]
 		if _, ok := clusterMap[getClusterID(c)]; !ok {
-			newClusterInfo = append(newClusterInfo, libsveltosv1alpha1.ClusterInfo{
+			newClusterInfo = append(newClusterInfo, libsveltosv1beta1.ClusterInfo{
 				Cluster: c,
 			})
 		}
@@ -431,11 +431,11 @@ func (r *ClassifierReconciler) updateMatchingClustersAndRegistrations(ctx contex
 
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
-			libsveltosv1alpha1.ClassifierlNameLabel: classifierScope.Classifier.Name,
+			libsveltosv1beta1.ClassifierlNameLabel: classifierScope.Classifier.Name,
 		},
 	}
 
-	classifierReportList := &libsveltosv1alpha1.ClassifierReportList{}
+	classifierReportList := &libsveltosv1beta1.ClassifierReportList{}
 	err := r.List(ctx, classifierReportList, listOptions...)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list ClassifierReports. Err: %v", err))
@@ -480,7 +480,7 @@ func (r *ClassifierReconciler) updateMatchingClustersAndRegistrations(ctx contex
 		return err
 	}
 
-	matchingClusterStatus := make([]libsveltosv1alpha1.MachingClusterStatus, len(currentMatchingClusters))
+	matchingClusterStatus := make([]libsveltosv1beta1.MachingClusterStatus, len(currentMatchingClusters))
 	i := 0
 	unManaged := 0
 	for c := range currentMatchingClusters {
@@ -490,7 +490,7 @@ func (r *ClassifierReconciler) updateMatchingClustersAndRegistrations(ctx contex
 		}
 		unManaged += len(tmpUnmanaged)
 		matchingClusterStatus[i] =
-			libsveltosv1alpha1.MachingClusterStatus{
+			libsveltosv1beta1.MachingClusterStatus{
 				ClusterRef:      c,
 				ManagedLabels:   tmpManaged,
 				UnManagedLabels: tmpUnmanaged,
@@ -547,7 +547,7 @@ func (r *ClassifierReconciler) updateLabelsOnMatchingClusters(ctx context.Contex
 }
 
 func (r *ClassifierReconciler) updateLabelsOnCluster(ctx context.Context,
-	classifierScope *scope.ClassifierScope, cluster client.Object, clusterType libsveltosv1alpha1.ClusterType,
+	classifierScope *scope.ClassifierScope, cluster client.Object, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) error {
 
 	manager, err := keymanager.GetKeyManagerInstance(ctx, r.Client)
@@ -632,7 +632,7 @@ func (r *ClassifierReconciler) removeAllRegistrations(ctx context.Context,
 // currently matching Classifier
 // Clear old registrations
 func (r *ClassifierReconciler) handleLabelRegistrations(ctx context.Context,
-	classifier *libsveltosv1alpha1.Classifier,
+	classifier *libsveltosv1beta1.Classifier,
 	currentMatchingClusters, oldMatchingClusters map[corev1.ObjectReference]bool,
 	logger logr.Logger) error {
 
@@ -666,8 +666,8 @@ func (r *ClassifierReconciler) handleLabelRegistrations(ctx context.Context,
 }
 
 // classifyLabels divides labels in Managed and UnManaged
-func (r *ClassifierReconciler) classifyLabels(ctx context.Context, classifier *libsveltosv1alpha1.Classifier,
-	cluster *corev1.ObjectReference, logger logr.Logger) ([]string, []libsveltosv1alpha1.UnManagedLabel, error) {
+func (r *ClassifierReconciler) classifyLabels(ctx context.Context, classifier *libsveltosv1beta1.Classifier,
+	cluster *corev1.ObjectReference, logger logr.Logger) ([]string, []libsveltosv1beta1.UnManagedLabel, error) {
 
 	manager, err := keymanager.GetKeyManagerInstance(ctx, r.Client)
 	if err != nil {
@@ -681,7 +681,7 @@ func (r *ClassifierReconciler) classifyLabels(ctx context.Context, classifier *l
 	})
 
 	managed := make([]string, 0)
-	unManaged := make([]libsveltosv1alpha1.UnManagedLabel, 0)
+	unManaged := make([]libsveltosv1beta1.UnManagedLabel, 0)
 	for i := range classifier.Spec.ClassifierLabels {
 		label := &classifier.Spec.ClassifierLabels[i]
 		if manager.CanManageLabel(classifier, cluster.Namespace, cluster.Name, label.Key, clusterType) {
@@ -689,7 +689,7 @@ func (r *ClassifierReconciler) classifyLabels(ctx context.Context, classifier *l
 			managed = append(managed, label.Key)
 		} else {
 			logger.V(logs.LogDebug).Info(fmt.Sprintf("classifier cannot manage label %s", label.Key))
-			tmpUnManaged := libsveltosv1alpha1.UnManagedLabel{Key: label.Key}
+			tmpUnManaged := libsveltosv1beta1.UnManagedLabel{Key: label.Key}
 			currentManager, err := manager.GetManagerForKey(cluster.Namespace, cluster.Name, label.Key, clusterType)
 			if err == nil {
 				failureMessage := fmt.Sprintf("classifier %s currently manage this", currentManager)
