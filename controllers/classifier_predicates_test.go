@@ -519,6 +519,119 @@ var _ = Describe("Classifier Predicates: SecretPredicates", func() {
 	})
 })
 
+var _ = Describe("Classifier Predicates: ConfigMapPredicates", func() {
+	var logger logr.Logger
+	var configMap *corev1.ConfigMap
+
+	BeforeEach(func() {
+		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+
+		configMap = &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "projectsveltos",
+				Name:      randomString(),
+			},
+		}
+	})
+
+	AfterEach(func() {
+		controllers.SetSveltosAgentConfigMap("")
+	})
+
+	It("Create reprocesses when ConfigMap is the one with SveltosAgent configuration", func() {
+		name := randomString()
+		controllers.SetSveltosAgentConfigMap(name)
+
+		configMapPredicate := controllers.ConfigMapPredicates(logger)
+
+		e := event.CreateEvent{
+			Object: configMap,
+		}
+
+		result := configMapPredicate.Create(e)
+		Expect(result).To(BeFalse())
+
+		configMap.Name = name
+
+		result = configMapPredicate.Create(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Delete reprocesses when ConfigMap is the one with SveltosAgent configuration", func() {
+		name := randomString()
+		controllers.SetSveltosAgentConfigMap(name)
+
+		configMapPredicate := controllers.ConfigMapPredicates(logger)
+
+		e := event.DeleteEvent{
+			Object: configMap,
+		}
+
+		result := configMapPredicate.Delete(e)
+		Expect(result).To(BeFalse())
+
+		configMap.Name = name
+
+		result = configMapPredicate.Delete(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Update reprocesses when ConfigMap Data has changed", func() {
+		name := randomString()
+		controllers.SetSveltosAgentConfigMap(name)
+		configMap.Name = name
+
+		configMapPredicate := controllers.ConfigMapPredicates(logger)
+
+		configMap.Data = map[string]string{
+			randomString(): randomString(),
+		}
+
+		oldConfigMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configMap.Name,
+				Namespace: configMap.Namespace,
+			},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: configMap,
+			ObjectOld: oldConfigMap,
+		}
+
+		result := configMapPredicate.Update(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Update does not reprocess when ConfigMap Data has not changed", func() {
+		name := randomString()
+		controllers.SetSveltosAgentConfigMap(name)
+		configMap.Name = name
+
+		configMapPredicate := controllers.ConfigMapPredicates(logger)
+
+		configMap.Data = map[string]string{
+			randomString(): randomString(),
+		}
+
+		oldConfigMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configMap.Name,
+				Namespace: configMap.Namespace,
+			},
+			Data: configMap.Data,
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: configMap,
+			ObjectOld: oldConfigMap,
+		}
+
+		result := configMapPredicate.Update(e)
+		Expect(result).To(BeFalse())
+	})
+})
+
 var _ = Describe("Classifier Predicates: ClassifierReportPredicate", func() {
 	var logger logr.Logger
 	var report *libsveltosv1beta1.ClassifierReport

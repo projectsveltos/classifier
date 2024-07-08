@@ -72,6 +72,8 @@ const (
 	normalRequeueAfter = 20 * time.Second
 
 	controlplaneendpoint = "controlplaneendpoint-key"
+
+	projectsveltos = "projectsveltos"
 )
 
 // ClassifierReconciler reconciles a Classifier object
@@ -120,6 +122,7 @@ type ClassifierReconciler struct {
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;watch;list
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines/status,verbs=get;watch;list
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 
 func (r *ClassifierReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	if r.ShardKey != "" {
@@ -317,6 +320,12 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForSecret),
 			builder.WithPredicates(
 				SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
+			),
+		).
+		Watches(&corev1.ConfigMap{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForConfigMap),
+			builder.WithPredicates(
+				ConfigMapPredicates(mgr.GetLogger().WithValues("predicate", "configmappredicate")),
 			),
 		).
 		Build(r)
