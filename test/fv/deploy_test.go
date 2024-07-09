@@ -178,7 +178,7 @@ func verifyCRDs(workloadClient client.Client) {
 }
 
 func verifySveltosAgent(workloadClient client.Client, name string) {
-	Byf("Get sveltos-agent deployment")
+	Byf("Get sveltos-agent deployment %s", name)
 	Eventually(func() bool {
 		depl := &appsv1.Deployment{}
 		err := workloadClient.Get(context.TODO(),

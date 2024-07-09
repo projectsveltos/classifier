@@ -70,7 +70,7 @@ var (
         apiVersion: apps/v1
         kind: Deployment
         metadata:
-          name: sveltos-agent
+          name: "sveltos-ag*"
         spec:
           template:
             spec:
