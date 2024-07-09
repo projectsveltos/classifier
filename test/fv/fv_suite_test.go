@@ -79,8 +79,6 @@ var (
                 resources:
                   requests:
                     memory: 256Mi
-                securityContext:
-                  readOnlyRootFilesystem: true
     kind: ConfigMap
     metadata:
       name: sveltos-agent
@@ -112,7 +110,7 @@ func TestFv(t *testing.T) {
 	RunSpecs(t, "FV Suite", suiteConfig, reporterConfig)
 }
 
-var _ = BeforeSuite(func() {
+var _ = SynchronizedBeforeSuite(func() []byte {
 	ctrl.SetLogger(klog.Background())
 
 	restConfig := ctrl.GetConfigOrDie()
@@ -123,16 +121,12 @@ var _ = BeforeSuite(func() {
 	scheme = runtime.NewScheme()
 
 	Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
-	Expect(clusterv1.AddToScheme(scheme)).To(Succeed())
-	Expect(libsveltosv1alpha1.AddToScheme(scheme)).To(Succeed())
 	Expect(libsveltosv1beta1.AddToScheme(scheme)).To(Succeed())
-	Expect(apiextensionsv1.AddToScheme(scheme)).To(Succeed())
 
 	var err error
 	k8sClient, err = client.New(restConfig, client.Options{Scheme: scheme})
 	Expect(err).NotTo(HaveOccurred())
 
-	Byf("Create configMap with SveltosAgent configuration patches")
 	cm, err := utils.GetUnstructured([]byte(configMapConfig))
 	Expect(err).To(BeNil())
 	err = k8sClient.Create(context.TODO(), cm)
@@ -141,8 +135,27 @@ var _ = BeforeSuite(func() {
 		Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
 	}
 
-	setClassifierMode(controllers.CollectFromManagementCluster)
 	setSveltosAgentConfig(cm.GetName())
+
+	setClassifierMode(controllers.CollectFromManagementCluster)
+
+	return []byte{}
+}, func(data []byte) {
+	restConfig := ctrl.GetConfigOrDie()
+	// To get rid of the annoying request.go log
+	restConfig.QPS = 100
+	restConfig.Burst = 100
+
+	scheme = runtime.NewScheme()
+	Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
+	Expect(clusterv1.AddToScheme(scheme)).To(Succeed())
+	Expect(libsveltosv1alpha1.AddToScheme(scheme)).To(Succeed())
+	Expect(libsveltosv1beta1.AddToScheme(scheme)).To(Succeed())
+	Expect(apiextensionsv1.AddToScheme(scheme)).To(Succeed())
+
+	var err error
+	k8sClient, err = client.New(restConfig, client.Options{Scheme: scheme})
+	Expect(err).NotTo(HaveOccurred())
 
 	clusterList := &clusterv1.ClusterList{}
 	listOptions := []client.ListOption{
