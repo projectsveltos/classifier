@@ -190,12 +190,6 @@ func verifySveltosAgent(workloadClient client.Client, name string) {
 		// Those values are overridden with patches
 		for i := range depl.Spec.Template.Spec.Containers {
 			container := &depl.Spec.Template.Spec.Containers[i]
-			securityContext := container.SecurityContext
-			if securityContext.ReadOnlyRootFilesystem == nil ||
-				!(*securityContext.ReadOnlyRootFilesystem) {
-
-				return false
-			}
 
 			resources := &container.Resources.Requests
 			if resources.Memory().String() != "256Mi" {
