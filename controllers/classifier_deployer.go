@@ -1277,19 +1277,15 @@ func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest
 	// for this cluster.
 	lbls := getSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
 
-	name, create, err := getSveltosAgentDeploymentName(ctx, restConfig, clusterNamespace, clusterName, clusterType, lbls)
+	name, err := getSveltosAgentDeploymentName(ctx, restConfig, clusterNamespace, clusterName, clusterType, lbls)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(
 			fmt.Sprintf("failed to get name for sveltos-agent deployment: %v", err))
 		return err
 	}
 
-	if create {
-		agentYAML = strings.ReplaceAll(agentYAML, "$NAME", name)
-		return deploySveltosAgentResources(ctx, restConfig, agentYAML, lbls, patches, logger)
-	}
-
-	return nil
+	agentYAML = strings.ReplaceAll(agentYAML, "$NAME", name)
+	return deploySveltosAgentResources(ctx, restConfig, agentYAML, lbls, patches, logger)
 }
 
 func deploySveltosAgentResources(ctx context.Context, restConfig *rest.Config,
@@ -1319,12 +1315,13 @@ func deploySveltosAgentResources(ctx context.Context, restConfig *rest.Config,
 
 		var referencedUnstructured []*unstructured.Unstructured
 		if len(patches) > 0 {
+			logger.V(logs.LogInfo).Info("Patch sveltos-agent resources")
 			p := &patcher.CustomPatchPostRenderer{Patches: patches}
 			referencedUnstructured, err = p.RunUnstructured(
 				[]*unstructured.Unstructured{policy},
 			)
 			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to patch drift-detection-manager: %v", err))
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to patch sveltos-agent: %v", err))
 				return err
 			}
 		} else {
@@ -1386,7 +1383,7 @@ func getSveltosAgentLabels(clusterNamespace, clusterName string,
 // started in the management cluster for a given cluster.
 func getSveltosAgentDeploymentName(ctx context.Context, restConfig *rest.Config,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType, lbls map[string]string,
-) (name string, create bool, err error) {
+) (name string, err error) {
 
 	labelSelector := metav1.LabelSelector{
 		MatchLabels: lbls,
@@ -1400,13 +1397,13 @@ func getSveltosAgentDeploymentName(ctx context.Context, restConfig *rest.Config,
 	// Create a new ClientSet using the RESTConfig.
 	clientset, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
-		return "", false, err
+		return "", err
 	}
 
 	// using client and a List would require permission at cluster level. So using clientset instead
 	deployments, err := clientset.AppsV1().Deployments(getSveltosAgentNamespace()).List(ctx, listOptions)
 	if err != nil {
-		return "", false, err
+		return "", err
 	}
 
 	objects := make([]client.Object, len(deployments.Items))
@@ -1418,7 +1415,7 @@ func getSveltosAgentDeploymentName(ctx context.Context, restConfig *rest.Config,
 }
 
 func getInstantiatedObjectName(ctx context.Context, objects []client.Object, clusterNamespace, clusterName string,
-	clusterType libsveltosv1beta1.ClusterType) (name string, create bool, err error) {
+	clusterType libsveltosv1beta1.ClusterType) (name string, err error) {
 
 	prefix := "sveltos-agent-"
 	switch len(objects) {
@@ -1429,7 +1426,7 @@ func getInstantiatedObjectName(ctx context.Context, objects []client.Object, clu
 
 		manager, tmpErr := keymanager.GetKeyManagerInstance(ctx, getManagementClusterClient())
 		if tmpErr != nil {
-			return "", false, tmpErr
+			return "", tmpErr
 		}
 		// Register the name with keymanager. This makes sure only one name can be register per
 		// managed cluster. If following returns an error, it means from the time this Classifier instance
@@ -1438,18 +1435,16 @@ func getInstantiatedObjectName(ctx context.Context, objects []client.Object, clu
 		// will use the existing sveltos-agent deployment.
 		err = manager.RegisterSveltosAgentDeploymentName(name, clusterNamespace, clusterName, clusterType)
 		if err != nil {
-			return "", false, err
+			return "", err
 		}
-		create = true
 		err = nil
 	case 1:
 		name = objects[0].GetName()
-		create = false
 		err = nil
 	default:
 		err = fmt.Errorf("more than one resource")
 	}
-	return name, create, err
+	return name, err
 }
 
 // removeSveltosAgentFromManagementCluster removes the sveltos-agent resources
@@ -1464,7 +1459,7 @@ func removeSveltosAgentFromManagementCluster(ctx context.Context,
 
 	// Classifier deploys sveltos-agent resources for each cluster.
 	lbls := getSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
-	name, _, err := getSveltosAgentDeploymentName(ctx, getManagementClusterConfig(),
+	name, err := getSveltosAgentDeploymentName(ctx, getManagementClusterConfig(),
 		clusterNamespace, clusterName, clusterType, lbls)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(
