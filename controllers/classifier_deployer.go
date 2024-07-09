@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -47,6 +48,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	"github.com/projectsveltos/libsveltos/lib/patcher"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
@@ -60,7 +62,7 @@ type feature struct {
 }
 
 func getSveltosAgentNamespace() string {
-	return "projectsveltos"
+	return projectsveltos
 }
 
 func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierScope *scope.ClassifierScope,
@@ -174,6 +176,7 @@ func classifierHash(classifier *libsveltosv1beta1.Classifier) []byte {
 	var config string
 	config += getVersion() // Use the version. This will cause Classifier, Sveltos CRDs and agent to be redeployed on upgrade
 	config += render.AsCode(classifier.Spec)
+
 	h.Write([]byte(config))
 	return h.Sum(nil)
 }
@@ -475,10 +478,15 @@ func deployClassifierWithKubeconfigInCluster(ctx context.Context, c client.Clien
 		return err
 	}
 
+	patches, err := getSveltosAgentPatches(ctx, c, logger)
+	if err != nil {
+		return err
+	}
+
 	logger.V(logs.LogDebug).Info("Deploying sveltos agent")
 	// Deploy SveltosAgent
 	err = deploySveltosAgentInManagedCluster(ctx, remoteRestConfig, clusterNamespace, clusterName,
-		"send-reports", clusterType, logger)
+		"send-reports", clusterType, patches, logger)
 	if err != nil {
 		return err
 	}
@@ -728,23 +736,40 @@ func (r *ClassifierReconciler) getCurrentHash(ctx context.Context, classifierSco
 	cpEndpoint string, cluster *corev1.ObjectReference, f feature, logger logr.Logger) ([]byte, error) {
 	// Get Classifier Spec hash (at this very precise moment)
 	currentHash := f.currentHash(classifierScope.Classifier)
+
+	// If sveltos-agent configuration is in a ConfigMap. fetch ConfigMap and use its Data
+	// section in the hash evaluation.
+	if sveltosAgentConfigMap := getSveltosAgentConfigMap(); sveltosAgentConfigMap != "" {
+		configMap, err := collectSveltosAgentConfigMap(ctx, sveltosAgentConfigMap)
+		if err != nil {
+			return nil, err
+		}
+		h := sha256.New()
+		config := string(currentHash)
+		config += render.AsCode(configMap.Data)
+		h.Write([]byte(config))
+		currentHash = h.Sum(nil)
+	}
+
 	var kubeconfig []byte
 	var err error
 	if r.ClassifierReportMode == AgentSendReportsNoGateway {
+		h := sha256.New()
+		config := string(currentHash)
 		kubeconfig, err = getKubeconfigFromAccessRequest(ctx, r.Client, cluster.Namespace, cluster.Name,
 			clusterproxy.GetClusterType(cluster), logger)
 		if err != nil && !apierrors.IsNotFound(err) {
 			return nil, err
 		}
 		if kubeconfig != nil {
-			h := sha256.New()
-			config := string(currentHash)
 			config += string(kubeconfig)
 			config += cpEndpoint
-			h.Write([]byte(config))
-			currentHash = h.Sum(nil)
 		}
+
+		h.Write([]byte(config))
+		currentHash = h.Sum(nil)
 	}
+
 	return currentHash, nil
 }
 
@@ -1194,6 +1219,11 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 
 	startInMgmtCluster := startSveltosAgentInMgmtCluster(options)
 
+	patches, err := getSveltosAgentPatches(ctx, c, logger)
+	if err != nil {
+		return err
+	}
+
 	// Deploy SveltosAgent
 	if startInMgmtCluster {
 		// in the managed cluster, create the namespace where sveltos-agent will store all its reports
@@ -1204,7 +1234,7 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 		// Use management cluster restConfig
 		restConfig := getManagementClusterConfig()
 		return deploySveltosAgentInManagementCluster(ctx, restConfig, c, clusterNamespace,
-			clusterName, "do-not-send-reports", clusterType, logger)
+			clusterName, "do-not-send-reports", clusterType, patches, logger)
 	} else {
 		// Use managed cluster restConfig
 		remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
@@ -1214,7 +1244,7 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 			return err
 		}
 		err = deploySveltosAgentInManagedCluster(ctx, remoteRestConfig, clusterNamespace,
-			clusterName, "do-not-send-reports", clusterType, logger)
+			clusterName, "do-not-send-reports", clusterType, patches, logger)
 		if err != nil {
 			return err
 		}
@@ -1223,18 +1253,20 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 }
 
 func deploySveltosAgentInManagedCluster(ctx context.Context, remoteRestConfig *rest.Config,
-	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
+	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType,
+	patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy sveltos-agent in the managed cluster")
 
 	agentYAML := string(agent.GetSveltosAgentYAML())
 	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode, clusterType)
 
-	return deploySveltosAgentResources(ctx, remoteRestConfig, agentYAML, nil, logger)
+	return deploySveltosAgentResources(ctx, remoteRestConfig, agentYAML, nil, patches, logger)
 }
 
 func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest.Config, c client.Client,
-	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
+	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType,
+	patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy sveltos-agent in the management cluster")
 
@@ -1254,14 +1286,15 @@ func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest
 
 	if create {
 		agentYAML = strings.ReplaceAll(agentYAML, "$NAME", name)
-		return deploySveltosAgentResources(ctx, restConfig, agentYAML, lbls, logger)
+		return deploySveltosAgentResources(ctx, restConfig, agentYAML, lbls, patches, logger)
 	}
 
 	return nil
 }
 
 func deploySveltosAgentResources(ctx context.Context, restConfig *rest.Config,
-	agentYAML string, lbls map[string]string, logger logr.Logger) error {
+	agentYAML string, lbls map[string]string, patches []libsveltosv1beta1.Patch,
+	logger logr.Logger) error {
 
 	const separator = "---"
 	elements := strings.Split(agentYAML, separator)
@@ -1284,6 +1317,34 @@ func deploySveltosAgentResources(ctx context.Context, restConfig *rest.Config,
 			policy.SetLabels(currentLabels)
 		}
 
+		var referencedUnstructured []*unstructured.Unstructured
+		if len(patches) > 0 {
+			p := &patcher.CustomPatchPostRenderer{Patches: patches}
+			referencedUnstructured, err = p.RunUnstructured(
+				[]*unstructured.Unstructured{policy},
+			)
+			if err != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to patch drift-detection-manager: %v", err))
+				return err
+			}
+		} else {
+			referencedUnstructured = append(referencedUnstructured, policy)
+		}
+
+		err = deploySveltosAgentPatchedResources(ctx, restConfig, referencedUnstructured, logger)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func deploySveltosAgentPatchedResources(ctx context.Context, restConfig *rest.Config,
+	referencedUnstructured []*unstructured.Unstructured, logger logr.Logger) error {
+
+	for i := range referencedUnstructured {
+		policy := referencedUnstructured[i]
 		dr, err := utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
@@ -1444,4 +1505,36 @@ func removeSveltosAgentFromManagementCluster(ctx context.Context,
 	}
 
 	return nil
+}
+
+func getSveltosAgentPatches(ctx context.Context, c client.Client,
+	logger logr.Logger) ([]libsveltosv1beta1.Patch, error) {
+
+	patches := make([]libsveltosv1beta1.Patch, 0)
+	configMapName := getSveltosAgentConfigMap()
+	configMap := &corev1.ConfigMap{}
+	if configMapName != "" {
+		err := c.Get(ctx,
+			types.NamespacedName{Namespace: projectsveltos, Name: configMapName},
+			configMap)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %s: %v",
+				configMapName, err))
+			return nil, err
+		}
+	}
+
+	for k := range configMap.Data {
+		// Only Deployment can be patched
+		patch := libsveltosv1beta1.Patch{
+			Patch: configMap.Data[k],
+			Target: &libsveltosv1beta1.PatchSelector{
+				Kind:  "Deployment",
+				Group: "apps",
+			},
+		}
+		patches = append(patches, patch)
+	}
+
+	return patches, nil
 }

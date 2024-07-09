@@ -307,7 +307,8 @@ var _ = Describe("Classifier Deployer", func() {
 			if err != nil {
 				return false
 			}
-			return len(classifier.Status.ClusterInfo) == 1
+			return len(classifier.Status.ClusterInfo) == 1 &&
+				classifier.Status.ClusterInfo[0].Status == libsveltosv1beta1.SveltosStatusProvisioned
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		classifierScope := getClassifierScope(testEnv.Client, logger, classifier)
@@ -464,7 +465,7 @@ var _ = Describe("Classifier Deployer", func() {
 
 	It("deploySveltosAgent deploys sveltos agent", func() {
 		Expect(controllers.DeploySveltosAgentInManagedCluster(ctx, testEnv.Config, randomString(), randomString(),
-			"do-not-send-reports", libsveltosv1beta1.ClusterTypeCapi, logger)).To(Succeed())
+			"do-not-send-reports", libsveltosv1beta1.ClusterTypeCapi, nil, logger)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -584,7 +585,7 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(err).To(BeNil())
 
 		Expect(controllers.DeploySveltosAgentInManagementCluster(context.TODO(), testEnv.Config,
-			testEnv.Client, clusterNamespace, clusterName, "", clusterType, logger)).To(Succeed())
+			testEnv.Client, clusterNamespace, clusterName, "", clusterType, nil, logger)).To(Succeed())
 
 		expectedLabels := controllers.GetSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
 

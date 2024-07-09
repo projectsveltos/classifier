@@ -151,6 +151,43 @@ func (r *ClassifierReconciler) requeueClassifierForSecret(
 	return requests
 }
 
+func (r *ClassifierReconciler) requeueClassifierForConfigMap(
+	ctx context.Context, o client.Object,
+) []reconcile.Request {
+
+	configMap := o.(*corev1.ConfigMap)
+	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
+		"objectMapper",
+		"requeueClassifierForConfigMap",
+		"namespace",
+		configMap.Namespace,
+		"configMap",
+		configMap.Name,
+	)
+
+	logger.V(logs.LogDebug).Info("reacting to configMap change")
+
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	if configMap.Namespace != projectsveltos || configMap.Name != getSveltosAgentConfigMap() {
+		return nil
+	}
+
+	requests := make([]ctrl.Request, r.AllClassifierSet.Len())
+	classifiers := r.AllClassifierSet.Items()
+	for i := range classifiers {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("queuing classifier %s", classifiers[i].Name))
+		requests[i] = ctrl.Request{
+			NamespacedName: client.ObjectKey{
+				Name: classifiers[i].Name,
+			},
+		}
+	}
+
+	return requests
+}
+
 func (r *ClassifierReconciler) requeueClassifierForClassifierReport(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {

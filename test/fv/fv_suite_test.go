@@ -30,6 +30,7 @@ import (
 	ginkgotypes "github.com/onsi/ginkgo/v2/types"
 	appsv1 "k8s.io/api/apps/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -42,6 +43,7 @@ import (
 	"github.com/projectsveltos/classifier/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 var (
@@ -53,6 +55,36 @@ var (
 const (
 	timeout         = 2 * time.Minute
 	pollingInterval = 5 * time.Second
+)
+
+const (
+	deplNamespace        = "projectsveltos"
+	deplName             = "classifier-manager"
+	managerContainerName = "manager"
+)
+
+var (
+	configMapConfig = `    apiVersion: v1
+    data:
+      patch: |-
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: sveltos-agent
+        spec:
+          template:
+            spec:
+              containers:
+              - name: manager
+                resources:
+                  requests:
+                    memory: 256Mi
+                securityContext:
+                  readOnlyRootFilesystem: true
+    kind: ConfigMap
+    metadata:
+      name: sveltos-agent
+      namespace: projectsveltos`
 )
 
 func TestFv(t *testing.T) {
@@ -100,7 +132,17 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(restConfig, client.Options{Scheme: scheme})
 	Expect(err).NotTo(HaveOccurred())
 
+	Byf("Create configMap with SveltosAgent configuration patches")
+	cm, err := utils.GetUnstructured([]byte(configMapConfig))
+	Expect(err).To(BeNil())
+	err = k8sClient.Create(context.TODO(), cm)
+	if err != nil {
+		// BeforeSuite runs on every parallel process
+		Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
+	}
+
 	setClassifierMode(controllers.CollectFromManagementCluster)
+	setSveltosAgentConfig(cm.GetName())
 
 	clusterList := &clusterv1.ClusterList{}
 	listOptions := []client.ListOption{
@@ -154,8 +196,6 @@ var _ = BeforeSuite(func() {
 })
 
 func setClassifierMode(reportMode controllers.ReportMode) {
-	deplNamespace := "projectsveltos"
-	deplName := "classifier-manager"
 	depl := &appsv1.Deployment{}
 
 	var from, to string
@@ -175,7 +215,6 @@ func setClassifierMode(reportMode controllers.ReportMode) {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: deplNamespace, Name: deplName},
 			depl)).To(Succeed())
 
-		managerContainerName := "manager"
 		Byf("Setting Classifer report mode to collect classifierReports")
 		for i := range depl.Spec.Template.Spec.Containers {
 			if depl.Spec.Template.Spec.Containers[i].Name == managerContainerName {
@@ -217,4 +256,68 @@ func setClassifierMode(reportMode controllers.ReportMode) {
 		}
 		return depl.Status.AvailableReplicas == *depl.Spec.Replicas
 	}, timeout, pollingInterval).Should(BeTrue())
+}
+
+func setSveltosAgentConfig(cmName string) {
+	depl := &appsv1.Deployment{}
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		Byf("Get classifier deployment")
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: deplNamespace, Name: deplName},
+			depl)).To(Succeed())
+
+		add := true
+		for i := range depl.Spec.Template.Spec.Containers {
+			if depl.Spec.Template.Spec.Containers[i].Name == managerContainerName {
+				for j := range depl.Spec.Template.Spec.Containers[i].Args {
+					if strings.Contains(depl.Spec.Template.Spec.Containers[i].Args[j], "sveltos-agent-config") {
+						add = false
+					}
+				}
+			}
+		}
+
+		if add {
+			Byf("Set sveltos-agent-config")
+			for i := range depl.Spec.Template.Spec.Containers {
+				if depl.Spec.Template.Spec.Containers[i].Name == managerContainerName {
+					depl.Spec.Template.Spec.Containers[i].Args = append(
+						depl.Spec.Template.Spec.Containers[i].Args,
+						fmt.Sprintf("--sveltos-agent-config=%s", cmName))
+				}
+			}
+		}
+
+		return k8sClient.Update(context.TODO(), depl)
+	})
+
+	Expect(err).To(BeNil())
+
+	Byf("Waiting for deployment replicas to be available")
+	Eventually(func() bool {
+		err := k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: deplNamespace, Name: deplName}, depl)
+		if err != nil {
+			return false
+		}
+		return depl.Status.AvailableReplicas == *depl.Spec.Replicas
+	}, timeout, pollingInterval).Should(BeTrue())
+}
+
+func isAgentLessMode() bool {
+	By("Getting classifier pod")
+	classfierDepl := &appsv1.Deployment{}
+	Expect(k8sClient.Get(context.TODO(),
+		types.NamespacedName{Namespace: deplNamespace, Name: deplName},
+		classfierDepl)).To(Succeed())
+
+	Expect(len(classfierDepl.Spec.Template.Spec.Containers)).To(Equal(1))
+
+	for i := range classfierDepl.Spec.Template.Spec.Containers[0].Args {
+		if strings.Contains(classfierDepl.Spec.Template.Spec.Containers[0].Args[i], "agent-in-mgmt-cluster") {
+			By("Classifier in agentless mode")
+			return true
+		}
+	}
+
+	return false
 }
