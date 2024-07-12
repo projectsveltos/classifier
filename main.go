@@ -77,6 +77,7 @@ var (
 	syncPeriod                            time.Duration
 	version                               string
 	healthAddr                            string
+	sveltosAgentConfigMap                 string
 )
 
 const (
@@ -131,6 +132,7 @@ func main() {
 	}
 
 	controllers.SetManagementClusterAccess(mgr.GetConfig(), mgr.GetClient())
+	controllers.SetSveltosAgentConfigMap(sveltosAgentConfigMap)
 
 	// Setup the context that's going to be used in controllers and for the manager.
 	ctx := ctrl.SetupSignalHandler()
@@ -184,24 +186,16 @@ func main() {
 }
 
 func initFlags(fs *pflag.FlagSet) {
-	fs.IntVar(&tmpReportMode,
-		"report-mode",
-		defaulReportMode,
+	fs.IntVar(&tmpReportMode, "report-mode", defaulReportMode,
 		"Indicates how ClassifierReport needs to be collected")
 
-	fs.BoolVar(&agentInMgmtCluster,
-		"agent-in-mgmt-cluster",
-		false,
+	fs.BoolVar(&agentInMgmtCluster, "agent-in-mgmt-cluster", false,
 		"When set, indicates drift-detection-manager needs to be started in the management cluster")
 
-	fs.StringVar(&shardKey,
-		"shard-key",
-		"",
+	fs.StringVar(&shardKey, "shard-key", "",
 		"If set, and report-mode is set to collect, this deployment will fetch only from clusters matching this shard")
 
-	fs.StringVar(&managementClusterControlPlaneEndpoint,
-		"control-plane-endpoint",
-		"",
+	fs.StringVar(&managementClusterControlPlaneEndpoint, "control-plane-endpoint", "",
 		"The management cluster controlplane endpoint. Format <ip>:<port>.")
 
 	fs.StringVar(&diagnosticsAddress, "diagnostics-address", ":8443",
@@ -212,20 +206,17 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&insecureDiagnostics, "insecure-diagnostics", false,
 		"Enable insecure diagnostics serving. For more details see the description of --diagnostics-address.")
 
-	fs.IntVar(&workers,
-		"worker-number",
-		defaultWorkers,
+	fs.IntVar(&workers, "worker-number", defaultWorkers,
 		"Number of worker. Workers are used to deploy classifiers in CAPI clusters")
 
-	fs.IntVar(&concurrentReconciles,
-		"concurrent-reconciles",
-		defaultReconcilers,
+	fs.IntVar(&concurrentReconciles, "concurrent-reconciles", defaultReconcilers,
 		"concurrent reconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 10")
 
-	fs.StringVar(&version,
-		"version",
-		"",
+	fs.StringVar(&version, "version", "",
 		"current sveltos version")
+
+	fs.StringVar(&sveltosAgentConfigMap, "sveltos-agent-config", "",
+		"The name of the ConfigMap in the projectsveltos namespace containing the sveltos-agent configuration")
 
 	fs.StringVar(&healthAddr, "health-addr", ":9440",
 		"The address the health endpoint binds to.")

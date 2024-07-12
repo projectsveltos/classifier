@@ -369,6 +369,83 @@ func SecretPredicates(logger logr.Logger) predicate.Funcs {
 	}
 }
 
+// ConfigMapPredicates predicates for ConfigMap. ClassifierReconciler watches ConfigMap events
+// and react to those by reconciling itself based on following predicates
+func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			newConfigMap := e.ObjectNew.(*corev1.ConfigMap)
+			oldConfigMap := e.ObjectOld.(*corev1.ConfigMap)
+			log := logger.WithValues("predicate", "updateEvent",
+				"namespace", newConfigMap.Namespace,
+				"configMap", newConfigMap.Name,
+			)
+
+			if newConfigMap.Namespace != projectsveltos || newConfigMap.Name != getSveltosAgentConfigMap() {
+				return false
+			}
+
+			if oldConfigMap == nil {
+				log.V(logs.LogVerbose).Info("Old ConfigMap is nil. Reconcile Classifier")
+				return true
+			}
+
+			// return true if Data has changed
+			if !reflect.DeepEqual(oldConfigMap.Data, newConfigMap.Data) {
+				log.V(logs.LogVerbose).Info(
+					"ConfigMap Data changed. Will attempt to reconcile associated Classifiers.")
+				return true
+			}
+
+			// otherwise, return false
+			log.V(logs.LogVerbose).Info(
+				"ConfigMap did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
+			return false
+		},
+		CreateFunc: func(e event.CreateEvent) bool {
+			configMap := e.Object.(*corev1.ConfigMap)
+			log := logger.WithValues("predicate", "createEvent",
+				"namespace", configMap.Namespace,
+				"configMap", configMap.Name,
+			)
+
+			if configMap.Namespace == projectsveltos && configMap.Name == getSveltosAgentConfigMap() {
+				log.V(logs.LogVerbose).Info("ConfigMap created. Will attempt to reconcile associated Classifiers.")
+				return true
+			}
+
+			log.V(logs.LogVerbose).Info(
+				"ConfigMap did match expected conditions.  Will attempt to reconcile associated Classifiers.")
+			return false
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			configMap := e.Object.(*corev1.ConfigMap)
+			log := logger.WithValues("predicate", "createEvent",
+				"namespace", configMap.Namespace,
+				"configMap", configMap.Name,
+			)
+
+			if configMap.Namespace == projectsveltos && configMap.Name == getSveltosAgentConfigMap() {
+				log.V(logs.LogVerbose).Info("ConfigMap deleted. Will attempt to reconcile associated Classifiers.")
+				return true
+			}
+
+			log.V(logs.LogVerbose).Info(
+				"ConfigMap did match expected conditions.  Will attempt to reconcile associated Classifiers.")
+			return false
+		},
+		GenericFunc: func(e event.GenericEvent) bool {
+			log := logger.WithValues("predicate", "genericEvent",
+				"namespace", e.Object.GetNamespace(),
+				"configMap", e.Object.GetName(),
+			)
+			log.V(logs.LogVerbose).Info(
+				"ConfigMap did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
+			return false
+		},
+	}
+}
+
 // ClassifierReportPredicate predicates for ClassifierReport. ClassifierReconciler watches ClassifierReport events
 // and react to those by reconciling itself based on following predicates
 func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {

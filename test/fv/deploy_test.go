@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	appsv1 "k8s.io/api/apps/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -49,6 +50,34 @@ var _ = Describe("Classifier: deployment", func() {
 
 		Byf("Verifying CRDs are installed in the workload cluster")
 		verifyCRDs(workloadClient)
+		if isAgentLessMode() {
+			var currentName string
+			Eventually(func() bool {
+				listOptions := []client.ListOption{
+					client.MatchingLabels(
+						map[string]string{
+							"cluster-name":      kindWorkloadCluster.Name,
+							"cluster-namespace": kindWorkloadCluster.Namespace,
+						},
+					),
+				}
+
+				depls := &appsv1.DeploymentList{}
+				err = k8sClient.List(context.TODO(), depls, listOptions...)
+				if err != nil {
+					return false
+				}
+				if len(depls.Items) != 1 {
+					return false
+				}
+
+				currentName = depls.Items[0].Name
+				return true
+			}, timeout, pollingInterval).Should(BeTrue())
+			verifySveltosAgent(k8sClient, currentName)
+		} else {
+			verifySveltosAgent(workloadClient, "sveltos-agent-manager")
+		}
 
 		Byf("Verifying Classifier instance is deployed in the workload cluster")
 		Eventually(func() error {
@@ -146,4 +175,27 @@ func verifyCRDs(workloadClient client.Client) {
 		return workloadClient.Get(context.TODO(),
 			types.NamespacedName{Name: "reloaderreports.lib.projectsveltos.io"}, reloaderReportCRD)
 	}, timeout, pollingInterval).Should(BeNil())
+}
+
+func verifySveltosAgent(workloadClient client.Client, name string) {
+	Byf("Get sveltos-agent deployment %s", name)
+	Eventually(func() bool {
+		depl := &appsv1.Deployment{}
+		err := workloadClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: "projectsveltos", Name: name}, depl)
+		if err != nil {
+			return false
+		}
+
+		// Those values are overridden with patches
+		for i := range depl.Spec.Template.Spec.Containers {
+			container := &depl.Spec.Template.Spec.Containers[i]
+
+			resources := &container.Resources.Requests
+			if resources.Memory().String() != "256Mi" {
+				return false
+			}
+		}
+		return true
+	}, timeout, pollingInterval).Should(BeTrue())
 }
