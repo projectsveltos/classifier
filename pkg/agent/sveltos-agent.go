@@ -268,7 +268,7 @@ spec:
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: docker.io/projectsveltos/sveltos-agent:v0.35.0
+        image: docker.io/projectsveltos/sveltos-agent:main
         livenessProbe:
           failureThreshold: 3
           httpGet:
