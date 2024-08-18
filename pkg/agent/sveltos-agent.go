@@ -76,6 +76,9 @@ rules:
   - lib.projectsveltos.io
   resources:
   - classifierreports/status
+  - eventreports/status
+  - healthcheckreports/status
+  - reloaderreports/status
   verbs:
   - get
   - patch
@@ -84,6 +87,8 @@ rules:
   - lib.projectsveltos.io
   resources:
   - classifiers
+  - eventsources
+  - healthchecks
   verbs:
   - get
   - list
@@ -94,6 +99,10 @@ rules:
   - lib.projectsveltos.io
   resources:
   - classifiers/finalizers
+  - eventreports/finalizers
+  - eventsources/finalizers
+  - healthcheckreports/finalizers
+  - healthchecks/finalizers
   verbs:
   - update
 - apiGroups:
@@ -108,89 +117,7 @@ rules:
   - lib.projectsveltos.io
   resources:
   - eventreports
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - eventreports/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - eventreports/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - eventsources
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - eventsources/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
   - healthcheckreports
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - healthcheckreports/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - healthcheckreports/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - healthchecks
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - healthchecks/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
   - reloaderreports
   verbs:
   - create
@@ -200,14 +127,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - reloaderreports/status
-  verbs:
-  - get
-  - patch
-  - update
 - apiGroups:
   - lib.projectsveltos.io
   resources:
