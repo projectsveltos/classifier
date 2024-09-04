@@ -480,6 +480,7 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 
 	BeforeEach(func() {
 		cluster = prepareCluster()
+		controllers.SetVersion(version)
 
 		classifier = getClassifierInstance(randomString())
 	})
