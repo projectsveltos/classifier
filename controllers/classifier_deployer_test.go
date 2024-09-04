@@ -700,7 +700,7 @@ func prepareCluster() *clusterv1.Cluster {
 			Name:      "sveltos-agent-version",
 		},
 		Data: map[string]string{
-			"sveltos-agent-version": version,
+			"version": version,
 		},
 	}
 	err := testEnv.Client.Create(context.TODO(), cm)
