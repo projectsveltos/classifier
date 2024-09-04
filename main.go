@@ -152,6 +152,8 @@ func main() {
 		}
 	}
 
+	controllers.SetVersion(version)
+
 	classifierReconciler := getClassifierReconciler(mgr)
 	classifierReconciler.Deployer = d
 	var classifierController controller.Controller
@@ -171,8 +173,6 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	setupChecks(mgr)
-
-	controllers.SetVersion(version)
 
 	go capiWatchers(ctx, mgr,
 		classifierReconciler, classifierController,

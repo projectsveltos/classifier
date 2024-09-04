@@ -33,6 +33,16 @@ metadata:
   name: sveltos-agent-manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - '*'
   resources:
   - '*'
@@ -183,11 +193,12 @@ spec:
         - --cluster-namespace=
         - --cluster-name=
         - --cluster-type=
+        - --version=dev
         - --current-cluster=managed-cluster
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: docker.io/projectsveltos/sveltos-agent:main
+        image: docker.io/projectsveltos/sveltos-agent:dev
         livenessProbe:
           failureThreshold: 3
           httpGet:

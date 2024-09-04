@@ -70,11 +70,13 @@ const (
 	upstreamClusterNamePrefix = "upstream-cluster"
 	upstreamMachineNamePrefix = "upstream-machine"
 	clusterKind               = "Cluster"
+	projectsveltosNamespace   = "projectsveltos"
 )
 
 const (
 	timeout         = 40 * time.Second
 	pollingInterval = 2 * time.Second
+	version         = "v0.31.0"
 )
 
 func TestControllers(t *testing.T) {
@@ -121,6 +123,14 @@ var _ = BeforeSuite(func() {
 	classifierReportCRD, err := utils.GetUnstructured(crd.GetClassifierReportCRDYAML())
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(ctx, classifierReportCRD)).To(Succeed())
+
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: projectsveltosNamespace,
+		},
+	}
+	Expect(testEnv.Create(ctx, ns)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
 	if synced := testEnv.GetCache().WaitForCacheSync(ctx); !synced {
 		time.Sleep(time.Second)
