@@ -42,6 +42,7 @@ spec:
         - --cluster-namespace=
         - --cluster-name=
         - --cluster-type=
+        - --version=main
         - --current-cluster=management-cluster
         - --run-mode=do-not-send-reports
         command:

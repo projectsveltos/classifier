@@ -49,6 +49,7 @@ var _ = Describe("Classifier Deployer", func() {
 
 	BeforeEach(func() {
 		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+		controllers.SetVersion(version)
 	})
 
 	It("classifierHash returns Classifier hash", func() {
@@ -85,6 +86,7 @@ var _ = Describe("Classifier Deployer", func() {
 		h := sha256.New()
 		var config string
 
+		config += version
 		config += render.AsCode(classifier.Spec)
 		h.Write([]byte(config))
 		hash := h.Sum(nil)
@@ -690,6 +692,22 @@ func prepareCluster() *clusterv1.Cluster {
 	}
 	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
+
+	By("Create the ConfigMap with sveltos-agent version")
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: projectsveltosNamespace,
+			Name:      "sveltos-agent-version",
+		},
+		Data: map[string]string{
+			"version": version,
+		},
+	}
+	err := testEnv.Client.Create(context.TODO(), cm)
+	if err != nil {
+		Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
+	}
+	Expect(waitForObject(context.TODO(), testEnv.Client, cm)).To(Succeed())
 
 	Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
 

@@ -33,6 +33,16 @@ metadata:
   name: sveltos-agent-manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - '*'
   resources:
   - '*'
@@ -183,6 +193,7 @@ spec:
         - --cluster-namespace=
         - --cluster-name=
         - --cluster-type=
+        - --version=main
         - --current-cluster=managed-cluster
         - --run-mode=do-not-send-reports
         command:
