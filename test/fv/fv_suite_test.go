@@ -43,7 +43,7 @@ import (
 	"github.com/projectsveltos/classifier/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
-	"github.com/projectsveltos/libsveltos/lib/utils"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 )
 
 var (
@@ -127,7 +127,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	k8sClient, err = client.New(restConfig, client.Options{Scheme: scheme})
 	Expect(err).NotTo(HaveOccurred())
 
-	cm, err := utils.GetUnstructured([]byte(configMapConfig))
+	cm, err := k8s_utils.GetUnstructured([]byte(configMapConfig))
 	Expect(err).To(BeNil())
 	err = k8sClient.Create(context.TODO(), cm)
 	if err != nil {

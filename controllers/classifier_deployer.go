@@ -46,10 +46,10 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
-	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 type getCurrentHash func(classifier *libsveltosv1beta1.Classifier) []byte
@@ -881,13 +881,13 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 func deployClassifierCRD(ctx context.Context, remoteRestConfig *rest.Config,
 	logger logr.Logger) error {
 
-	classifierCRD, err := utils.GetUnstructured(crd.GetClassifierCRDYAML())
+	classifierCRD, err := k8s_utils.GetUnstructured(crd.GetClassifierCRDYAML())
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get Classifier CRD unstructured: %v", err))
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, classifierCRD.GroupVersionKind(), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, classifierCRD.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -910,14 +910,14 @@ func deployClassifierCRD(ctx context.Context, remoteRestConfig *rest.Config,
 func deployClassifierReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
 	logger logr.Logger) error {
 
-	classifierReportCRD, err := utils.GetUnstructured(crd.GetClassifierReportCRDYAML())
+	classifierReportCRD, err := k8s_utils.GetUnstructured(crd.GetClassifierReportCRDYAML())
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get ClassifierReport CRD unstructured: %v",
 			err))
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, classifierReportCRD.GroupVersionKind(), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, classifierReportCRD.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -940,13 +940,13 @@ func deployClassifierReportCRD(ctx context.Context, remoteRestConfig *rest.Confi
 func deployHealthCheckCRD(ctx context.Context, remoteRestConfig *rest.Config,
 	logger logr.Logger) error {
 
-	healthCheckCRD, err := utils.GetUnstructured(crd.GetHealthCheckCRDYAML())
+	healthCheckCRD, err := k8s_utils.GetUnstructured(crd.GetHealthCheckCRDYAML())
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get HealthCheck CRD unstructured: %v", err))
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, healthCheckCRD.GroupVersionKind(), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, healthCheckCRD.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -969,14 +969,14 @@ func deployHealthCheckCRD(ctx context.Context, remoteRestConfig *rest.Config,
 func deployHealthCheckReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
 	logger logr.Logger) error {
 
-	healthCheckReportCRD, err := utils.GetUnstructured(crd.GetHealthCheckReportCRDYAML())
+	healthCheckReportCRD, err := k8s_utils.GetUnstructured(crd.GetHealthCheckReportCRDYAML())
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get healthCheckReport CRD unstructured: %v",
 			err))
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, healthCheckReportCRD.GroupVersionKind(), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, healthCheckReportCRD.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -999,13 +999,13 @@ func deployHealthCheckReportCRD(ctx context.Context, remoteRestConfig *rest.Conf
 func deployEventSourceCRD(ctx context.Context, remoteRestConfig *rest.Config,
 	logger logr.Logger) error {
 
-	eventSourceCRD, err := utils.GetUnstructured(crd.GetEventSourceCRDYAML())
+	eventSourceCRD, err := k8s_utils.GetUnstructured(crd.GetEventSourceCRDYAML())
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get eventSourceCRD CRD unstructured: %v", err))
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, eventSourceCRD.GroupVersionKind(), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, eventSourceCRD.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -1028,14 +1028,14 @@ func deployEventSourceCRD(ctx context.Context, remoteRestConfig *rest.Config,
 func deployEventReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
 	logger logr.Logger) error {
 
-	eventReportCRD, err := utils.GetUnstructured(crd.GetEventReportCRDYAML())
+	eventReportCRD, err := k8s_utils.GetUnstructured(crd.GetEventReportCRDYAML())
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get eventReportCRD CRD unstructured: %v",
 			err))
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, eventReportCRD.GroupVersionKind(), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, eventReportCRD.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -1088,14 +1088,14 @@ func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest.Config,
 	logger logr.Logger) error {
 
-	dcCRD, err := utils.GetUnstructured(crd.GetDebuggingConfigurationCRDYAML())
+	dcCRD, err := k8s_utils.GetUnstructured(crd.GetDebuggingConfigurationCRDYAML())
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get DebuggingConfiguration CRD unstructured: %v",
 			err))
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, dcCRD.GroupVersionKind(), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, dcCRD.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -1116,13 +1116,13 @@ func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest
 
 func deployReloaderCRD(ctx context.Context, remoteRestConfig *rest.Config, logger logr.Logger) error {
 	// Deploy Reloader CRD
-	reloaderCRD, err := utils.GetUnstructured(crd.GetReloaderCRDYAML())
+	reloaderCRD, err := k8s_utils.GetUnstructured(crd.GetReloaderCRDYAML())
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get Reloader CRD unstructured: %v", err))
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, reloaderCRD.GroupVersionKind(), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, reloaderCRD.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(
 			fmt.Sprintf("failed to get dynamic client: %v", err))
@@ -1144,14 +1144,14 @@ func deployReloaderCRD(ctx context.Context, remoteRestConfig *rest.Config, logge
 
 func deployReloaderReportCRD(ctx context.Context, remoteRestConfig *rest.Config, logger logr.Logger) error {
 	// Deploy Reloader CRD
-	reloaderReportCRD, err := utils.GetUnstructured(crd.GetReloaderReportCRDYAML())
+	reloaderReportCRD, err := k8s_utils.GetUnstructured(crd.GetReloaderReportCRDYAML())
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(
 			fmt.Sprintf("failed to get ReloaderReport CRD unstructured: %v", err))
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, reloaderReportCRD.GroupVersionKind(), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, reloaderReportCRD.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -1295,7 +1295,7 @@ func deploySveltosAgentResources(ctx context.Context, restConfig *rest.Config,
 	const separator = "---"
 	elements := strings.Split(agentYAML, separator)
 	for i := range elements {
-		policy, err := utils.GetUnstructured([]byte(elements[i]))
+		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse classifier agent yaml: %v", err))
 			return err
@@ -1342,7 +1342,7 @@ func deploySveltosAgentPatchedResources(ctx context.Context, restConfig *rest.Co
 
 	for i := range referencedUnstructured {
 		policy := referencedUnstructured[i]
-		dr, err := utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
+		dr, err := k8s_utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 			return err
@@ -1474,13 +1474,13 @@ func removeSveltosAgentFromManagementCluster(ctx context.Context,
 	const separator = "---"
 	elements := strings.Split(agentYAML, separator)
 	for i := range elements {
-		policy, err := utils.GetUnstructured([]byte(elements[i]))
+		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse sveltos-agent yaml: %v", err))
 			return err
 		}
 
-		dr, err := utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
+		dr, err := k8s_utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 			return err

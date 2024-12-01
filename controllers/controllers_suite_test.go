@@ -46,8 +46,8 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
-	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 var (
@@ -112,15 +112,15 @@ var _ = BeforeSuite(func() {
 		}
 	}()
 
-	sveltosClusterCRD, err := utils.GetUnstructured(crd.GetSveltosClusterCRDYAML())
+	sveltosClusterCRD, err := k8s_utils.GetUnstructured(crd.GetSveltosClusterCRDYAML())
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(ctx, sveltosClusterCRD)).To(Succeed())
 
-	classifierCRD, err := utils.GetUnstructured(crd.GetClassifierCRDYAML())
+	classifierCRD, err := k8s_utils.GetUnstructured(crd.GetClassifierCRDYAML())
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(ctx, classifierCRD)).To(Succeed())
 
-	classifierReportCRD, err := utils.GetUnstructured(crd.GetClassifierReportCRDYAML())
+	classifierReportCRD, err := k8s_utils.GetUnstructured(crd.GetClassifierReportCRDYAML())
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(ctx, classifierReportCRD)).To(Succeed())
 
