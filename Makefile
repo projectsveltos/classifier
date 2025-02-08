@@ -246,12 +246,6 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 
 ##@ Build
 
-sveltos-agent:
-	@echo "Downloading sveltos agent yaml"
-	curl -L https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/manifest.yaml -o ./pkg/agent/sveltos-agent.yaml
-	curl -L https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/agent/sveltos-agent-in-mgmt-cluster.yaml	
-	cd pkg/agent; go generate
-
 .PHONY: build
 build: sveltos-agent generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
@@ -371,3 +365,14 @@ deploy-projectsveltos: $(KUSTOMIZE)
 
 	@echo "Waiting for projectsveltos conversion webhook to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/conversion-webhook -n projectsveltos --timeout=$(TIMEOUT)
+
+
+digest := $(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/sveltos-agent:${TAG}" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)
+sveltos-agent:
+	@echo "Downloading sveltos agent yaml"
+	@echo "image digest is $(digest)"
+	curl -L https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/manifest.yaml -o ./pkg/agent/sveltos-agent.yaml
+	sed -i'' -e "s#image: docker.io/projectsveltos/sveltos-agent:${TAG}#image: docker.io/projectsveltos/sveltos-agent@${digest}#g" ./pkg/agent/sveltos-agent.yaml
+	curl -L https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/agent/sveltos-agent-in-mgmt-cluster.yaml	
+	sed -i'' -e "s#image: docker.io/projectsveltos/sveltos-agent:${TAG}#image: docker.io/projectsveltos/sveltos-agent@${digest}#g" ./pkg/agent/sveltos-agent-in-mgmt-cluster.yaml
+	cd pkg/agent; go generate
