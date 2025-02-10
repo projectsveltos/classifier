@@ -1180,6 +1180,7 @@ func prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode stri
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-namespace=", fmt.Sprintf("cluster-namespace=%s", clusterNamespace))
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-name=", fmt.Sprintf("cluster-name=%s", clusterName))
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-type=", fmt.Sprintf("cluster-type=%s", clusterType))
+	agentYAML = strings.ReplaceAll(agentYAML, "v=5", "v=0")
 
 	return agentYAML
 }
