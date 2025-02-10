@@ -178,7 +178,7 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
-	if !sveltos_upgrade.IsSveltosAgentVersionCompatible(ctx, remoteClient, version) {
+	if !sveltos_upgrade.IsSveltosAgentVersionCompatible(ctx, remoteClient, version, logger) {
 		msg := "compatibility checks failed"
 		logger.V(logs.LogDebug).Info(msg)
 		return errors.New(msg)
