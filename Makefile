@@ -2,7 +2,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # KUBEBUILDER_ENVTEST_KUBERNETES_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-KUBEBUILDER_ENVTEST_KUBERNETES_VERSION = 1.31.0
+KUBEBUILDER_ENVTEST_KUBERNETES_VERSION = 1.32.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -68,7 +68,7 @@ KUSTOMIZE_PKG := sigs.k8s.io/kustomize/kustomize/v5
 $(KUSTOMIZE): # Build kustomize from tools folder.
 	CGO_ENABLED=0 GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(KUSTOMIZE_PKG) $(KUSTOMIZE_BIN) $(KUSTOMIZE_VER)
 
-SETUP_ENVTEST_VER := v0.0.0-20240522175850-2e9781e9fc60
+SETUP_ENVTEST_VER := release-0.20
 SETUP_ENVTEST_BIN := setup-envtest
 SETUP_ENVTEST := $(abspath $(TOOLS_BIN_DIR)/$(SETUP_ENVTEST_BIN)-$(SETUP_ENVTEST_VER))
 SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
@@ -169,7 +169,7 @@ endif
 # K8S_VERSION for the Kind cluster can be set as environment variable. If not defined,
 # this default value is used
 ifndef K8S_VERSION
-K8S_VERSION := v1.32.0
+K8S_VERSION := v1.32.2
 endif
 
 KIND_CONFIG ?= kind-cluster.yaml
@@ -366,10 +366,13 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	@echo "Waiting for projectsveltos conversion webhook to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/conversion-webhook -n projectsveltos --timeout=$(TIMEOUT)
 
+define get-digest
+$(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/sveltos-agent:${TAG}" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)
+endef
 
-digest := $(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/sveltos-agent:${TAG}" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)
 sveltos-agent:
 	@echo "Downloading sveltos agent yaml"
+	$(eval digest :=$(call get-digest))
 	@echo "image digest is $(digest)"
 	curl -L https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/manifest.yaml -o ./pkg/agent/sveltos-agent.yaml
 	sed -i'' -e "s#image: docker.io/projectsveltos/sveltos-agent:${TAG}#image: docker.io/projectsveltos/sveltos-agent@${digest}#g" ./pkg/agent/sveltos-agent.yaml
