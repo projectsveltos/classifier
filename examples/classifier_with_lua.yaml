@@ -9,7 +9,7 @@ spec:
   classifierLabels:
   - key: issuer
     value: acme-staging-v02
-  deployedResourceConstraints:
+  deployedResourceConstraint:
   - group: "cert-manager.io"
     version: v1
     kind: ClusterIssuer

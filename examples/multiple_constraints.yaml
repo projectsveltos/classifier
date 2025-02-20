@@ -11,7 +11,7 @@ spec:
   kubernetesVersionConstraints:
   - comparison: GreaterThanOrEqualTo
     version: 1.25.0
-  deployedResourceConstraints:
+  deployedResourceConstraint:
   - group: ""
     version: v1
     kind: Namespace
