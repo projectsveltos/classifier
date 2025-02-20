@@ -8,7 +8,7 @@ spec:
   classifierLabels:
   - key: env
     value: large
-  deployedResourceConstraints:
+  deployedResourceConstraint:
   - group: ""
     version: v1
     kind: Namespace
