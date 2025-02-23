@@ -78,6 +78,7 @@ var (
 	version                               string
 	healthAddr                            string
 	sveltosAgentConfigMap                 string
+	capiOnboardAnnotation                 string
 )
 
 const (
@@ -194,6 +195,9 @@ func initFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&shardKey, "shard-key", "",
 		"If set, and report-mode is set to collect, this deployment will fetch only from clusters matching this shard")
+
+	fs.StringVar(&capiOnboardAnnotation, "capi-onboard-annotation", "",
+		"If provided, Sveltos will only manage CAPI clusters that have this exact annotation.")
 
 	fs.StringVar(&managementClusterControlPlaneEndpoint, "control-plane-endpoint", "",
 		"The management cluster controlplane endpoint. Format <ip>:<port>.")
@@ -315,16 +319,17 @@ func capiWatchers(ctx context.Context, mgr ctrl.Manager,
 
 func getClassifierReconciler(mgr manager.Manager) *controllers.ClassifierReconciler {
 	return &controllers.ClassifierReconciler{
-		Client:               mgr.GetClient(),
-		Scheme:               mgr.GetScheme(),
-		ConcurrentReconciles: concurrentReconciles,
-		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClassifierMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ShardKey:             shardKey,
-		AgentInMgmtCluster:   agentInMgmtCluster,
-		ClassifierReportMode: reportMode,
-		ControlPlaneEndpoint: managementClusterControlPlaneEndpoint,
-		Mux:                  sync.Mutex{},
+		Client:                mgr.GetClient(),
+		Scheme:                mgr.GetScheme(),
+		ConcurrentReconciles:  concurrentReconciles,
+		ClusterMap:            make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ClassifierMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ShardKey:              shardKey,
+		CapiOnboardAnnotation: capiOnboardAnnotation,
+		AgentInMgmtCluster:    agentInMgmtCluster,
+		ClassifierReportMode:  reportMode,
+		ControlPlaneEndpoint:  managementClusterControlPlaneEndpoint,
+		Mux:                   sync.Mutex{},
 	}
 }
 

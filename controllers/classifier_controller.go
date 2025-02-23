@@ -86,8 +86,9 @@ type ClassifierReconciler struct {
 	AgentInMgmtCluster   bool // if true, indicates sveltos-agent needs to be started in the management cluster
 	// Management cluster controlplane endpoint. This is needed when mode is AgentSendReportsNoGateway.
 	// It will be used by classifier-agent to send classifierreports back to management cluster.
-	ControlPlaneEndpoint string
-	ShardKey             string // when set, only clusters matching the ShardKey will be reconciled
+	ControlPlaneEndpoint  string
+	ShardKey              string // when set, only clusters matching the ShardKey will be reconciled
+	CapiOnboardAnnotation string // when set, only capi clusters with this annotation are considered
 	// use a Mutex to update in-memory structure as MaxConcurrentReconciles is higher than one
 	Mux sync.Mutex
 	// key: Sveltos/CAPI Cluster namespace/name; value: set of all Classifiers deployed int the Cluster
@@ -337,7 +338,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
 
 	if r.ClassifierReportMode == CollectFromManagementCluster {
-		go collectClassifierReports(mgr.GetClient(), r.ShardKey, getVersion(), mgr.GetLogger())
+		go collectClassifierReports(mgr.GetClient(), r.ShardKey, r.CapiOnboardAnnotation, getVersion(), mgr.GetLogger())
 	}
 
 	return c, nil
@@ -404,7 +405,8 @@ func (r *ClassifierReconciler) updateClusterInfo(ctx context.Context, classifier
 		return fmt.Sprintf("%s:%s/%s", clusterproxy.GetClusterType(&cluster), cluster.Namespace, cluster.Name)
 	}
 
-	matchingCluster, err := clusterproxy.GetListOfClusters(ctx, r.Client, "", classifierScope.Logger)
+	matchingCluster, err := clusterproxy.GetListOfClusters(ctx, r.Client, "", r.CapiOnboardAnnotation,
+		classifierScope.Logger)
 	if err != nil {
 		return err
 	}
