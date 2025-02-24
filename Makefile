@@ -360,11 +360,6 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	@echo "Waiting for projectsveltos classifier to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/classifier-manager -n projectsveltos --timeout=$(TIMEOUT)
 
-	@echo "Install sveltos conversion webhook (dev is used for conversion-webhook)"
-	$(KUBECTL) apply -f  https://raw.githubusercontent.com/projectsveltos/conversion-webhook/dev/manifest/manifest.yaml
-
-	@echo "Waiting for projectsveltos conversion webhook to be available..."
-	$(KUBECTL) wait --for=condition=Available deployment/conversion-webhook -n projectsveltos --timeout=$(TIMEOUT)
 
 define get-digest
 $(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/sveltos-agent:${TAG}" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)

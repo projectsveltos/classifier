@@ -41,7 +41,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectsveltos/classifier/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 )
@@ -149,7 +148,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	scheme = runtime.NewScheme()
 	Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
 	Expect(clusterv1.AddToScheme(scheme)).To(Succeed())
-	Expect(libsveltosv1alpha1.AddToScheme(scheme)).To(Succeed())
 	Expect(libsveltosv1beta1.AddToScheme(scheme)).To(Succeed())
 	Expect(apiextensionsv1.AddToScheme(scheme)).To(Succeed())
 
