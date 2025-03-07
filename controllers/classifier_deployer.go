@@ -435,12 +435,12 @@ func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterN
 	return nil
 }
 
-// deployClassifierWithKubeconfigInCluster does following things in order:
+// deploySveltosAgentWithKubeconfigInCluster does following things in order:
 // - create (if one does not exist already) AccessRequest
 // - get Kubeconfig to access management cluster from AccessRequest
 // - create/update secret in the managed cluster with kubeconfig to access management cluster
-// - deploy classifier-agent
-func deployClassifierWithKubeconfigInCluster(ctx context.Context, c client.Client,
+// - deploy sveltos-agent
+func deploySveltosAgentWithKubeconfigInCluster(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
 	clusterType libsveltosv1beta1.ClusterType, options deployer.Options, logger logr.Logger) error {
 
@@ -856,7 +856,7 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 		var handler deployer.RequestHandler
 		handler = deployClassifierInCluster
 		if r.ClassifierReportMode == AgentSendReportsNoGateway {
-			handler = deployClassifierWithKubeconfigInCluster
+			handler = deploySveltosAgentWithKubeconfigInCluster
 			options.HandlerOptions[controlplaneendpoint] = r.ControlPlaneEndpoint
 		}
 		// Getting here means either Classifier failed to be deployed or Classifier has changed.
@@ -1253,6 +1253,11 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 	return nil
 }
 
+func replaceRegistry(agentYAML, registry string) string {
+	oldRegistry := "docker.io"
+	return strings.Replace(agentYAML, oldRegistry, registry, 1)
+}
+
 func deploySveltosAgentInManagedCluster(ctx context.Context, remoteRestConfig *rest.Config,
 	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType,
 	patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
@@ -1261,6 +1266,11 @@ func deploySveltosAgentInManagedCluster(ctx context.Context, remoteRestConfig *r
 
 	agentYAML := string(agent.GetSveltosAgentYAML())
 	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode, clusterType)
+
+	registry := GetSveltosAgentRegistry()
+	if registry != "" {
+		agentYAML = replaceRegistry(agentYAML, registry)
+	}
 
 	return deploySveltosAgentResources(ctx, remoteRestConfig, agentYAML, nil, patches, logger)
 }
@@ -1273,6 +1283,11 @@ func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest
 
 	agentYAML := string(agent.GetSveltosAgentInMgmtClusterYAML())
 	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode, clusterType)
+
+	registry := GetSveltosAgentRegistry()
+	if registry != "" {
+		agentYAML = replaceRegistry(agentYAML, registry)
+	}
 
 	// Following labels are added on the objects representing the drift-detection-manager
 	// for this cluster.
