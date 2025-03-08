@@ -79,6 +79,7 @@ var (
 	healthAddr                            string
 	sveltosAgentConfigMap                 string
 	capiOnboardAnnotation                 string
+	registry                              string
 )
 
 const (
@@ -134,6 +135,7 @@ func main() {
 
 	controllers.SetManagementClusterAccess(mgr.GetConfig(), mgr.GetClient())
 	controllers.SetSveltosAgentConfigMap(sveltosAgentConfigMap)
+	controllers.SetSveltosAgentRegistry(registry)
 
 	// Setup the context that's going to be used in controllers and for the manager.
 	ctx := ctrl.SetupSignalHandler()
@@ -224,6 +226,9 @@ func initFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&healthAddr, "health-addr", ":9440",
 		"The address the health endpoint binds to.")
+
+	fs.StringVar(&registry, "registry", "",
+		"Container registry for sveltos-agent images. Defaults to docker.io/ if empty.")
 
 	const defautlRestConfigQPS = 20
 	fs.Float32Var(&restConfigQPS, "kube-api-qps", defautlRestConfigQPS,
