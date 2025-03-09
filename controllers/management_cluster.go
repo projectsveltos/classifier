@@ -29,6 +29,7 @@ var (
 	managementClusterConfig *rest.Config
 	managementClusterClient client.Client
 	sveltosAgentConfigMap   string
+	registry                string
 )
 
 func SetManagementClusterAccess(config *rest.Config, c client.Client) {
@@ -38,6 +39,10 @@ func SetManagementClusterAccess(config *rest.Config, c client.Client) {
 
 func SetSveltosAgentConfigMap(name string) {
 	sveltosAgentConfigMap = name
+}
+
+func SetSveltosAgentRegistry(reg string) {
+	registry = reg
 }
 
 func getManagementClusterConfig() *rest.Config {
@@ -50,6 +55,10 @@ func getManagementClusterClient() client.Client {
 
 func getSveltosAgentConfigMap() string {
 	return sveltosAgentConfigMap
+}
+
+func GetSveltosAgentRegistry() string {
+	return registry
 }
 
 func collectSveltosAgentConfigMap(ctx context.Context, name string) (*corev1.ConfigMap, error) {
