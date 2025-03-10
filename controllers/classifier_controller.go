@@ -43,6 +43,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	predicates "github.com/projectsveltos/libsveltos/lib/predicates"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
@@ -314,7 +315,7 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 		Watches(&libsveltosv1beta1.SveltosCluster{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForSveltosCluster),
 			builder.WithPredicates(
-				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
+				predicates.SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
 			),
 		).
 		Watches(&corev1.Secret{},
@@ -351,7 +352,7 @@ func (r *ClassifierReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Contr
 		mgr.GetCache(),
 		&clusterv1.Cluster{},
 		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClassifierForCluster),
-		ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
+		predicates.ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
 	)
 	if err := c.Watch(sourceCluster); err != nil {
 		return err
@@ -363,7 +364,7 @@ func (r *ClassifierReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Contr
 		mgr.GetCache(),
 		&clusterv1.Machine{},
 		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClassifierForMachine),
-		MachinePredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
+		predicates.MachinePredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
 	)
 	if err := c.Watch(machineCluster); err != nil {
 		return err
