@@ -42,12 +42,12 @@ spec:
         - --cluster-namespace=
         - --cluster-name=
         - --cluster-type=
-        - --version=v0.50.0
+        - --version=main
         - --current-cluster=management-cluster
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: docker.io/projectsveltos/sveltos-agent@sha256:084161d56ce95d48d4bfabba0b7742839f4c4b988932e3cc3ca1b769b202a93a
+        image: docker.io/projectsveltos/sveltos-agent@sha256:fd5257889e6ecea716ef054d7200ed5222d1460f528eac1a5285f9c991d487cd
         livenessProbe:
           failureThreshold: 3
           httpGet:
