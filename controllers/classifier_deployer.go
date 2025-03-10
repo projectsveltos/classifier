@@ -26,11 +26,13 @@ import (
 
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -1182,6 +1184,11 @@ func prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode stri
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-type=", fmt.Sprintf("cluster-type=%s", clusterType))
 	agentYAML = strings.ReplaceAll(agentYAML, "v=5", "v=0")
 
+	registry := GetSveltosAgentRegistry()
+	if registry != "" {
+		agentYAML = replaceRegistry(agentYAML, registry)
+	}
+
 	return agentYAML
 }
 
@@ -1267,11 +1274,6 @@ func deploySveltosAgentInManagedCluster(ctx context.Context, remoteRestConfig *r
 	agentYAML := string(agent.GetSveltosAgentYAML())
 	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode, clusterType)
 
-	registry := GetSveltosAgentRegistry()
-	if registry != "" {
-		agentYAML = replaceRegistry(agentYAML, registry)
-	}
-
 	return deploySveltosAgentResources(ctx, remoteRestConfig, agentYAML, nil, patches, logger)
 }
 
@@ -1284,15 +1286,9 @@ func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest
 	agentYAML := string(agent.GetSveltosAgentInMgmtClusterYAML())
 	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode, clusterType)
 
-	registry := GetSveltosAgentRegistry()
-	if registry != "" {
-		agentYAML = replaceRegistry(agentYAML, registry)
-	}
-
 	// Following labels are added on the objects representing the drift-detection-manager
 	// for this cluster.
 	lbls := getSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
-
 	name, err := getSveltosAgentDeploymentName(ctx, restConfig, clusterNamespace, clusterName, clusterType, lbls)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(
@@ -1327,6 +1323,14 @@ func deploySveltosAgentResources(ctx context.Context, restConfig *rest.Config,
 				currentLabels[k] = lbls[k]
 			}
 			policy.SetLabels(currentLabels)
+
+			if policy.GetKind() == "Deployment" {
+				policy, err = addTemplateSpecLabels(policy, lbls)
+				if err != nil {
+					logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to set deployment spec.template.labels: %v", err))
+					return err
+				}
+			}
 		}
 
 		var referencedUnstructured []*unstructured.Unstructured
@@ -1548,4 +1552,28 @@ func getSveltosAgentPatches(ctx context.Context, c client.Client,
 	}
 
 	return patches, nil
+}
+
+func addTemplateSpecLabels(u *unstructured.Unstructured, lbls map[string]string) (*unstructured.Unstructured, error) {
+	var deployment appsv1.Deployment
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	if deployment.Spec.Template.Labels == nil {
+		deployment.Spec.Template.Labels = map[string]string{}
+	}
+	for k := range lbls {
+		deployment.Spec.Template.Labels[k] = lbls[k]
+	}
+
+	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	var uDeployment unstructured.Unstructured
+	uDeployment.SetUnstructuredContent(content)
+	return &uDeployment, nil
 }
