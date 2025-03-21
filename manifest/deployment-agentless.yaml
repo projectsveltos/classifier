@@ -24,11 +24,11 @@ spec:
         - --agent-in-mgmt-cluster
         - --capi-onboard-annotation=
         - --v=5
-        - --version=v0.51.1
+        - --version=main
         - --registry=
         command:
         - /manager
-        image: docker.io/projectsveltos/classifier:v0.51.1
+        image: docker.io/projectsveltos/classifier:main
         livenessProbe:
           failureThreshold: 3
           httpGet:
