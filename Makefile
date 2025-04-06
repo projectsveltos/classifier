@@ -196,10 +196,11 @@ fv-sharding: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing
 
 .PHONY: fv-agentless
 fv-agentless: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
-	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_common_manifest.yaml
+	$(KUBECTL) apply -f test/sveltos-agent-mgmt_cluster_common_manifest.yaml
 	$(KUBECTL) apply -f manifest/sveltos_agent_rbac.yaml 
 	cp manifest/deployment-agentless.yaml test/classifier-deployment-agentless.yaml	
-	$(KUBECTL) apply -f test/classifier-deployment-agentless.yaml	
+	$(KUBECTL) apply -f test/classifier-deployment-agentless.yaml
+	sleep 60
 	@echo "Waiting for projectsveltos classifier to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/classifier-manager -n projectsveltos --timeout=$(TIMEOUT)
 	rm -f test/classifier-deployment-agentless.yaml	
@@ -369,8 +370,11 @@ sveltos-agent:
 	@echo "Downloading sveltos agent yaml"
 	$(eval digest :=$(call get-digest))
 	@echo "image digest is $(digest)"
-	curl -L https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/manifest.yaml -o ./pkg/agent/sveltos-agent.yaml
+	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/manifest.yaml -o ./pkg/agent/sveltos-agent.yaml
 	sed -i'' -e "s#image: docker.io/projectsveltos/sveltos-agent:${TAG}#image: docker.io/projectsveltos/sveltos-agent@${digest}#g" ./pkg/agent/sveltos-agent.yaml
-	curl -L https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/agent/sveltos-agent-in-mgmt-cluster.yaml	
+	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/agent/sveltos-agent-in-mgmt-cluster.yaml	
 	sed -i'' -e "s#image: docker.io/projectsveltos/sveltos-agent:${TAG}#image: docker.io/projectsveltos/sveltos-agent@${digest}#g" ./pkg/agent/sveltos-agent-in-mgmt-cluster.yaml
 	cd pkg/agent; go generate
+	@echo "Downloading sveltos-agent common yaml for agentless fv"
+	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_common_manifest.yaml -o ./test/sveltos-agent-mgmt_cluster_common_manifest.yaml
+	

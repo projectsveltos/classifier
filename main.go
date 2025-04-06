@@ -136,6 +136,9 @@ func main() {
 	controllers.SetManagementClusterAccess(mgr.GetConfig(), mgr.GetClient())
 	controllers.SetSveltosAgentConfigMap(sveltosAgentConfigMap)
 	controllers.SetSveltosAgentRegistry(registry)
+	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
+
+	setupLog.V(logs.LogInfo).Info(fmt.Sprintf("Running in managemnt cluster: %t", agentInMgmtCluster))
 
 	// Setup the context that's going to be used in controllers and for the manager.
 	ctx := ctrl.SetupSignalHandler()

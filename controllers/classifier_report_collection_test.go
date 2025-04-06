@@ -124,16 +124,16 @@ var _ = Describe("Classifier Deployer", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifierReport)).To(Succeed())
 
-		Expect(controllers.CollectClassifierReportsFromCluster(context.TODO(), testEnv.Client, getClusterRef(cluster),
-			version, logger)).To(Succeed())
+		Expect(controllers.CollectClassifierReportsFromCluster(context.TODO(), testEnv.Client,
+			getClusterRef(cluster), version, logger)).To(Succeed())
 
 		clusterType := libsveltosv1beta1.ClusterTypeCapi
 
 		validateClassifierReports(classifierName, cluster, &clusterType)
 
 		// Update ClassifierReports and validate again
-		Expect(controllers.CollectClassifierReportsFromCluster(context.TODO(), testEnv.Client, getClusterRef(cluster),
-			version, logger)).To(Succeed())
+		Expect(controllers.CollectClassifierReportsFromCluster(context.TODO(), testEnv.Client,
+			getClusterRef(cluster), version, logger)).To(Succeed())
 
 		validateClassifierReports(classifierName, cluster, &clusterType)
 	})

@@ -35,6 +35,24 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
 
+// Classifier instances reside in the same cluster as the sveltos-agent component.
+// This function dynamically selects the appropriate Kubernetes client:
+// - Management cluster's client if sveltos-agent is deployed there.
+// - A managed cluster's client (obtained via clusterproxy) if sveltos-agent is in a managed cluster.
+func getClassifierClient(ctx context.Context, clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) (client.Client, error) {
+
+	if getAgentInMgmtCluster() {
+		return getManagementClusterClient(), nil
+	}
+
+	// ResourceSummary is a Sveltos resource created in managed clusters.
+	// Sveltos resources are always created using cluster-admin so that admin does not need to be
+	// given such permissions.
+	return clusterproxy.GetKubernetesClient(ctx, getManagementClusterClient(),
+		clusterNamespace, clusterName, "", "", clusterType, logger)
+}
+
 // removeAccessRequest removes AccessRequest generated for SveltosAgent
 func removeAccessRequest(ctx context.Context, c client.Client, logger logr.Logger) error {
 	accessRequestList := &libsveltosv1beta1.AccessRequestList{}
@@ -121,9 +139,7 @@ func removeClusterClassifierReports(ctx context.Context, c client.Client, cluste
 
 // Periodically collects ClassifierReports from each cluster.
 // If sharding is used, it will collect only from clusters matching shard.
-func collectClassifierReports(c client.Client, shardKey, capiOnboardAnnotation, version string,
-	logger logr.Logger) {
-
+func collectClassifierReports(c client.Client, shardKey, capiOnboardAnnotation, version string, logger logr.Logger) {
 	interval := 10 * time.Second
 	if shardKey != "" {
 		// This controller will only fetch ClassifierReport instances
@@ -173,22 +189,25 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	var remoteClient client.Client
-	remoteClient, err = clusterproxy.GetKubernetesClient(ctx, c, cluster.Namespace, cluster.Name,
-		"", "", clusterproxy.GetClusterType(clusterRef), logger)
-	if err != nil {
-		return err
-	}
+	if !sveltos_upgrade.IsSveltosAgentVersionCompatible(ctx, getManagementClusterClient(), version, cluster.Namespace,
+		cluster.Name, clusterproxy.GetClusterType(clusterRef), getAgentInMgmtCluster(), logger) {
 
-	if !sveltos_upgrade.IsSveltosAgentVersionCompatible(ctx, remoteClient, version, logger) {
 		msg := "compatibility checks failed"
 		logger.V(logs.LogDebug).Info(msg)
 		return errors.New(msg)
 	}
 
+	// Classifier instance location depends on sveltos-agent: management cluster if it's running there,
+	// otherwise managed cluster.
+	clusterClient, err := getClassifierClient(ctx, cluster.Namespace, cluster.Name,
+		clusterproxy.GetClusterType(clusterRef), logger)
+	if err != nil {
+		return err
+	}
+
 	logger.V(logs.LogDebug).Info("collecting ClassifierReports from cluster")
 	classifierReportList := libsveltosv1beta1.ClassifierReportList{}
-	err = remoteClient.List(ctx, &classifierReportList)
+	err = clusterClient.List(ctx, &classifierReportList)
 	if err != nil {
 		return err
 	}
