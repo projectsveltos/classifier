@@ -48,9 +48,12 @@ var _ = Describe("Classifier: deployment", func() {
 		Expect(err).To(BeNil())
 		Expect(workloadClient).ToNot(BeNil())
 
-		Byf("Verifying CRDs are installed in the workload cluster")
-		verifyCRDs(workloadClient)
-		if isAgentLessMode() {
+		// In agentless mode classifier instances are only in the management cluster
+		if !isAgentLessMode() {
+			Byf("Verifying CRDs are installed in the workload cluster")
+			verifyCRDs(workloadClient)
+			verifySveltosAgent(workloadClient, "sveltos-agent-manager")
+		} else {
 			var currentName string
 			Eventually(func() bool {
 				listOptions := []client.ListOption{
@@ -75,16 +78,16 @@ var _ = Describe("Classifier: deployment", func() {
 				return true
 			}, timeout, pollingInterval).Should(BeTrue())
 			verifySveltosAgent(k8sClient, currentName)
-		} else {
-			verifySveltosAgent(workloadClient, "sveltos-agent-manager")
 		}
 
-		Byf("Verifying Classifier instance is deployed in the workload cluster")
-		Eventually(func() error {
-			currentClassifier := &libsveltosv1beta1.Classifier{}
-			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: classifier.Name}, currentClassifier)
-		}, timeout, pollingInterval).Should(BeNil())
+		if !isAgentLessMode() {
+			Byf("Verifying Classifier instance is deployed in the workload cluster")
+			Eventually(func() error {
+				currentClassifier := &libsveltosv1beta1.Classifier{}
+				return workloadClient.Get(context.TODO(),
+					types.NamespacedName{Name: classifier.Name}, currentClassifier)
+			}, timeout, pollingInterval).Should(BeNil())
+		}
 
 		Byf("Deleting classifier instance %s in the management cluster", classifier.Name)
 		currentClassifier := &libsveltosv1beta1.Classifier{}
@@ -92,13 +95,15 @@ var _ = Describe("Classifier: deployment", func() {
 			types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
 		Expect(k8sClient.Delete(context.TODO(), currentClassifier)).To(Succeed())
 
-		Byf("Verifying Classifier instance is removed from the workload cluster")
-		Eventually(func() bool {
-			currentClassifier := &libsveltosv1beta1.Classifier{}
-			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: classifier.Name}, currentClassifier)
-			return err != nil && apierrors.IsNotFound(err)
-		}, timeout, pollingInterval).Should(BeTrue())
+		if !isAgentLessMode() {
+			Byf("Verifying Classifier instance is removed from the workload cluster")
+			Eventually(func() bool {
+				currentClassifier := &libsveltosv1beta1.Classifier{}
+				err = workloadClient.Get(context.TODO(),
+					types.NamespacedName{Name: classifier.Name}, currentClassifier)
+				return err != nil && apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+		}
 
 		Byf("Verifying Classifier instance is removed from the management cluster")
 		Eventually(func() bool {

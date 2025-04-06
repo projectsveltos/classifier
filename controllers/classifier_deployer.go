@@ -528,6 +528,12 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
+	if getAgentInMgmtCluster() {
+		// If sveltos-agent is deployed in the management cluster, Classifier instance
+		// does not need to be deployed in the managed cluster. So return here
+		return nil
+	}
+
 	// Get Classifier that requested this
 	classifier, remoteClient, err := getClassifierAndClusterClient(ctx, clusterNamespace, clusterName, applicant, clusterType,
 		c, logger)
