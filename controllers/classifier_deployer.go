@@ -1240,11 +1240,6 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 
 	// Deploy SveltosAgent
 	if startInMgmtCluster {
-		// in the managed cluster, create the namespace where sveltos-agent will store all its reports
-		err := createSveltosAgentNamespaceInManagedCluster(ctx, c, clusterNamespace, clusterName, clusterType, logger)
-		if err != nil {
-			return err
-		}
 		// Use management cluster restConfig
 		restConfig := getManagementClusterConfig()
 		return deploySveltosAgentInManagementCluster(ctx, restConfig, c, clusterNamespace,
@@ -1255,6 +1250,11 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 			"", "", clusterType, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
+			return err
+		}
+		// in the managed cluster, create the namespace where sveltos-agent will store all its reports
+		err = createSveltosAgentNamespaceInManagedCluster(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+		if err != nil {
 			return err
 		}
 		err = deploySveltosAgentInManagedCluster(ctx, remoteRestConfig, clusterNamespace,
