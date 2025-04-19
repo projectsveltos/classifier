@@ -324,7 +324,7 @@ func isAgentLessMode() bool {
 	Expect(len(classfierDepl.Spec.Template.Spec.Containers)).To(Equal(1))
 
 	for i := range classfierDepl.Spec.Template.Spec.Containers[0].Args {
-		if strings.Contains(classfierDepl.Spec.Template.Spec.Containers[0].Args[i], "agent-in-mgmt-cluster") {
+		if strings.Contains(classfierDepl.Spec.Template.Spec.Containers[0].Args[i], "agent-in-mgmt-cluster=true") {
 			By("Classifier in agentless mode")
 			return true
 		}
