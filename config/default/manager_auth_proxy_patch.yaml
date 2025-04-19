@@ -16,6 +16,6 @@ spec:
         - "--shard-key="
         - --capi-onboard-annotation=
         - "--v=5"
-        - "--version=v0.52.1"
+        - "--version=main"
         - "--registry="
         - "--agent-in-mgmt-cluster=false"
