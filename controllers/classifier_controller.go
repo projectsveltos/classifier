@@ -199,11 +199,15 @@ func (r *ClassifierReconciler) reconcileDelete(
 		return reconcile.Result{}, err
 	}
 
-	f := getHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
-	err = r.undeployClassifier(ctx, classifierScope, f, logger)
-	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to undeploy")
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+	if !r.AgentInMgmtCluster {
+		// In agentless mode, Classifier instances are not copied to managed clusters.
+		// So there is nothing to remove from managed cluster.
+		f := getHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
+		err = r.undeployClassifier(ctx, classifierScope, f, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to undeploy")
+			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		}
 	}
 
 	err = removeClassifierReports(ctx, r.Client, classifierScope.Classifier, logger)

@@ -373,6 +373,12 @@ func updateSecretWithAccessManagementKubeconfig(ctx context.Context, c client.Cl
 func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
 	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
 
+	if getAgentInMgmtCluster() {
+		// CRDs must be deployed alongside the agent. Since the management cluster already contains these CRDs,
+		// this operation is a no-op if the agent is deployed there.
+		return nil
+	}
+
 	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 		"", "", clusterType, logger)
 	if err != nil {
