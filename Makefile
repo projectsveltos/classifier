@@ -101,7 +101,7 @@ $(KIND): $(TOOLS_DIR)/go.mod
 $(CLUSTERCTL): $(TOOLS_DIR)/go.mod ## Build clusterctl binary
 	curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/$(CLUSTERCTL_VERSION)/clusterctl-$(OS)-$(ARCH) -o $@
 	chmod +x $@
-	mkdir -p $(HOME)/.cluster-api # create cluster api init directory, if not present	
+	mkdir -p $(HOME)/.cluster-api # create cluster api init directory, if not present
 
 $(KUBECTL):
 	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_LATEST_VER)/bin/$(OS)/$(ARCH)/kubectl -o $@
@@ -140,7 +140,7 @@ manifests: $(CONTROLLER_GEN) $(KUSTOMIZE) $(ENVSUBST) ## Generate WebhookConfigu
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) > manifest/manifest.yaml
 	./scripts/extract_shard-deployment.sh manifest/manifest.yaml manifest/deployment-shard.yaml
 	./scripts/extract_agentless-deployment.sh manifest/manifest.yaml manifest/deployment-agentless.yaml
-	
+
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
@@ -156,7 +156,7 @@ vet: ## Run go vet against code.
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) generate ## Lint codebase
-	$(GOLANGCI_LINT) run -v --fast=false --max-issues-per-linter 0 --max-same-issues 0 --timeout 5m	
+	$(GOLANGCI_LINT) run -v --fast=false --max-issues-per-linter 0 --max-same-issues 0 --timeout 5m
 
 ##@ Testing
 
@@ -197,18 +197,16 @@ fv-sharding: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing
 .PHONY: fv-agentless
 fv-agentless: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
 	$(KUBECTL) apply -f test/sveltos-agent-mgmt_cluster_common_manifest.yaml
-	$(KUBECTL) apply -f manifest/sveltos_agent_rbac.yaml 
-	cp manifest/deployment-agentless.yaml test/classifier-deployment-agentless.yaml	
-	$(KUBECTL) apply -f test/classifier-deployment-agentless.yaml
+	$(KUBECTL) apply -f manifest/sveltos_agent_rbac.yaml
+	$(KUBECTL) apply -f manifest/deployment-agentless.yaml
 	sleep 60
 	@echo "Waiting for projectsveltos classifier to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/classifier-manager -n projectsveltos --timeout=$(TIMEOUT)
-	rm -f test/classifier-deployment-agentless.yaml	
 	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
 
 .PHONY: test
 test: manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.
-	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test $(shell go list ./... |grep -v test/fv |grep -v test/helpers) $(TEST_ARGS) -coverprofile cover.out 
+	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test $(shell go list ./... |grep -v test/fv |grep -v test/helpers) $(TEST_ARGS) -coverprofile cover.out
 
 .PHONY: create-cluster
 create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kind cluster designed for development
@@ -314,19 +312,19 @@ set-manifest-pull-policy:
 ## fv helpers
 
 # In order to avoid this error
-# Error: failed to read "cluster-template-development.yaml" from provider's repository "infrastructure-docker": failed to get GitHub release v1.2.0: rate limit for github api has been reached. 
+# Error: failed to read "cluster-template-development.yaml" from provider's repository "infrastructure-docker": failed to get GitHub release v1.2.0: rate limit for github api has been reached.
 # Please wait one hour or get a personal API token and assign it to the GITHUB_TOKEN environment variable
 #
 # It requires control cluster to exist. So first "make create-control-cluster" then run this target before creating any workload cluster.
 # Once generated, remove
 #      enforce: "{{ .podSecurityStandard.enforce }}"
 #      enforce-version: "latest"
-create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL) 
+create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL)
 	CLUSTER_TOPOLOGY=ok KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
 		--control-plane-machine-count=1 \
   		--worker-machine-count=1 > $(KIND_CLUSTER_YAML)
 
-create-control-cluster:
+create-control-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL)
 	sed -e "s/K8S_VERSION/$(K8S_VERSION)/g"  test/$(KIND_CONFIG) > test/$(KIND_CONFIG).tmp
 	$(KIND) create cluster --name=$(CONTROL_CLUSTER_NAME) --config test/$(KIND_CONFIG).tmp
 	@echo "Create control cluster with docker as infrastructure provider"
@@ -372,9 +370,9 @@ sveltos-agent:
 	@echo "image digest is $(digest)"
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/manifest.yaml -o ./pkg/agent/sveltos-agent.yaml
 	sed -i'' -e "s#image: docker.io/projectsveltos/sveltos-agent:${TAG}#image: docker.io/projectsveltos/sveltos-agent@${digest}#g" ./pkg/agent/sveltos-agent.yaml
-	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/agent/sveltos-agent-in-mgmt-cluster.yaml	
+	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/agent/sveltos-agent-in-mgmt-cluster.yaml
 	sed -i'' -e "s#image: docker.io/projectsveltos/sveltos-agent:${TAG}#image: docker.io/projectsveltos/sveltos-agent@${digest}#g" ./pkg/agent/sveltos-agent-in-mgmt-cluster.yaml
 	cd pkg/agent; go generate
 	@echo "Downloading sveltos-agent common yaml for agentless fv"
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_common_manifest.yaml -o ./test/sveltos-agent-mgmt_cluster_common_manifest.yaml
-	
+
