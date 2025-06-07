@@ -1,6 +1,6 @@
 module github.com/projectsveltos/classifier
 
-go 1.24.1
+go 1.24.4
 
 require (
 	github.com/TwiN/go-color v1.4.1
@@ -9,23 +9,23 @@ require (
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.56.0
+	github.com/projectsveltos/libsveltos v0.57.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/spf13/pflag v1.0.6
-	golang.org/x/text v0.25.0
+	golang.org/x/text v0.26.0
 	k8s.io/api v0.33.1
 	k8s.io/apiextensions-apiserver v0.33.1
 	k8s.io/apimachinery v0.33.1
 	k8s.io/client-go v0.33.1
 	k8s.io/component-base v0.33.1
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/utils v0.0.0-20250502105355-0f33e8f1c979
+	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	sigs.k8s.io/cluster-api v1.10.2
 	sigs.k8s.io/controller-runtime v0.21.0
 )
 
 require (
-	cel.dev/expr v0.19.1 // indirect
+	cel.dev/expr v0.23.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
@@ -46,7 +46,7 @@ require (
 	github.com/gobuffalo/flect v1.0.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/btree v1.1.3 // indirect
-	github.com/google/cel-go v0.23.2 // indirect
+	github.com/google/cel-go v0.25.0 // indirect
 	github.com/google/gnostic-models v0.6.9 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20250403155104-27863c87afa6 // indirect
@@ -79,13 +79,13 @@ require (
 	go.opentelemetry.io/proto/otlp v1.4.0 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0 // indirect
-	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/oauth2 v0.28.0 // indirect
-	golang.org/x/sync v0.14.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
-	golang.org/x/term v0.30.0 // indirect
+	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/oauth2 v0.29.0 // indirect
+	golang.org/x/sync v0.15.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
-	golang.org/x/tools v0.31.0 // indirect
+	golang.org/x/tools v0.33.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241223144023-3abc09e42ca8 // indirect
