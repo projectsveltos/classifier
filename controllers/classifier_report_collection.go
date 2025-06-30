@@ -172,14 +172,18 @@ func collectClassifierReports(c client.Client, shardKey, capiOnboardAnnotation, 
 func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 	cluster *corev1.ObjectReference, version string, logger logr.Logger) error {
 
-	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
-	clusterRef := &corev1.ObjectReference{
-		Namespace:  cluster.Namespace,
-		Name:       cluster.Name,
-		APIVersion: cluster.APIVersion,
-		Kind:       cluster.Kind,
+	isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, c, cluster.Namespace, cluster.Name,
+		clusterproxy.GetClusterType(cluster), logger)
+	if err != nil {
+		return err
 	}
-	ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, c, clusterRef, logger)
+
+	if isPullMode {
+		return nil
+	}
+
+	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
+	ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, c, cluster, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Info("cluster is not ready yet")
 		return err
@@ -190,7 +194,7 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 	}
 
 	if !sveltos_upgrade.IsSveltosAgentVersionCompatible(ctx, getManagementClusterClient(), version, cluster.Namespace,
-		cluster.Name, clusterproxy.GetClusterType(clusterRef), getAgentInMgmtCluster(), logger) {
+		cluster.Name, clusterproxy.GetClusterType(cluster), getAgentInMgmtCluster(), logger) {
 
 		msg := "compatibility checks failed"
 		logger.V(logs.LogDebug).Info(msg)
@@ -200,7 +204,7 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 	// Classifier instance location depends on sveltos-agent: management cluster if it's running there,
 	// otherwise managed cluster.
 	clusterClient, err := getClassifierClient(ctx, cluster.Namespace, cluster.Name,
-		clusterproxy.GetClusterType(clusterRef), logger)
+		clusterproxy.GetClusterType(cluster), logger)
 	if err != nil {
 		return err
 	}

@@ -24,6 +24,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
@@ -90,12 +92,15 @@ func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 
 func verifyClassifierReport(classifierName string, isMatch bool) {
 	clusterType := libsveltosv1beta1.ClusterTypeCapi
-	classifierReportName := libsveltosv1beta1.GetClassifierReportName(classifierName, kindWorkloadCluster.Name, &clusterType)
+	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+		clusterType = libsveltosv1beta1.ClusterTypeSveltos
+	}
+	classifierReportName := libsveltosv1beta1.GetClassifierReportName(classifierName, kindWorkloadCluster.GetName(), &clusterType)
 	Byf("Verifing ClassifierReport %s for Classifier %s", classifierReportName, classifierName)
 	Eventually(func() bool {
 		currentClassifierReport := &libsveltosv1beta1.ClassifierReport{}
 		err := k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: classifierReportName},
+			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: classifierReportName},
 			currentClassifierReport)
 		return err == nil && currentClassifierReport.Spec.Match == isMatch
 	}, timeout, pollingInterval).Should(BeTrue())
@@ -104,19 +109,16 @@ func verifyClassifierReport(classifierName string, isMatch bool) {
 func verifyClusterLabels(classifier *libsveltosv1beta1.Classifier) {
 	Byf("Verifying Cluster labels are updated with labels from Classifier %s", classifier.Name)
 	Eventually(func() bool {
-		currentCuster := &clusterv1.Cluster{}
-		err := k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
-			currentCuster)
+		currentCuster, err := getCluster()
 		if err != nil {
 			return false
 		}
-		if currentCuster.Labels == nil {
+		if currentCuster.GetLabels() == nil {
 			return false
 		}
 		for i := range classifier.Spec.ClassifierLabels {
 			cLabel := classifier.Spec.ClassifierLabels[i]
-			v, ok := currentCuster.Labels[cLabel.Key]
+			v, ok := currentCuster.GetLabels()[cLabel.Key]
 			if !ok {
 				return false
 			}
@@ -130,22 +132,98 @@ func verifyClusterLabels(classifier *libsveltosv1beta1.Classifier) {
 
 func removeLabels(classifier *libsveltosv1beta1.Classifier) {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		currentCluster := &clusterv1.Cluster{}
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
-			currentCluster)).To(Succeed())
+		currentCluster, err := getCluster()
+		if err != nil {
+			return err
+		}
 
-		currentLabels := currentCluster.Labels
+		currentLabels := currentCluster.GetLabels()
 		if currentLabels == nil {
 			return nil
 		}
 
 		for i := range classifier.Spec.ClassifierLabels {
 			cLabel := classifier.Spec.ClassifierLabels[i]
-			delete(currentCluster.Labels, cLabel.Key)
+			delete(currentLabels, cLabel.Key)
 		}
+
+		currentCluster.SetLabels(currentLabels)
 
 		return k8sClient.Update(context.TODO(), currentCluster)
 	})
 	Expect(err).To(BeNil())
+}
+
+func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) error {
+	gvks, _, err := scheme.ObjectKinds(obj)
+	if err != nil {
+		return fmt.Errorf("missing apiVersion or kind and cannot assign it; %w", err)
+	}
+
+	for _, gvk := range gvks {
+		if gvk.Kind == "" {
+			continue
+		}
+		if gvk.Version == "" || gvk.Version == runtime.APIVersionInternal {
+			continue
+		}
+		obj.GetObjectKind().SetGroupVersionKind(gvk)
+		break
+	}
+
+	return nil
+}
+
+func getCluster() (*unstructured.Unstructured, error) {
+	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+		return getSveltosCluster()
+	}
+
+	return getCapiCluster()
+}
+
+func getSveltosCluster() (*unstructured.Unstructured, error) {
+	currentCuster := &libsveltosv1beta1.SveltosCluster{}
+	err := k8sClient.Get(context.TODO(),
+		types.NamespacedName{
+			Namespace: kindWorkloadCluster.GetNamespace(),
+			Name:      kindWorkloadCluster.GetName()},
+		currentCuster)
+	if err != nil {
+		return nil, err
+	}
+
+	Expect(addTypeInformationToObject(scheme, currentCuster)).To(Succeed())
+
+	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&currentCuster)
+	if err != nil {
+		return nil, err
+	}
+
+	u := &unstructured.Unstructured{}
+	u.SetUnstructuredContent(unstructuredObj)
+	return u, nil
+}
+
+func getCapiCluster() (*unstructured.Unstructured, error) {
+	currentCuster := &clusterv1.Cluster{}
+	err := k8sClient.Get(context.TODO(),
+		types.NamespacedName{
+			Namespace: kindWorkloadCluster.GetNamespace(),
+			Name:      kindWorkloadCluster.GetName()},
+		currentCuster)
+	if err != nil {
+		return nil, err
+	}
+
+	Expect(addTypeInformationToObject(scheme, currentCuster)).To(Succeed())
+
+	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&currentCuster)
+	if err != nil {
+		return nil, err
+	}
+
+	u := &unstructured.Unstructured{}
+	u.SetUnstructuredContent(unstructuredObj)
+	return u, nil
 }

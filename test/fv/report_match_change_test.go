@@ -21,7 +21,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,7 +34,7 @@ var _ = Describe("Classifier: update cluster labels", func() {
 		namePrefix = "labels-"
 	)
 
-	It("Cluster labels are updated when classifier starts matching", Label("FV"), func() {
+	It("Cluster labels are updated when classifier starts matching", Label("FV", "PULLMODE"), func() {
 		clusterLabels := map[string]string{randomString(): randomString(), randomString(): randomString()}
 		classifier := getClassifier(namePrefix, clusterLabels)
 		// Cluster won't be a match for this Cassifier
@@ -74,19 +73,16 @@ var _ = Describe("Classifier: update cluster labels", func() {
 
 		Byf("Verifying cluster labels are not set by Classifier %s", classifier.Name)
 		Consistently(func() bool {
-			currentCuster := &clusterv1.Cluster{}
-			err = k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
-				currentCuster)
+			currentCuster, err := getCluster()
 			if err != nil {
 				return false
 			}
-			if currentCuster.Labels == nil {
+			if currentCuster.GetLabels() == nil {
 				return true
 			}
 			for i := range classifier.Spec.ClassifierLabels {
 				cLabel := classifier.Spec.ClassifierLabels[i]
-				_, ok := currentCuster.Labels[cLabel.Key]
+				_, ok := currentCuster.GetLabels()[cLabel.Key]
 				if ok {
 					return false
 				}

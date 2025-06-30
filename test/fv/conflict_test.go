@@ -34,7 +34,7 @@ var _ = Describe("Classifier: update cluster labels", func() {
 		namePrefix = "conflict-"
 	)
 
-	It("Deploy Classifier two conflicting instances in CAPI clusters", Label("FV"), func() {
+	It("Deploy Classifier two conflicting instances in CAPI clusters", Label("FV", "PULLMODE"), func() {
 		clusterLabels := map[string]string{randomString(): randomString(), randomString(): randomString()}
 		classifier1 := getClassifier(namePrefix, clusterLabels)
 		classifier2 := getClassifier(namePrefix, clusterLabels)
@@ -110,12 +110,17 @@ var _ = Describe("Classifier: update cluster labels", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		clusterType := libsveltosv1beta1.ClusterTypeCapi
-		classifierReportName := libsveltosv1beta1.GetClassifierReportName(classifier1.Name, kindWorkloadCluster.Name, &clusterType)
+		if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+			clusterType = libsveltosv1beta1.ClusterTypeSveltos
+		}
+		classifierReportName := libsveltosv1beta1.GetClassifierReportName(classifier1.Name, kindWorkloadCluster.GetName(), &clusterType)
 		Byf("Verifying ClassifierReports instance %s is removed from the management cluster", classifierReportName)
 		Eventually(func() bool {
 			classifierReport := &libsveltosv1beta1.ClassifierReport{}
 			err = k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: classifierReportName}, classifierReport)
+				types.NamespacedName{
+					Namespace: kindWorkloadCluster.GetNamespace(),
+					Name:      classifierReportName}, classifierReport)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 

@@ -36,7 +36,7 @@ var _ = Describe("Classifier: deployment", func() {
 		namePrefix = "deploy-"
 	)
 
-	It("Deploy Classifier instance in CAPI clusters", Label("FV"), func() {
+	It("Deploy Classifier instance in clusters", Label("FV", "PULLMODE"), func() {
 		clusterLabels := map[string]string{randomString(): randomString(), randomString(): randomString()}
 		classifier := getClassifier(namePrefix, clusterLabels)
 
@@ -59,8 +59,8 @@ var _ = Describe("Classifier: deployment", func() {
 				listOptions := []client.ListOption{
 					client.MatchingLabels(
 						map[string]string{
-							"cluster-name":      kindWorkloadCluster.Name,
-							"cluster-namespace": kindWorkloadCluster.Namespace,
+							"cluster-name":      kindWorkloadCluster.GetName(),
+							"cluster-namespace": kindWorkloadCluster.GetNamespace(),
 						},
 					),
 				}
