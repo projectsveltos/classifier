@@ -57,6 +57,8 @@ rules:
   resources:
   - accessrequests
   - classifiers
+  - configurationbundles
+  - configurationgroups
   verbs:
   - create
   - delete
@@ -93,18 +95,20 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
-  - debuggingconfigurations
-  - sveltosclusters/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
+  - configurationbundles/status
   - sveltosclusters
   verbs:
   - get
   - list
   - update
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - configurationgroups/status
+  - debuggingconfigurations
+  - sveltosclusters/status
+  verbs:
+  - get
+  - list
   - watch

@@ -96,7 +96,10 @@ var _ = Describe("Classifier Deployer", func() {
 	})
 
 	It("deployClassifierCRD deploys Classifier CRD", func() {
-		Expect(controllers.DeployClassifierCRD(context.TODO(), testEnv.Config, logger)).To(Succeed())
+		cluster := prepareCluster()
+
+		Expect(controllers.DeployClassifierCRD(context.TODO(), cluster.Namespace, cluster.Name, randomString(),
+			libsveltosv1beta1.ClusterTypeCapi, false, logger)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -107,7 +110,10 @@ var _ = Describe("Classifier Deployer", func() {
 	})
 
 	It("deployClassifierReportCRD deploys ClassifierReport CRD", func() {
-		Expect(controllers.DeployClassifierReportCRD(context.TODO(), testEnv.Config, logger)).To(Succeed())
+		cluster := prepareCluster()
+
+		Expect(controllers.DeployClassifierReportCRD(context.TODO(), cluster.Namespace, cluster.Name, randomString(),
+			libsveltosv1beta1.ClusterTypeCapi, false, logger)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -118,7 +124,10 @@ var _ = Describe("Classifier Deployer", func() {
 	})
 
 	It("deployHealthCheckCRD deploys HealthCheck CRD", func() {
-		Expect(controllers.DeployHealthCheckCRD(context.TODO(), testEnv.Config, logger)).To(Succeed())
+		cluster := prepareCluster()
+
+		Expect(controllers.DeployHealthCheckCRD(context.TODO(), cluster.Namespace, cluster.Name, randomString(),
+			libsveltosv1beta1.ClusterTypeCapi, false, logger)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -129,7 +138,10 @@ var _ = Describe("Classifier Deployer", func() {
 	})
 
 	It("deployHealthCheckReportCRD deploys HealthCheckReport CRD", func() {
-		Expect(controllers.DeployHealthCheckReportCRD(context.TODO(), testEnv.Config, logger)).To(Succeed())
+		cluster := prepareCluster()
+
+		Expect(controllers.DeployHealthCheckReportCRD(context.TODO(), cluster.Namespace, cluster.Name, randomString(),
+			libsveltosv1beta1.ClusterTypeCapi, false, logger)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -140,7 +152,10 @@ var _ = Describe("Classifier Deployer", func() {
 	})
 
 	It("deployEventSourceCRD deploys EventSource CRD", func() {
-		Expect(controllers.DeployEventSourceCRD(context.TODO(), testEnv.Config, logger)).To(Succeed())
+		cluster := prepareCluster()
+
+		Expect(controllers.DeployEventSourceCRD(context.TODO(), cluster.Namespace, cluster.Name, randomString(),
+			libsveltosv1beta1.ClusterTypeCapi, false, logger)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -151,7 +166,10 @@ var _ = Describe("Classifier Deployer", func() {
 	})
 
 	It("deployEventReportCRD deploys EventReport CRD", func() {
-		Expect(controllers.DeployEventReportCRD(context.TODO(), testEnv.Config, logger)).To(Succeed())
+		cluster := prepareCluster()
+
+		Expect(controllers.DeployEventReportCRD(context.TODO(), cluster.Namespace, cluster.Name, randomString(),
+			libsveltosv1beta1.ClusterTypeCapi, false, logger)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -165,14 +183,18 @@ var _ = Describe("Classifier Deployer", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 		classifier := getClassifierInstance(randomString())
-		Expect(controllers.DeployClassifierInstance(ctx, c, classifier, logger)).To(Succeed())
+		Expect(controllers.DeployClassifierInstance(ctx, c, randomString(), randomString(),
+			classifier, false, logger)).To(Succeed())
 
 		currentClassifier := &libsveltosv1beta1.Classifier{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
 	})
 
 	It("deployDebuggingConfigurationCRD deploys DebuggingConfiguration CRD", func() {
-		Expect(controllers.DeployDebuggingConfigurationCRD(context.TODO(), testEnv.Config, logger)).To(Succeed())
+		cluster := prepareCluster()
+
+		Expect(controllers.DeployDebuggingConfigurationCRD(context.TODO(), cluster.Namespace, cluster.Name, randomString(),
+			libsveltosv1beta1.ClusterTypeCapi, false, logger)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -183,7 +205,10 @@ var _ = Describe("Classifier Deployer", func() {
 	})
 
 	It("deployReloaderCRD deploys Reloader CRD", func() {
-		Expect(controllers.DeployReloaderCRD(context.TODO(), testEnv.Config, logger)).To(Succeed())
+		cluster := prepareCluster()
+
+		Expect(controllers.DeployReloaderCRD(context.TODO(), cluster.Namespace, cluster.Name, randomString(),
+			libsveltosv1beta1.ClusterTypeCapi, false, logger)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -194,7 +219,10 @@ var _ = Describe("Classifier Deployer", func() {
 	})
 
 	It("deployReloaderReportCRD deploys ReloaderReport CRD", func() {
-		Expect(controllers.DeployReloaderReportCRD(context.TODO(), testEnv.Config, logger)).To(Succeed())
+		cluster := prepareCluster()
+
+		Expect(controllers.DeployReloaderReportCRD(context.TODO(), cluster.Namespace, cluster.Name, randomString(),
+			libsveltosv1beta1.ClusterTypeCapi, false, logger)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -208,7 +236,8 @@ var _ = Describe("Classifier Deployer", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 		classifier := getClassifierInstance(randomString())
-		Expect(controllers.DeployClassifierInstance(ctx, c, classifier, logger)).To(Succeed())
+		Expect(controllers.DeployClassifierInstance(ctx, c, randomString(), randomString(),
+			classifier, false, logger)).To(Succeed())
 
 		currentClassifier := &libsveltosv1beta1.Classifier{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
@@ -225,7 +254,8 @@ var _ = Describe("Classifier Deployer", func() {
 			WithObjects(initObjects...).Build()
 
 		classifier.Spec.ClassifierLabels = []libsveltosv1beta1.ClassifierLabel{{Key: randomString(), Value: randomString()}}
-		Expect(controllers.DeployClassifierInstance(ctx, c, classifier, logger)).To(Succeed())
+		Expect(controllers.DeployClassifierInstance(ctx, c, randomString(), randomString(), classifier,
+			false, logger)).To(Succeed())
 
 		currentClassifier := &libsveltosv1beta1.Classifier{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
@@ -282,9 +312,11 @@ var _ = Describe("Classifier Deployer", func() {
 
 		// Following are needed to make ProcessClassifier think all that is needed is already deployed
 		// Deploy Classifier CRD
-		Expect(controllers.DeployClassifierCRD(context.TODO(), testEnv.Config, logger)).To(Succeed())
+		Expect(controllers.DeployClassifierCRD(context.TODO(), cluster.Namespace, cluster.Name, classifier.Name,
+			libsveltosv1beta1.ClusterTypeCapi, false, logger)).To(Succeed())
 		// Deploy Classifier instance
-		Expect(controllers.DeployClassifierInstance(ctx, testEnv, classifier, logger)).To(Succeed())
+		Expect(controllers.DeployClassifierInstance(ctx, testEnv, cluster.Namespace, cluster.Name, classifier,
+			false, logger)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
 
@@ -467,7 +499,7 @@ var _ = Describe("Classifier Deployer", func() {
 
 	It("deploySveltosAgent deploys sveltos agent", func() {
 		Expect(controllers.DeploySveltosAgentInManagedCluster(ctx, testEnv.Config, randomString(), randomString(),
-			"do-not-send-reports", libsveltosv1beta1.ClusterTypeCapi, nil, logger)).To(Succeed())
+			randomString(), "do-not-send-reports", libsveltosv1beta1.ClusterTypeCapi, nil, false, logger)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -493,7 +525,7 @@ var _ = Describe("Classifier Deployer", func() {
 		initObjects := []client.Object{classifier, ns}
 
 		options := deployer.Options{
-			HandlerOptions: map[string]string{controllers.Controlplaneendpoint: "http://192.168.10.1:443"},
+			HandlerOptions: map[string]any{controllers.Controlplaneendpoint: "http://192.168.10.1:443"},
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
@@ -587,7 +619,7 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(err).To(BeNil())
 
 		Expect(controllers.DeploySveltosAgentInManagementCluster(context.TODO(), testEnv.Config,
-			testEnv.Client, clusterNamespace, clusterName, "", clusterType, nil, logger)).To(Succeed())
+			testEnv.Client, clusterNamespace, clusterName, randomString(), "", clusterType, nil, logger)).To(Succeed())
 
 		expectedLabels := controllers.GetSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
 

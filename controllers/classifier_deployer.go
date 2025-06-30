@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -52,6 +53,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
+	"github.com/projectsveltos/libsveltos/lib/pullmode"
 )
 
 type getCurrentHash func(classifier *libsveltosv1beta1.Classifier) []byte
@@ -62,6 +64,10 @@ type feature struct {
 	deploy      deployer.RequestHandler
 	undeploy    deployer.RequestHandler
 }
+
+const (
+	sveltosAgent = "sveltos-agent"
+)
 
 func getSveltosAgentNamespace() string {
 	return projectsveltos
@@ -247,7 +253,7 @@ func createAccessRequest(ctx context.Context, c client.Client,
 
 	// the format of this is already validated in main.
 	// Format is ^https://[0-9a-zA-Z][0-9a-zA-Z-.]+[0-9a-zA-Z]:\d+$`
-	info := strings.Split(cpEndpoint, ":")
+	info := strings.Split(cpEndpoint.(string), ":")
 	port, _ := strconv.ParseInt(info[2], 10, 32)
 
 	accessRequest := &libsveltosv1beta1.AccessRequest{}
@@ -370,8 +376,8 @@ func updateSecretWithAccessManagementKubeconfig(ctx context.Context, c client.Cl
 }
 
 // deployCRDs deploys all Sveltos CRDs needed by sveltos-agent
-func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
-	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
+func deployCRDs(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
 
 	if getAgentInMgmtCluster() {
 		// CRDs must be deployed alongside the agent. Since the management cluster already contains these CRDs,
@@ -379,63 +385,58 @@ func deployCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterN
 		return nil
 	}
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
-		"", "", clusterType, logger)
-	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
-		return err
-	}
-
 	logger.V(logs.LogDebug).Info("deploy classifier CRD")
-	err = deployClassifierCRD(ctx, remoteRestConfig, logger)
+	err := deployClassifierCRD(ctx, clusterNamespace, clusterName, classifierName, clusterType, isPullMode, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy classifierReport CRD")
-	err = deployClassifierReportCRD(ctx, remoteRestConfig, logger)
+	err = deployClassifierReportCRD(ctx, clusterNamespace, clusterName, classifierName, clusterType, isPullMode, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy healthCheck CRD")
-	err = deployHealthCheckCRD(ctx, remoteRestConfig, logger)
+	err = deployHealthCheckCRD(ctx, clusterNamespace, clusterName, classifierName, clusterType, isPullMode, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy healthCheckReport CRD")
-	err = deployHealthCheckReportCRD(ctx, remoteRestConfig, logger)
+	err = deployHealthCheckReportCRD(ctx, clusterNamespace, clusterName, classifierName, clusterType, isPullMode,
+		logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy eventsource CRD")
-	err = deployEventSourceCRD(ctx, remoteRestConfig, logger)
+	err = deployEventSourceCRD(ctx, clusterNamespace, clusterName, classifierName, clusterType, isPullMode, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy eventReport CRD")
-	err = deployEventReportCRD(ctx, remoteRestConfig, logger)
+	err = deployEventReportCRD(ctx, clusterNamespace, clusterName, classifierName, clusterType, isPullMode, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy debuggingConfiguration CRD")
-	err = deployDebuggingConfigurationCRD(ctx, remoteRestConfig, logger)
+	err = deployDebuggingConfigurationCRD(ctx, clusterNamespace, clusterName, classifierName, clusterType, isPullMode,
+		logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy reloader CRD")
-	err = deployReloaderCRD(ctx, remoteRestConfig, logger)
+	err = deployReloaderCRD(ctx, clusterNamespace, clusterName, classifierName, clusterType, isPullMode, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy reloaderReport CRD")
-	err = deployReloaderReportCRD(ctx, remoteRestConfig, logger)
+	err = deployReloaderReportCRD(ctx, clusterNamespace, clusterName, classifierName, clusterType, isPullMode, logger)
 	if err != nil {
 		return err
 	}
@@ -474,7 +475,7 @@ func deploySveltosAgentWithKubeconfigInCluster(ctx context.Context, c client.Cli
 		return err
 	}
 
-	err = deployCRDs(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	err = deployCRDs(ctx, clusterNamespace, clusterName, applicant, clusterType, false, logger)
 	if err != nil {
 		return err
 	}
@@ -493,8 +494,8 @@ func deploySveltosAgentWithKubeconfigInCluster(ctx context.Context, c client.Cli
 
 	logger.V(logs.LogDebug).Info("Deploying sveltos agent")
 	// Deploy SveltosAgent
-	err = deploySveltosAgentInManagedCluster(ctx, remoteRestConfig, clusterNamespace, clusterName,
-		"send-reports", clusterType, patches, logger)
+	err = deploySveltosAgentInManagedCluster(ctx, remoteRestConfig, clusterNamespace, clusterName, applicant,
+		"send-reports", clusterType, patches, false, logger)
 	if err != nil {
 		return err
 	}
@@ -508,7 +509,7 @@ func deploySveltosAgentWithKubeconfigInCluster(ctx context.Context, c client.Cli
 	}
 
 	// Deploy Classifier instance
-	err = deployClassifierInstance(ctx, remoteClient, classifier, logger)
+	err = deployClassifierInstance(ctx, remoteClient, clusterNamespace, clusterName, classifier, false, logger)
 	if err != nil {
 		return err
 	}
@@ -523,13 +524,28 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 
 	logger.V(logs.LogDebug).Info("deploy CRDs: do not send reports mode")
 
-	err := deployCRDs(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	if err != nil {
+		return err
+	}
+
+	if isPullMode {
+		// If SveltosCluster is in pull mode, discard all previous staged resources. Those will be regenerated now.
+		err = pullmode.DiscardStagedResourcesForDeployment(ctx, c, clusterNamespace,
+			clusterName, libsveltosv1beta1.ClassifierKind, applicant, featureID, logger)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = deployCRDs(ctx, clusterNamespace, clusterName, applicant, clusterType, isPullMode, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy sveltos-agent: do not send reports mode")
-	err = deploySveltosAgent(ctx, c, clusterNamespace, clusterName, clusterType, options, logger)
+	err = deploySveltosAgent(ctx, c, clusterNamespace, clusterName, applicant, clusterType,
+		isPullMode, options, logger)
 	if err != nil {
 		return err
 	}
@@ -549,9 +565,19 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 	}
 
 	// Deploy Classifier instance
-	err = deployClassifierInstance(ctx, remoteClient, classifier, logger)
+	err = deployClassifierInstance(ctx, remoteClient, clusterNamespace, clusterName, classifier, isPullMode, logger)
 	if err != nil {
 		return err
+	}
+
+	if isPullMode {
+		configurationHash, _ := options.HandlerOptions[configurationHash].([]byte)
+		setters := prepareSetters(classifier, configurationHash)
+		err = pullmode.CommitStagedResourcesForDeployment(ctx, c, clusterNamespace, clusterName,
+			libsveltosv1beta1.ClassifierKind, applicant, libsveltosv1beta1.FeatureClassifier, logger, setters...)
+		if err != nil {
+			return err
+		}
 	}
 
 	logger.V(logs.LogDebug).Info("successuflly deployed classifier CRD and instance")
@@ -582,6 +608,18 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 		return nil
 	}
 
+	isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, c, clusterNamespace, clusterName,
+		clusterType, logger)
+	if err != nil {
+		msg := fmt.Sprintf("failed to verify if Cluster is in pull mode: %v", err)
+		logger.V(logs.LogDebug).Info(msg)
+		return err
+	}
+
+	if isPullMode {
+		return undeployClassifierInPullMode(ctx, c, clusterNamespace, clusterName, applicant, logger)
+	}
+
 	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
 		"", "", clusterType, logger)
 	if err != nil {
@@ -604,6 +642,66 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 
 	logger.V(logs.LogDebug).Info("remove classifier instance")
 	return remoteClient.Delete(ctx, currentClassifier)
+}
+
+func undeployClassifierInPullMode(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName, classifierName string, logger logr.Logger) error {
+
+	// Classifier follows a strict state machine for resource removal:
+	//
+	// 1. Create ConfigurationGroup with action=Remove
+	// 2. Monitor ConfigurationGroup status:
+	//    - Missing ConfigurationGroup = resources successfully removed
+	//    - ConfigurationGroup.Status = Removed = resources successfully removed
+	//
+	// The FeatureStatusAgentRemoving state is critical - only after reaching this state
+	// can a missing ConfigurationGroup be interpreted as successful removal. This prevents
+	// race conditions where a missing ConfigurationGroup might be misinterpreted as
+	// successful removal when it was never created or failed to deploy.
+	var retError error
+	agentStatus, err := pullmode.GetRemoveStatus(ctx, c, clusterNamespace, clusterName,
+		libsveltosv1beta1.ClassifierKind, classifierName, libsveltosv1beta1.FeatureClassifier, logger)
+	if err != nil {
+		retError = err
+	} else if agentStatus != nil {
+		if agentStatus.DeploymentStatus != nil && *agentStatus.DeploymentStatus == libsveltosv1beta1.FeatureStatusRemoved {
+			logger.V(logs.LogDebug).Info("agent removed content")
+			err = pullmode.TerminateDeploymentTracking(ctx, c, clusterNamespace, clusterName,
+				libsveltosv1beta1.ClassifierKind, classifierName, libsveltosv1beta1.FeatureClassifier, logger)
+			if err != nil {
+				return err
+			}
+			return nil
+		} else if agentStatus.FailureMessage != nil {
+			retError = errors.New(*agentStatus.FailureMessage)
+		} else {
+			return errors.New("agent is removing classifier instance")
+		}
+	}
+
+	classifier := &libsveltosv1beta1.Classifier{}
+	err = c.Get(ctx, types.NamespacedName{Name: classifierName}, classifier)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("queueing request to un-deploy")
+	setters := prepareSetters(classifier, nil)
+	err = pullmode.RemoveDeployedResources(ctx, c, clusterNamespace, clusterName, libsveltosv1beta1.ClassifierKind, classifierName,
+		libsveltosv1beta1.FeatureClassifier, logger, setters...)
+	if err != nil {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("removeDeployedResources failed: %v", err))
+		return err
+	}
+
+	if retError != nil {
+		return retError
+	}
+
+	return fmt.Errorf("agent cleanup request is queued")
 }
 
 func (r *ClassifierReconciler) convertResultStatus(result deployer.Result) *libsveltosv1beta1.SveltosFeatureStatus {
@@ -810,32 +908,51 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 	}
 
 	// If undeploying feature is in progress, wait for it to complete.
-	// Otherwise, if we redeploy feature while same feature is still being cleaned up, if two workers process those request in
-	// parallel some resources might end up missing.
-	if r.Deployer.IsInProgress(cluster.Namespace, cluster.Name, classifier.Name, f.id, clusterproxy.GetClusterType(cluster), true) {
+	// Otherwise, if we redeploy feature while same feature is still being cleaned up, if two workers process
+	// those request in parallel some resources might end up missing.
+	if r.Deployer.IsInProgress(cluster.Namespace, cluster.Name, classifier.Name, f.id,
+		clusterproxy.GetClusterType(cluster), true) {
+
 		logger.V(logs.LogDebug).Info("cleanup is in progress")
 		return nil, fmt.Errorf("cleanup of %s in cluster still in progress. Wait before redeploying", f.id)
 	}
 
 	// Get the Classifier hash when Classifier was last deployed in this cluster (if ever)
-	hash, currentStatus := r.getClassifierInClusterHashAndStatus(classifier, cluster)
+	hash, _ := r.getClassifierInClusterHashAndStatus(classifier, cluster)
 	isConfigSame := reflect.DeepEqual(hash, currentHash)
 	if !isConfigSame {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("Classifier has changed. Current hash %x. Previous hash %x",
 			currentHash, hash))
 	}
 
-	var status *libsveltosv1beta1.SveltosFeatureStatus
+	isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, r.Client, cluster.Namespace,
+		cluster.Name, clusterproxy.GetClusterType(cluster), logger)
+	if err != nil {
+		msg := fmt.Sprintf("failed to verify if Cluster is in pull mode: %v", err)
+		logger.V(logs.LogDebug).Info(msg)
+		return nil, err
+	}
+
+	return r.proceedProcessingClassifier(ctx, classifier, cluster, isPullMode, isConfigSame, currentHash, f, logger)
+}
+
+func (r *ClassifierReconciler) proceedProcessingClassifier(ctx context.Context, classifier *libsveltosv1beta1.Classifier,
+	cluster *corev1.ObjectReference, isPullMode, isConfigSame bool, currentHash []byte, f feature, logger logr.Logger,
+) (*libsveltosv1beta1.ClusterInfo, error) {
+
+	_, currentStatus := r.getClassifierInClusterHashAndStatus(classifier, cluster)
+
+	var deployerStatus *libsveltosv1beta1.SveltosFeatureStatus
 	var result deployer.Result
 
 	if isConfigSame {
 		logger.V(logs.LogInfo).Info("classifier and kubeconfig have not changed")
 		result = r.Deployer.GetResult(ctx, cluster.Namespace, cluster.Name, classifier.Name, f.id,
 			clusterproxy.GetClusterType(cluster), false)
-		status = r.convertResultStatus(result)
+		deployerStatus = r.convertResultStatus(result)
 	}
 
-	if status != nil {
+	if deployerStatus != nil {
 		logger.V(logs.LogDebug).Info("result is available. updating status.")
 		var errorMessage string
 		if result.Err != nil {
@@ -843,27 +960,33 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 		}
 		clusterInfo := &libsveltosv1beta1.ClusterInfo{
 			Cluster:        *cluster,
-			Status:         *status,
+			Status:         *deployerStatus,
 			Hash:           currentHash,
 			FailureMessage: &errorMessage,
 		}
 
-		if *status == libsveltosv1beta1.SveltosStatusProvisioned {
+		if *deployerStatus == libsveltosv1beta1.SveltosStatusProvisioned {
+			if isPullMode {
+				// provisioned here means configuration for sveltos-applier has been successufully prepared.
+				// In pull mode, verify now agent has deployed the configuration.
+				return r.proceedDeployingClassifierInPullMode(ctx, classifier, cluster, f, isConfigSame,
+					currentHash, logger)
+			}
 			return clusterInfo, nil
 		}
-		if *status == libsveltosv1beta1.SveltosStatusProvisioning {
+		if *deployerStatus == libsveltosv1beta1.SveltosStatusProvisioning {
 			return clusterInfo, fmt.Errorf("classifier is still being provisioned")
 		}
 	} else if isConfigSame && currentStatus != nil && *currentStatus == libsveltosv1beta1.SveltosStatusProvisioned {
 		logger.V(logs.LogInfo).Info("already deployed")
 		s := libsveltosv1beta1.SveltosStatusProvisioned
-		status = &s
+		deployerStatus = &s
 	} else {
 		logger.V(logs.LogInfo).Info("no result is available. queue job and mark status as provisioning")
 		s := libsveltosv1beta1.SveltosStatusProvisioning
-		status = &s
+		deployerStatus = &s
 
-		options := deployer.Options{HandlerOptions: map[string]string{}}
+		options := deployer.Options{HandlerOptions: make(map[string]any)}
 		if r.AgentInMgmtCluster {
 			options.HandlerOptions[sveltosAgentInMgtmCluster] = "management"
 		}
@@ -876,32 +999,152 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 		// Getting here means either Classifier failed to be deployed or Classifier has changed.
 		// Classifier must be (re)deployed.
 		if err := r.Deployer.Deploy(ctx, cluster.Namespace, cluster.Name,
-			classifier.Name, f.id, clusterproxy.GetClusterType(cluster), false, handler, programDuration, options); err != nil {
+			classifier.Name, f.id, clusterproxy.GetClusterType(cluster), false, handler,
+			programDuration, options); err != nil {
 			return nil, err
 		}
 	}
 
 	clusterInfo := &libsveltosv1beta1.ClusterInfo{
 		Cluster:        *cluster,
-		Status:         *status,
+		Status:         *deployerStatus,
 		Hash:           currentHash,
 		FailureMessage: nil,
+	}
+
+	if clusterInfo.Hash == nil {
+		panic(1)
 	}
 
 	return clusterInfo, nil
 }
 
-// deployClassifierCRD deploys Classifier CRD in remote cluster
-func deployClassifierCRD(ctx context.Context, remoteRestConfig *rest.Config,
-	logger logr.Logger) error {
+func (r *ClassifierReconciler) proceedDeployingClassifierInPullMode(ctx context.Context,
+	classifier *libsveltosv1beta1.Classifier, cluster *corev1.ObjectReference, f feature,
+	isConfigSame bool, currentHash []byte, logger logr.Logger) (*libsveltosv1beta1.ClusterInfo, error) {
 
-	classifierCRD, err := k8s_utils.GetUnstructured(crd.GetClassifierCRDYAML())
+	var pullmodeStatus *libsveltosv1beta1.FeatureStatus
+
+	if isConfigSame {
+		pullmodeHash, err := pullmode.GetRequestorHash(ctx, getManagementClusterClient(),
+			cluster.Namespace, cluster.Name, libsveltosv1beta1.ClassifierKind, classifier.Name, f.id, logger)
+		if err != nil {
+			if !apierrors.IsNotFound(err) {
+				msg := fmt.Sprintf("failed to get pull mode hash: %v", err)
+				logger.V(logs.LogDebug).Info(msg)
+				return nil, err
+			}
+		} else {
+			isConfigSame = reflect.DeepEqual(pullmodeHash, currentHash)
+		}
+	}
+
+	if isConfigSame {
+		// only if configuration hash matches, check if feature is deployed
+		logger.V(logs.LogDebug).Info("hash has not changed")
+		var err error
+		pullmodeStatus, err = r.proceesAgentDeploymentStatus(ctx, classifier, cluster, f, logger)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	clusterInfo := &libsveltosv1beta1.ClusterInfo{
+		Cluster:        *cluster,
+		Hash:           currentHash,
+		FailureMessage: nil,
+	}
+
+	if pullmodeStatus != nil {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("agent result is available. updating status: %v", *pullmodeStatus))
+
+		if *pullmodeStatus == libsveltosv1beta1.FeatureStatusProvisioned {
+			if err := pullmode.TerminateDeploymentTracking(ctx, r.Client, cluster.Namespace,
+				cluster.Name, libsveltosv1beta1.ClassifierKind, classifier.Name, f.id, logger); err != nil {
+				logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to terminate tracking: %v", err))
+				return nil, err
+			}
+			provisioned := libsveltosv1beta1.SveltosStatusProvisioned
+			clusterInfo.Status = provisioned
+			return clusterInfo, nil
+		} else if *pullmodeStatus == libsveltosv1beta1.FeatureStatusProvisioning {
+			msg := "agent is provisioning the content"
+			logger.V(logs.LogDebug).Info(msg)
+			provisioning := libsveltosv1beta1.SveltosStatusProvisioning
+			clusterInfo.Status = provisioning
+			return clusterInfo, nil
+		} else if *pullmodeStatus == libsveltosv1beta1.FeatureStatusFailed {
+			logger.V(logs.LogDebug).Info("agent failed provisioning the content")
+			failed := libsveltosv1beta1.SveltosStatusFailed
+			clusterInfo.Status = failed
+		}
+	} else {
+		provisioning := libsveltosv1beta1.SveltosStatusProvisioning
+		clusterInfo.Status = provisioning
+	}
+
+	// Getting here means either agent failed to deploy feature or configuration has changed.
+	// Either way, feature must be (re)deployed. Queue so new configuration for agent is prepared.
+	options := deployer.Options{HandlerOptions: make(map[string]any)}
+	options.HandlerOptions[configurationHash] = currentHash
+
+	logger.V(logs.LogDebug).Info("queueing request to deploy")
+	if err := r.Deployer.Deploy(ctx, cluster.Namespace, cluster.Name,
+		classifier.Name, f.id, clusterproxy.GetClusterType(cluster), false,
+		deployClassifierInCluster, programDuration, options); err != nil {
+		return nil, err
+	}
+
+	return clusterInfo, fmt.Errorf("request to deploy queued")
+}
+
+// If SveltosCluster is in pull mode, verify whether agent has pulled and successuffly deployed it.
+func (r *ClassifierReconciler) proceesAgentDeploymentStatus(ctx context.Context,
+	classifier *libsveltosv1beta1.Classifier, cluster *corev1.ObjectReference, f feature, logger logr.Logger,
+) (*libsveltosv1beta1.FeatureStatus, error) {
+
+	logger.V(logs.LogDebug).Info("Verify if agent has deployed content and process it")
+
+	status, err := pullmode.GetDeploymentStatus(ctx, r.Client, cluster.Namespace, cluster.Name,
+		libsveltosv1beta1.ClassifierKind, classifier.Name, f.id, logger)
+
 	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get Classifier CRD unstructured: %v", err))
+		if pullmode.IsProcessingMismatch(err) {
+			provisioning := libsveltosv1beta1.FeatureStatusProvisioning
+			return &provisioning, nil
+		}
+	}
+
+	return status.DeploymentStatus, err
+}
+
+func deployCRDInPullMode(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	crd *unstructured.Unstructured, logger logr.Logger) error {
+
+	resources := map[string][]unstructured.Unstructured{}
+	resources[crd.GetName()] = []unstructured.Unstructured{*crd}
+
+	err := pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
+		libsveltosv1beta1.ClassifierKind, classifierName, libsveltosv1beta1.FeatureClassifier, resources, true, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(
+			fmt.Sprintf("failed to stage DebuggingConfiguration CRD: %v", err))
+		return err
+	}
+	return nil
+}
+
+func applyCRD(ctx context.Context, clusterNamespace, clusterName string, crd *unstructured.Unstructured,
+	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
+
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, getManagementClusterClient(),
+		clusterNamespace, clusterName, "", "", clusterType, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
 	}
 
-	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, classifierCRD.GroupVersionKind(), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, crd.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -911,7 +1154,7 @@ func deployClassifierCRD(ctx context.Context, remoteRestConfig *rest.Config,
 		FieldManager: "application/apply-patch",
 		Force:        true,
 	}
-	_, err = dr.Apply(ctx, classifierCRD.GetName(), classifierCRD, options)
+	_, err = dr.Apply(ctx, crd.GetName(), crd, options)
 	if err != nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply Classifier CRD: %v", err))
 		return err
@@ -920,9 +1163,26 @@ func deployClassifierCRD(ctx context.Context, remoteRestConfig *rest.Config,
 	return nil
 }
 
+// deployClassifierCRD deploys Classifier CRD in remote cluster
+func deployClassifierCRD(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
+
+	classifierCRD, err := k8s_utils.GetUnstructured(crd.GetClassifierCRDYAML())
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get Classifier CRD unstructured: %v", err))
+		return err
+	}
+
+	if isPullMode {
+		return deployCRDInPullMode(ctx, clusterNamespace, clusterName, classifierName, classifierCRD, logger)
+	}
+
+	return applyCRD(ctx, clusterNamespace, clusterName, classifierCRD, clusterType, logger)
+}
+
 // deployClassifierReportCRD deploys ClassifierReport CRD in remote cluster
-func deployClassifierReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
-	logger logr.Logger) error {
+func deployClassifierReportCRD(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
 
 	classifierReportCRD, err := k8s_utils.GetUnstructured(crd.GetClassifierReportCRDYAML())
 	if err != nil {
@@ -931,28 +1191,16 @@ func deployClassifierReportCRD(ctx context.Context, remoteRestConfig *rest.Confi
 		return err
 	}
 
-	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, classifierReportCRD.GroupVersionKind(), "")
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
-		return err
+	if isPullMode {
+		return deployCRDInPullMode(ctx, clusterNamespace, clusterName, classifierName, classifierReportCRD, logger)
 	}
 
-	options := metav1.ApplyOptions{
-		FieldManager: "application/apply-patch",
-		Force:        true,
-	}
-	_, err = dr.Apply(ctx, classifierReportCRD.GetName(), classifierReportCRD, options)
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply ClassifierReport CRD: %v", err))
-		return err
-	}
-
-	return nil
+	return applyCRD(ctx, clusterNamespace, clusterName, classifierReportCRD, clusterType, logger)
 }
 
 // deployHealthCheckCRD deploys HealthCheck CRD in remote cluster
-func deployHealthCheckCRD(ctx context.Context, remoteRestConfig *rest.Config,
-	logger logr.Logger) error {
+func deployHealthCheckCRD(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
 
 	healthCheckCRD, err := k8s_utils.GetUnstructured(crd.GetHealthCheckCRDYAML())
 	if err != nil {
@@ -960,28 +1208,16 @@ func deployHealthCheckCRD(ctx context.Context, remoteRestConfig *rest.Config,
 		return err
 	}
 
-	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, healthCheckCRD.GroupVersionKind(), "")
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
-		return err
+	if isPullMode {
+		return deployCRDInPullMode(ctx, clusterNamespace, clusterName, classifierName, healthCheckCRD, logger)
 	}
 
-	options := metav1.ApplyOptions{
-		FieldManager: "application/apply-patch",
-		Force:        true,
-	}
-	_, err = dr.Apply(ctx, healthCheckCRD.GetName(), healthCheckCRD, options)
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply healthCheck CRD: %v", err))
-		return err
-	}
-
-	return nil
+	return applyCRD(ctx, clusterNamespace, clusterName, healthCheckCRD, clusterType, logger)
 }
 
 // deployHealthCheckeportCRD deploys HealthCheckReport CRD in remote cluster
-func deployHealthCheckReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
-	logger logr.Logger) error {
+func deployHealthCheckReportCRD(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
 
 	healthCheckReportCRD, err := k8s_utils.GetUnstructured(crd.GetHealthCheckReportCRDYAML())
 	if err != nil {
@@ -990,28 +1226,16 @@ func deployHealthCheckReportCRD(ctx context.Context, remoteRestConfig *rest.Conf
 		return err
 	}
 
-	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, healthCheckReportCRD.GroupVersionKind(), "")
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
-		return err
+	if isPullMode {
+		return deployCRDInPullMode(ctx, clusterNamespace, clusterName, classifierName, healthCheckReportCRD, logger)
 	}
 
-	options := metav1.ApplyOptions{
-		FieldManager: "application/apply-patch",
-		Force:        true,
-	}
-	_, err = dr.Apply(ctx, healthCheckReportCRD.GetName(), healthCheckReportCRD, options)
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply ClassifierReport CRD: %v", err))
-		return err
-	}
-
-	return nil
+	return applyCRD(ctx, clusterNamespace, clusterName, healthCheckReportCRD, clusterType, logger)
 }
 
 // deployEventSourceCRD deploys EventSource CRD in remote cluster
-func deployEventSourceCRD(ctx context.Context, remoteRestConfig *rest.Config,
-	logger logr.Logger) error {
+func deployEventSourceCRD(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
 
 	eventSourceCRD, err := k8s_utils.GetUnstructured(crd.GetEventSourceCRDYAML())
 	if err != nil {
@@ -1019,28 +1243,16 @@ func deployEventSourceCRD(ctx context.Context, remoteRestConfig *rest.Config,
 		return err
 	}
 
-	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, eventSourceCRD.GroupVersionKind(), "")
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
-		return err
+	if isPullMode {
+		return deployCRDInPullMode(ctx, clusterNamespace, clusterName, classifierName, eventSourceCRD, logger)
 	}
 
-	options := metav1.ApplyOptions{
-		FieldManager: "application/apply-patch",
-		Force:        true,
-	}
-	_, err = dr.Apply(ctx, eventSourceCRD.GetName(), eventSourceCRD, options)
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply eventSourceCRD CRD: %v", err))
-		return err
-	}
-
-	return nil
+	return applyCRD(ctx, clusterNamespace, clusterName, eventSourceCRD, clusterType, logger)
 }
 
 // deployEventReportCRD deploys EventReport CRD in remote cluster
-func deployEventReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
-	logger logr.Logger) error {
+func deployEventReportCRD(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
 
 	eventReportCRD, err := k8s_utils.GetUnstructured(crd.GetEventReportCRDYAML())
 	if err != nil {
@@ -1049,58 +1261,71 @@ func deployEventReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
 		return err
 	}
 
-	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, eventReportCRD.GroupVersionKind(), "")
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
-		return err
+	if isPullMode {
+		return deployCRDInPullMode(ctx, clusterNamespace, clusterName, classifierName, eventReportCRD, logger)
 	}
 
-	options := metav1.ApplyOptions{
-		FieldManager: "application/apply-patch",
-		Force:        true,
-	}
-	_, err = dr.Apply(ctx, eventReportCRD.GetName(), eventReportCRD, options)
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply EventReport CRD: %v", err))
-		return err
+	return applyCRD(ctx, clusterNamespace, clusterName, eventReportCRD, clusterType, logger)
+}
+
+func getClassifierToDeploy(classifier *libsveltosv1beta1.Classifier) *libsveltosv1beta1.Classifier {
+	toDeploy := &libsveltosv1beta1.Classifier{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: classifier.Name,
+			Annotations: map[string]string{
+				libsveltosv1beta1.DeployedBySveltosAnnotation: "true",
+			},
+		},
+		Spec: classifier.Spec,
 	}
 
-	return nil
+	addTypeInformationToObject(getManagementClusterScheme(), toDeploy)
+	return toDeploy
 }
 
 func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
-	classifier *libsveltosv1beta1.Classifier, logger logr.Logger) error {
+	clusterNamespace, clusterName string, classifier *libsveltosv1beta1.Classifier, isPullMode bool,
+	logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy classifier instance")
-	currentClassifier := &libsveltosv1beta1.Classifier{}
-	err := remoteClient.Get(ctx, types.NamespacedName{Name: classifier.Name}, currentClassifier)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.V(logsettings.LogDebug).Info("classifier instance not present. creating it.")
-			toDeployClassifier := &libsveltosv1beta1.Classifier{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: classifier.Name,
-					Annotations: map[string]string{
-						libsveltosv1beta1.DeployedBySveltosAnnotation: "true",
-					},
-				},
-				Spec: classifier.Spec,
+
+	if !isPullMode {
+		currentClassifier := &libsveltosv1beta1.Classifier{}
+		err := remoteClient.Get(ctx, types.NamespacedName{Name: classifier.Name}, currentClassifier)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				logger.V(logsettings.LogDebug).Info("classifier instance not present. creating it.")
+				toDeployClassifier := getClassifierToDeploy(classifier)
+				return remoteClient.Create(ctx, toDeployClassifier)
 			}
-			return remoteClient.Create(ctx, toDeployClassifier)
+			return err
 		}
-		return err
+
+		currentClassifier.Spec = classifier.Spec
+		currentClassifier.Annotations = map[string]string{
+			libsveltosv1beta1.DeployedBySveltosAnnotation: "true",
+		}
+		return remoteClient.Update(ctx, currentClassifier)
 	}
 
-	currentClassifier.Spec = classifier.Spec
-	currentClassifier.Annotations = map[string]string{
-		libsveltosv1beta1.DeployedBySveltosAnnotation: "true",
+	toDeployClassifier := getClassifierToDeploy(classifier)
+	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&toDeployClassifier)
+	if err != nil {
+		logger.V(logsettings.LogDebug).Info(fmt.Sprintf("failed to convert classifier instance to unstructured: %v", err))
 	}
-	return remoteClient.Update(ctx, currentClassifier)
+
+	u := &unstructured.Unstructured{}
+	u.SetUnstructuredContent(unstructuredObj)
+
+	resources := map[string][]unstructured.Unstructured{}
+	resources["classifier-instance"] = []unstructured.Unstructured{*u}
+	return pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
+		libsveltosv1beta1.ClassifierKind, classifier.Name, libsveltosv1beta1.FeatureClassifier, resources, false, logger)
 }
 
 // deployDebuggingConfigurationCRD deploys DebuggingConfiguration CRD in remote cluster
-func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest.Config,
-	logger logr.Logger) error {
+func deployDebuggingConfigurationCRD(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
 
 	dcCRD, err := k8s_utils.GetUnstructured(crd.GetDebuggingConfigurationCRDYAML())
 	if err != nil {
@@ -1109,26 +1334,16 @@ func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest
 		return err
 	}
 
-	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, dcCRD.GroupVersionKind(), "")
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
-		return err
+	if isPullMode {
+		return deployCRDInPullMode(ctx, clusterNamespace, clusterName, classifierName, dcCRD, logger)
 	}
 
-	options := metav1.ApplyOptions{
-		FieldManager: "application/apply-patch",
-		Force:        true,
-	}
-	_, err = dr.Apply(ctx, dcCRD.GetName(), dcCRD, options)
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply DebuggingConfiguration CRD: %v", err))
-		return err
-	}
-
-	return nil
+	return applyCRD(ctx, clusterNamespace, clusterName, dcCRD, clusterType, logger)
 }
 
-func deployReloaderCRD(ctx context.Context, remoteRestConfig *rest.Config, logger logr.Logger) error {
+func deployReloaderCRD(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
+
 	// Deploy Reloader CRD
 	reloaderCRD, err := k8s_utils.GetUnstructured(crd.GetReloaderCRDYAML())
 	if err != nil {
@@ -1136,27 +1351,16 @@ func deployReloaderCRD(ctx context.Context, remoteRestConfig *rest.Config, logge
 		return err
 	}
 
-	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, reloaderCRD.GroupVersionKind(), "")
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(
-			fmt.Sprintf("failed to get dynamic client: %v", err))
-		return err
+	if isPullMode {
+		return deployCRDInPullMode(ctx, clusterNamespace, clusterName, classifierName, reloaderCRD, logger)
 	}
 
-	options := metav1.ApplyOptions{
-		FieldManager: "application/apply-patch",
-		Force:        true,
-	}
-	_, err = dr.Apply(ctx, reloaderCRD.GetName(), reloaderCRD, options)
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply Reloader CRD: %v", err))
-		return err
-	}
-
-	return nil
+	return applyCRD(ctx, clusterNamespace, clusterName, reloaderCRD, clusterType, logger)
 }
 
-func deployReloaderReportCRD(ctx context.Context, remoteRestConfig *rest.Config, logger logr.Logger) error {
+func deployReloaderReportCRD(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
+
 	// Deploy Reloader CRD
 	reloaderReportCRD, err := k8s_utils.GetUnstructured(crd.GetReloaderReportCRDYAML())
 	if err != nil {
@@ -1165,23 +1369,11 @@ func deployReloaderReportCRD(ctx context.Context, remoteRestConfig *rest.Config,
 		return err
 	}
 
-	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, reloaderReportCRD.GroupVersionKind(), "")
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
-		return err
+	if isPullMode {
+		return deployCRDInPullMode(ctx, clusterNamespace, clusterName, classifierName, reloaderReportCRD, logger)
 	}
 
-	options := metav1.ApplyOptions{
-		FieldManager: "application/apply-patch",
-		Force:        true,
-	}
-	_, err = dr.Apply(ctx, reloaderReportCRD.GetName(), reloaderReportCRD, options)
-	if err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply ReloaderReport CRD: %v", err))
-		return err
-	}
-
-	return nil
+	return applyCRD(ctx, clusterNamespace, clusterName, reloaderReportCRD, clusterType, logger)
 }
 
 func prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode string,
@@ -1234,8 +1426,8 @@ func createSveltosAgentNamespaceInManagedCluster(ctx context.Context, c client.C
 // deploySveltosAgent deploys sveltos-agent.
 // Sveltos-agent can be deployed in either the managed or the management cluster depending
 // on options
-func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
-	clusterType libsveltosv1beta1.ClusterType, options deployer.Options, logger logr.Logger) error {
+func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, options deployer.Options, logger logr.Logger) error {
 
 	startInMgmtCluster := startSveltosAgentInMgmtCluster(options)
 
@@ -1248,9 +1440,9 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 	if startInMgmtCluster {
 		// Use management cluster restConfig
 		restConfig := getManagementClusterConfig()
-		return deploySveltosAgentInManagementCluster(ctx, restConfig, c, clusterNamespace,
-			clusterName, "do-not-send-reports", clusterType, patches, logger)
-	} else {
+		return deploySveltosAgentInManagementCluster(ctx, restConfig, c, clusterNamespace, clusterName,
+			classifierName, "do-not-send-reports", clusterType, patches, logger)
+	} else if !isPullMode {
 		// Use managed cluster restConfig
 		remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 			"", "", clusterType, logger)
@@ -1264,7 +1456,13 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 			return err
 		}
 		err = deploySveltosAgentInManagedCluster(ctx, remoteRestConfig, clusterNamespace,
-			clusterName, "do-not-send-reports", clusterType, patches, logger)
+			clusterName, classifierName, "do-not-send-reports", clusterType, patches, false, logger)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = deploySveltosAgentInManagedCluster(ctx, nil, clusterNamespace,
+			clusterName, classifierName, "do-not-send-reports", clusterType, patches, true, logger)
 		if err != nil {
 			return err
 		}
@@ -1278,19 +1476,20 @@ func replaceRegistry(agentYAML, registry string) string {
 }
 
 func deploySveltosAgentInManagedCluster(ctx context.Context, remoteRestConfig *rest.Config,
-	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType,
-	patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
+	clusterNamespace, clusterName, classifierName, mode string, clusterType libsveltosv1beta1.ClusterType,
+	patches []libsveltosv1beta1.Patch, isPullMode bool, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy sveltos-agent in the managed cluster")
 
 	agentYAML := string(agent.GetSveltosAgentYAML())
 	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode, clusterType)
 
-	return deploySveltosAgentResources(ctx, remoteRestConfig, agentYAML, nil, patches, logger)
+	return deploySveltosAgentResources(ctx, clusterNamespace, clusterName, classifierName,
+		remoteRestConfig, agentYAML, nil, patches, isPullMode, logger)
 }
 
 func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest.Config, c client.Client,
-	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType,
+	clusterNamespace, clusterName, classifierName, mode string, clusterType libsveltosv1beta1.ClusterType,
 	patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy sveltos-agent in the management cluster")
@@ -1309,15 +1508,22 @@ func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest
 	}
 
 	agentYAML = strings.ReplaceAll(agentYAML, "$NAME", name)
-	return deploySveltosAgentResources(ctx, restConfig, agentYAML, lbls, patches, logger)
+	return deploySveltosAgentResources(ctx, clusterNamespace, clusterName, classifierName,
+		restConfig, agentYAML, lbls, patches, false, logger)
 }
 
-func deploySveltosAgentResources(ctx context.Context, restConfig *rest.Config,
-	agentYAML string, lbls map[string]string, patches []libsveltosv1beta1.Patch,
-	logger logr.Logger) error {
+func deploySveltosAgentResources(ctx context.Context, clusterNamespace, clusterName, cliassifierName string,
+	restConfig *rest.Config, agentYAML string, lbls map[string]string, patches []libsveltosv1beta1.Patch,
+	isPullMode bool, logger logr.Logger) error {
 
-	const separator = "---"
-	elements := strings.Split(agentYAML, separator)
+	resources := make(map[string][]unstructured.Unstructured)
+	index := sveltosAgent
+	resources[index] = []unstructured.Unstructured{}
+
+	elements, err := deployer.CustomSplit(agentYAML)
+	if err != nil {
+		return err
+	}
 	for i := range elements {
 		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
@@ -1360,7 +1566,20 @@ func deploySveltosAgentResources(ctx context.Context, restConfig *rest.Config,
 			referencedUnstructured = append(referencedUnstructured, policy)
 		}
 
-		err = deploySveltosAgentPatchedResources(ctx, restConfig, referencedUnstructured, logger)
+		if isPullMode {
+			resources[index] = append(resources[index], convertPointerSliceToValueSlice(referencedUnstructured)...)
+		} else {
+			err = deploySveltosAgentPatchedResources(ctx, restConfig, referencedUnstructured, logger)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// This means SveltosCluster is in pull mode
+	if isPullMode {
+		err = pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
+			libsveltosv1beta1.ClassifierKind, cliassifierName, libsveltosv1beta1.FeatureClassifier, resources, true, logger)
 		if err != nil {
 			return err
 		}
@@ -1405,7 +1624,7 @@ func getSveltosAgentLabels(clusterNamespace, clusterName string,
 	lbls["cluster-namespace"] = clusterNamespace
 	lbls["cluster-name"] = clusterName
 	lbls["cluster-type"] = strings.ToLower(string(clusterType))
-	lbls["feature"] = "sveltos-agent"
+	lbls["feature"] = sveltosAgent
 	return lbls
 }
 
@@ -1588,4 +1807,19 @@ func addTemplateSpecLabels(u *unstructured.Unstructured, lbls map[string]string)
 	var uDeployment unstructured.Unstructured
 	uDeployment.SetUnstructuredContent(content)
 	return &uDeployment, nil
+}
+
+func prepareSetters(classifier *libsveltosv1beta1.Classifier, configurationHash []byte) []pullmode.Option {
+	setters := make([]pullmode.Option, 0)
+	setters = append(setters, pullmode.WithRequestorHash(configurationHash))
+	sourceRef := corev1.ObjectReference{
+		APIVersion: classifier.APIVersion,
+		Kind:       classifier.Kind,
+		Name:       classifier.Name,
+		UID:        classifier.UID,
+	}
+
+	setters = append(setters, pullmode.WithSourceRef(&sourceRef))
+
+	return setters
 }

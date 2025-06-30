@@ -34,7 +34,7 @@ var _ = Describe("Classifier: update cluster labels", func() {
 		namePrefix = "labels-"
 	)
 
-	It("Cluster labels are updated", Label("FV"), func() {
+	It("Cluster labels are updated", Label("FV", "PULLMODE"), func() {
 		verifyFlow(namePrefix)
 	})
 })
