@@ -653,11 +653,6 @@ func undeployClassifierInPullMode(ctx context.Context, c client.Client,
 	// 2. Monitor ConfigurationGroup status:
 	//    - Missing ConfigurationGroup = resources successfully removed
 	//    - ConfigurationGroup.Status = Removed = resources successfully removed
-	//
-	// The FeatureStatusAgentRemoving state is critical - only after reaching this state
-	// can a missing ConfigurationGroup be interpreted as successful removal. This prevents
-	// race conditions where a missing ConfigurationGroup might be misinterpreted as
-	// successful removal when it was never created or failed to deploy.
 	var retError error
 	agentStatus, err := pullmode.GetRemoveStatus(ctx, c, clusterNamespace, clusterName,
 		libsveltosv1beta1.ClassifierKind, classifierName, libsveltosv1beta1.FeatureClassifier, logger)
@@ -987,6 +982,7 @@ func (r *ClassifierReconciler) proceedProcessingClassifier(ctx context.Context, 
 		deployerStatus = &s
 
 		options := deployer.Options{HandlerOptions: make(map[string]any)}
+		options.HandlerOptions[configurationHash] = currentHash
 		if r.AgentInMgmtCluster {
 			options.HandlerOptions[sveltosAgentInMgtmCluster] = "management"
 		}
