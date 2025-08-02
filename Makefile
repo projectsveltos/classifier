@@ -424,14 +424,18 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	$(KUBECTL) wait --for=condition=Available deployment/classifier-manager -n projectsveltos --timeout=$(TIMEOUT)
 
 
-define get-digest
+define get-digest-sveltos-agent
 $(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/sveltos-agent:${TAG}" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)
+endef
+
+define get-digest-sveltos-applier
+$(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/sveltos-applier:${TAG}" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)
 endef
 
 sveltos-agent:
 	@echo "Downloading sveltos agent yaml"
-	$(eval digest :=$(call get-digest))
-	@echo "image digest is $(digest)"
+	$(eval digest :=$(call get-digest-sveltos-agent))
+	@echo "image digest is $(get-digest-sveltos-agent)"
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/manifest.yaml -o ./pkg/agent/sveltos-agent.yaml
 	sed -i'' -e "s#image: docker.io/projectsveltos/sveltos-agent:${TAG}#image: docker.io/projectsveltos/sveltos-agent@${digest}#g" ./pkg/agent/sveltos-agent.yaml
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/agent/sveltos-agent-in-mgmt-cluster.yaml
@@ -440,3 +444,13 @@ sveltos-agent:
 	@echo "Downloading sveltos-agent common yaml for agentless fv"
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-agent/$(TAG)/manifest/mgmt_cluster_common_manifest.yaml -o ./test/sveltos-agent-mgmt_cluster_common_manifest.yaml
 
+sveltos-applier:
+	@echo "Downloading sveltos applier yaml"
+	$(eval digest :=$(call get-digest-sveltos-applier))
+	@echo "image digest is $(get-digest-sveltos-applier)"
+	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-applier/$(TAG)/manifest/manifest.yaml -o ./test/pullmode-sveltosapplier.yaml
+	sed -i '' -e "s#image: docker.io/projectsveltos/sveltos-applier:${TAG}#image: docker.io/projectsveltos/sveltos-applier@${digest}#g" ./test/pullmode-sveltosapplier.yaml
+	sed -i '' -e "s#cluster-namespace=#cluster-namespace=default#g" ./test/pullmode-sveltosapplier.yaml
+	sed -i '' -e "s#cluster-name=#cluster-name=clusterapi-workload#g" ./test/pullmode-sveltosapplier.yaml
+	sed -i '' -e "s#cluster-type=#cluster-type=sveltos#g" ./test/pullmode-sveltosapplier.yaml
+	sed -i '' -e "s#secret-with-kubeconfig=#secret-with-kubeconfig=clusterapi-workload-sveltos-kubeconfig#g" ./test/pullmode-sveltosapplier.yaml
