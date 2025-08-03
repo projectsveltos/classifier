@@ -210,8 +210,23 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 	}
 
 	logger.V(logs.LogDebug).Info("collecting ClassifierReports from cluster")
+
+	var listOptions []client.ListOption
+	if getAgentInMgmtCluster() || isPullMode {
+		clusterType := clusterproxy.GetClusterType(cluster)
+		// If agent is in the management cluster or in pull mode, ClassifierReport for this
+		// cluster are also in the management cluuster in the cluster namespace.
+		listOptions = []client.ListOption{
+			client.InNamespace(cluster.Namespace),
+			client.MatchingLabels{
+				libsveltosv1beta1.ClassifierReportClusterNameLabel: cluster.Name,
+				libsveltosv1beta1.ClassifierReportClusterTypeLabel: strings.ToLower(string(clusterType)),
+			},
+		}
+	}
+
 	classifierReportList := libsveltosv1beta1.ClassifierReportList{}
-	err = clusterClient.List(ctx, &classifierReportList)
+	err = clusterClient.List(ctx, &classifierReportList, listOptions...)
 	if err != nil {
 		return err
 	}
