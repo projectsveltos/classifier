@@ -163,7 +163,7 @@ func main() {
 	classifierReconciler := getClassifierReconciler(mgr)
 	classifierReconciler.Deployer = d
 	var classifierController controller.Controller
-	classifierController, err = classifierReconciler.SetupWithManager(mgr)
+	classifierController, err = classifierReconciler.SetupWithManager(ctx, mgr, ctrl.Log.WithName("classifierreconcilier"))
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Classifier")
 		os.Exit(1)

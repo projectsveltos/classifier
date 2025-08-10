@@ -300,7 +300,9 @@ func (r *ClassifierReconciler) reconcileNormal(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Controller, error) {
+func (r *ClassifierReconciler) SetupWithManager(ctx context.Context,
+	mgr ctrl.Manager, logger logr.Logger) (controller.Controller, error) {
+
 	// When Classifier changes, according to ClassifierPredicates,
 	// all Classifier with at least one conflict needs to be reconciled
 
@@ -349,6 +351,10 @@ func (r *ClassifierReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Co
 
 	if r.ClassifierReportMode == CollectFromManagementCluster {
 		go collectClassifierReports(mgr.GetClient(), r.ShardKey, r.CapiOnboardAnnotation, getVersion(), mgr.GetLogger())
+	}
+
+	if getAgentInMgmtCluster() {
+		go removeStaleClassifierResources(ctx, logger)
 	}
 
 	return c, nil

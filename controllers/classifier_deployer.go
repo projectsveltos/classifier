@@ -66,7 +66,11 @@ type feature struct {
 }
 
 const (
-	sveltosAgent = "sveltos-agent"
+	sveltosAgent                      = "sveltos-agent"
+	sveltosAgentFeatureLabelKey       = "feature"
+	sveltosAgentClusterNamespaceLabel = "cluster-namespace"
+	sveltosAgentClusterNameLabel      = "cluster-name"
+	sveltosAgentClusterTypeLabel      = "cluster-type"
 )
 
 func getSveltosAgentNamespace() string {
@@ -1617,10 +1621,10 @@ func getSveltosAgentLabels(clusterNamespace, clusterName string,
 	// Following labels are added on the objects representing the
 	// sveltos-agent for this cluster.
 	lbls := make(map[string]string)
-	lbls["cluster-namespace"] = clusterNamespace
-	lbls["cluster-name"] = clusterName
-	lbls["cluster-type"] = strings.ToLower(string(clusterType))
-	lbls["feature"] = sveltosAgent
+	lbls[sveltosAgentClusterNamespaceLabel] = clusterNamespace
+	lbls[sveltosAgentClusterNameLabel] = clusterName
+	lbls[sveltosAgentClusterTypeLabel] = strings.ToLower(string(clusterType))
+	lbls[sveltosAgentFeatureLabelKey] = sveltosAgent
 	return lbls
 }
 
