@@ -17,15 +17,26 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-logr/logr"
+
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	"github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=debuggingconfigurations,verbs=get;list;watch
@@ -120,4 +131,88 @@ func convertPointerSliceToValueSlice(pointerSlice []*unstructured.Unstructured) 
 		}
 	}
 	return valueSlice
+}
+
+// Identifies and removes sveltos-agent deployments that are no longer associated with active clusters
+// Identifies and removes classifierReports instances from clusters that are no longer existing
+func removeStaleClassifierResources(ctx context.Context, logger logr.Logger) {
+	listOptions := []client.ListOption{
+		client.MatchingLabels{
+			sveltosAgentFeatureLabelKey: sveltosAgent,
+		},
+	}
+
+	for {
+		const five = 5
+		time.Sleep(five * time.Minute)
+
+		c := getManagementClusterClient()
+		sveltosAgentDeployments := &appsv1.DeploymentList{}
+		err := c.List(ctx, sveltosAgentDeployments, listOptions...)
+		if err != nil {
+			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to collect sveltos-agent deployment: %v", err))
+			continue
+		}
+
+		for i := range sveltosAgentDeployments.Items {
+			depl := &sveltosAgentDeployments.Items[i]
+
+			exist, clusterNs, clusterName, clusterType := deplAssociatedClusterExist(ctx, c, depl, logger)
+			if !exist {
+				_, err = cleanClusterStaleResources(ctx, c, clusterNs, clusterName, clusterType, logger)
+				if err != nil {
+					logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to remove sveltos-agent resources: %v", err))
+					continue
+				}
+			}
+		}
+	}
+}
+
+func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *appsv1.Deployment,
+	logger logr.Logger) (exist bool, clusterName, clusterNamespace string, clusterType libsveltosv1beta1.ClusterType) {
+
+	if depl.Labels == nil {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no label",
+			depl.Namespace, depl.Name))
+		return true, "", "", ""
+	}
+
+	clusterNamespace, ok := depl.Labels[sveltosAgentClusterNamespaceLabel]
+	if !ok {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("sveltos-agent %s/%s has no %s label",
+			depl.Namespace, depl.Name, sveltosAgentClusterNamespaceLabel))
+		return true, "", "", ""
+	}
+
+	clusterName, ok = depl.Labels[sveltosAgentClusterNameLabel]
+	if !ok {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("sveltos-agent %s/%s has no %s label",
+			depl.Namespace, depl.Name, sveltosAgentClusterNameLabel))
+		return true, "", "", ""
+	}
+
+	clusterTypeString, ok := depl.Labels[sveltosAgentClusterTypeLabel]
+	if !ok {
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("sveltos-agent %s/%s has no %s label",
+			depl.Namespace, depl.Name, sveltosAgentClusterTypeLabel))
+		return true, "", "", ""
+	}
+
+	if strings.EqualFold(clusterTypeString, string(libsveltosv1beta1.ClusterTypeSveltos)) {
+		clusterType = libsveltosv1beta1.ClusterTypeSveltos
+	} else if strings.EqualFold(clusterTypeString, string(libsveltosv1beta1.ClusterTypeCapi)) {
+		clusterType = libsveltosv1beta1.ClusterTypeCapi
+	}
+
+	_, err := clusterproxy.GetCluster(ctx, c, clusterNamespace, clusterName, clusterType)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, clusterNamespace, clusterName, clusterType
+		}
+		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get cluster %s:%s/%s: %v",
+			clusterNamespace, clusterName, clusterTypeString, err))
+	}
+
+	return true, "", "", ""
 }
