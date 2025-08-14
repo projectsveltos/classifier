@@ -66,6 +66,8 @@ type feature struct {
 }
 
 const (
+	sveltosApplier = "sveltos-applier"
+
 	sveltosAgent                      = "sveltos-agent"
 	sveltosAgentFeatureLabelKey       = "feature"
 	sveltosAgentClusterNamespaceLabel = "cluster-namespace"
@@ -540,6 +542,16 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 		if err != nil {
 			return err
 		}
+
+		// Initially, a user needs to manually deploy SveltosApplier in a managed cluster. After this initial
+		// deployment, the classifier will automatically handle any necessary upgrades. The SveltosApplier
+		// resources are passed to the SveltosApplier running in the managed cluster via ConfigurationGroups.
+		// The SveltosApplier then applies these resources, effectively upgrading itself.
+		err = upgradeSveltosApplierInManagedCluster(ctx, clusterNamespace, clusterName, applicant,
+			clusterType, logger)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = deployCRDs(ctx, clusterNamespace, clusterName, applicant, clusterType, isPullMode, logger)
@@ -851,7 +863,21 @@ func (r *ClassifierReconciler) getCurrentHash(ctx context.Context, classifierSco
 	// If sveltos-agent configuration is in a ConfigMap. fetch ConfigMap and use its Data
 	// section in the hash evaluation.
 	if sveltosAgentConfigMap := getSveltosAgentConfigMap(); sveltosAgentConfigMap != "" {
-		configMap, err := collectSveltosAgentConfigMap(ctx, sveltosAgentConfigMap)
+		configMap, err := collectAgentConfigMap(ctx, sveltosAgentConfigMap)
+		if err != nil {
+			return nil, err
+		}
+		h := sha256.New()
+		config := string(currentHash)
+		config += render.AsCode(configMap.Data)
+		h.Write([]byte(config))
+		currentHash = h.Sum(nil)
+	}
+
+	// If sveltos-applier configuration is in a ConfigMap. fetch ConfigMap and use its Data
+	// section in the hash evaluation.
+	if sveltosApplierConfigMap := getSveltosApplierConfigMap(); sveltosApplierConfigMap != "" {
+		configMap, err := collectAgentConfigMap(ctx, sveltosApplierConfigMap)
 		if err != nil {
 			return nil, err
 		}
@@ -1396,6 +1422,22 @@ func prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode stri
 	return agentYAML
 }
 
+func prepareSveltosApplierYAML(agentYAML, clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType) string {
+
+	agentYAML = strings.ReplaceAll(agentYAML, "cluster-namespace=", fmt.Sprintf("cluster-namespace=%s", clusterNamespace))
+	agentYAML = strings.ReplaceAll(agentYAML, "cluster-name=", fmt.Sprintf("cluster-name=%s", clusterName))
+	agentYAML = strings.ReplaceAll(agentYAML, "cluster-type=", fmt.Sprintf("cluster-type=%s", clusterType))
+	agentYAML = strings.ReplaceAll(agentYAML, "secret-with-kubeconfig=", fmt.Sprintf("secret-with-kubeconfig=%s-sveltos-kubeconfig", clusterName))
+
+	registry := GetSveltosAgentRegistry()
+	if registry != "" {
+		agentYAML = replaceRegistry(agentYAML, registry)
+	}
+
+	return agentYAML
+}
+
 // createSveltosAgentNamespaceInManagedCluster creates the namespace where sveltos-agent will
 // store all its reports
 func createSveltosAgentNamespaceInManagedCluster(ctx context.Context, c client.Client,
@@ -1488,6 +1530,23 @@ func deploySveltosAgentInManagedCluster(ctx context.Context, remoteRestConfig *r
 		remoteRestConfig, agentYAML, nil, patches, isPullMode, logger)
 }
 
+func upgradeSveltosApplierInManagedCluster(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
+
+	logger.V(logs.LogDebug).Info("upgrade sveltos-applier in the managed cluster")
+
+	patches, err := getSveltosApplierPatches(ctx, getManagementClusterClient(), logger)
+	if err != nil {
+		return err
+	}
+
+	agentYAML := string(agent.GetSveltosApplierAML())
+	agentYAML = prepareSveltosApplierYAML(agentYAML, clusterNamespace, clusterName, clusterType)
+
+	return deploySveltosApplierResources(ctx, clusterNamespace, clusterName, classifierName,
+		agentYAML, patches, logger)
+}
+
 func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest.Config, c client.Client,
 	clusterNamespace, clusterName, classifierName, mode string, clusterType libsveltosv1beta1.ClusterType,
 	patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
@@ -1512,7 +1571,7 @@ func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest
 		restConfig, agentYAML, lbls, patches, false, logger)
 }
 
-func deploySveltosAgentResources(ctx context.Context, clusterNamespace, clusterName, cliassifierName string,
+func deploySveltosAgentResources(ctx context.Context, clusterNamespace, clusterName, classifierName string,
 	restConfig *rest.Config, agentYAML string, lbls map[string]string, patches []libsveltosv1beta1.Patch,
 	isPullMode bool, logger logr.Logger) error {
 
@@ -1527,7 +1586,7 @@ func deploySveltosAgentResources(ctx context.Context, clusterNamespace, clusterN
 	for i := range elements {
 		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse classifier agent yaml: %v", err))
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse sveltos agent yaml: %v", err))
 			return err
 		}
 
@@ -1579,13 +1638,53 @@ func deploySveltosAgentResources(ctx context.Context, clusterNamespace, clusterN
 	// This means SveltosCluster is in pull mode
 	if isPullMode {
 		err = pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
-			libsveltosv1beta1.ClassifierKind, cliassifierName, libsveltosv1beta1.FeatureClassifier, resources, true, logger)
+			libsveltosv1beta1.ClassifierKind, classifierName, libsveltosv1beta1.FeatureClassifier, resources, true, logger)
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func deploySveltosApplierResources(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	agentYAML string, patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
+
+	resources := make(map[string][]unstructured.Unstructured)
+	index := sveltosApplier
+	resources[index] = []unstructured.Unstructured{}
+
+	elements, err := deployer.CustomSplit(agentYAML)
+	if err != nil {
+		return err
+	}
+	for i := range elements {
+		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse sveltos applier yaml: %v", err))
+			return err
+		}
+
+		var referencedUnstructured []*unstructured.Unstructured
+		if len(patches) > 0 {
+			logger.V(logs.LogInfo).Info("Patch sveltos-applier resources")
+			p := &patcher.CustomPatchPostRenderer{Patches: patches}
+			referencedUnstructured, err = p.RunUnstructured(
+				[]*unstructured.Unstructured{policy},
+			)
+			if err != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to patch sveltos-applier: %v", err))
+				return err
+			}
+		} else {
+			referencedUnstructured = append(referencedUnstructured, policy)
+		}
+
+		resources[index] = append(resources[index], convertPointerSliceToValueSlice(referencedUnstructured)...)
+	}
+
+	return pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
+		libsveltosv1beta1.ClassifierKind, classifierName, libsveltosv1beta1.FeatureClassifier, resources, true, logger)
 }
 
 func deploySveltosAgentPatchedResources(ctx context.Context, restConfig *rest.Config,
@@ -1758,6 +1857,38 @@ func getSveltosAgentPatches(ctx context.Context, c client.Client,
 
 	patches := make([]libsveltosv1beta1.Patch, 0)
 	configMapName := getSveltosAgentConfigMap()
+	configMap := &corev1.ConfigMap{}
+	if configMapName != "" {
+		err := c.Get(ctx,
+			types.NamespacedName{Namespace: projectsveltos, Name: configMapName},
+			configMap)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %s: %v",
+				configMapName, err))
+			return nil, err
+		}
+	}
+
+	for k := range configMap.Data {
+		// Only Deployment can be patched
+		patch := libsveltosv1beta1.Patch{
+			Patch: configMap.Data[k],
+			Target: &libsveltosv1beta1.PatchSelector{
+				Kind:  "Deployment",
+				Group: "apps",
+			},
+		}
+		patches = append(patches, patch)
+	}
+
+	return patches, nil
+}
+
+func getSveltosApplierPatches(ctx context.Context, c client.Client,
+	logger logr.Logger) ([]libsveltosv1beta1.Patch, error) {
+
+	patches := make([]libsveltosv1beta1.Patch, 0)
+	configMapName := getSveltosApplierConfigMap()
 	configMap := &corev1.ConfigMap{}
 	if configMapName != "" {
 		err := c.Get(ctx,
