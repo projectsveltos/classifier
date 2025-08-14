@@ -450,6 +450,7 @@ sveltos-applier:
 	@echo "image digest is $(get-digest-sveltos-applier)"
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-applier/main/manifest/manifest.yaml -o ./pkg/agent/sveltos-applier.yaml
 	sed -i '' -e "s#image: docker.io/projectsveltos/sveltos-applier:main#image: docker.io/projectsveltos/sveltos-applier@${digest}#g" ./pkg/agent/sveltos-applier.yaml
+	sed -i '' -e "s#version=main#version=${TAG}#g" ./pkg/agent/sveltos-applier.yaml
 	cd pkg/agent; go generate
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-applier/main/manifest/manifest.yaml -o ./test/pullmode-sveltosapplier.yaml
 	sed -i '' -e "s#image: docker.io/projectsveltos/sveltos-applier:main#image: docker.io/projectsveltos/sveltos-applier@${digest}#g" ./test/pullmode-sveltosapplier.yaml
