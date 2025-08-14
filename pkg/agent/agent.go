@@ -25,3 +25,7 @@ func GetSveltosAgentYAML() []byte {
 func GetSveltosAgentInMgmtClusterYAML() []byte {
 	return sveltosAgentInMgmtClusterYAML
 }
+
+func GetSveltosApplierAML() []byte {
+	return sveltosApplierYAML
+}

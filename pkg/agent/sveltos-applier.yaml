@@ -78,12 +78,12 @@ spec:
       containers:
       - args:
         - --diagnostics-address=:8443
-        - --cluster-namespace=default
-        - --cluster-name=clusterapi-workload
-        - --cluster-type=sveltos
-        - --secret-with-kubeconfig=clusterapi-workload-sveltos-kubeconfig
+        - --cluster-namespace=
+        - --cluster-name=
+        - --cluster-type=
+        - --secret-with-kubeconfig=
         - --v=5
-        - --version=main
+        - --version=v1.0.1
         command:
         - /manager
         env:

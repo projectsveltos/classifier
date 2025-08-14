@@ -78,6 +78,7 @@ var (
 	version                               string
 	healthAddr                            string
 	sveltosAgentConfigMap                 string
+	sveltosApplierConfigMap               string
 	capiOnboardAnnotation                 string
 	registry                              string
 )
@@ -135,6 +136,7 @@ func main() {
 
 	controllers.SetManagementClusterAccess(mgr.GetConfig(), mgr.GetClient())
 	controllers.SetSveltosAgentConfigMap(sveltosAgentConfigMap)
+	controllers.SetSveltosApplierConfigMap(sveltosApplierConfigMap)
 	controllers.SetSveltosAgentRegistry(registry)
 	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
 
@@ -163,7 +165,7 @@ func main() {
 	classifierReconciler := getClassifierReconciler(mgr)
 	classifierReconciler.Deployer = d
 	var classifierController controller.Controller
-	classifierController, err = classifierReconciler.SetupWithManager(mgr)
+	classifierController, err = classifierReconciler.SetupWithManager(ctx, mgr, ctrl.Log.WithName("classifierreconcilier"))
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Classifier")
 		os.Exit(1)
@@ -226,6 +228,9 @@ func initFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&sveltosAgentConfigMap, "sveltos-agent-config", "",
 		"The name of the ConfigMap in the projectsveltos namespace containing the sveltos-agent configuration")
+
+	fs.StringVar(&sveltosApplierConfigMap, "sveltos-applier-config", "",
+		"The name of the ConfigMap in the projectsveltos namespace containing the sveltos-applier configuration")
 
 	fs.StringVar(&healthAddr, "health-addr", ":9440",
 		"The address the health endpoint binds to.")

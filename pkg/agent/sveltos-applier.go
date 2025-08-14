@@ -16,189 +16,108 @@ limitations under the License.
 */
 package agent
 
-var sveltosAgentYAML = []byte(`apiVersion: v1
+var sveltosApplierYAML = []byte(`apiVersion: v1
 kind: Namespace
 metadata:
+  labels:
+    app.kubernetes.io/name: sveltos-applier
   name: projectsveltos
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: sveltos-agent-manager
+  labels:
+    app.kubernetes.io/name: sveltos-applier
+  name: sveltos-applier-manager
   namespace: projectsveltos
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: sveltos-agent-manager-role
+  name: sveltos-applier-manager-role
 rules:
 - apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - create
-  - get
-  - list
-  - update
-  - watch
-- apiGroups:
   - '*'
   resources:
   - '*'
   verbs:
-  - get
-  - impersonate
-  - list
-  - watch
-- apiGroups:
-  - apiextensions.k8s.io
-  resources:
-  - customresourcedefinitions
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - authentication.k8s.io
-  resources:
-  - tokenreviews
-  verbs:
-  - create
-- apiGroups:
-  - authorization.k8s.io
-  resources:
-  - subjectaccessreviews
-  verbs:
-  - create
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - classifierreports
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - classifierreports/status
-  - eventreports/status
-  - healthcheckreports/status
-  - reloaderreports/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - classifiers
-  - eventsources
-  - healthchecks
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - classifiers/finalizers
-  - eventreports/finalizers
-  - eventsources/finalizers
-  - healthcheckreports/finalizers
-  - healthchecks/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - debuggingconfigurations
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - eventreports
-  - healthcheckreports
-  - reloaderreports
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - reloaders
-  verbs:
-  - get
-  - list
-  - patch
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - reloaders/finalizers
-  verbs:
-  - patch
-  - update
+  - '*'
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: sveltos-agent-manager-rolebinding
+  labels:
+    app.kubernetes.io/name: sveltos-applier
+  name: sveltos-applier-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: sveltos-agent-manager-role
+  name: sveltos-applier-manager-role
 subjects:
 - kind: ServiceAccount
-  name: sveltos-agent-manager
+  name: sveltos-applier-manager
   namespace: projectsveltos
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: sveltos-applier
+  name: sveltos-applier-metrics-service
+  namespace: projectsveltos
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app.kubernetes.io/name: sveltos-applier
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    control-plane: sveltos-agent
-  name: sveltos-agent-manager
+    app.kubernetes.io/name: sveltos-applier
+  name: sveltos-applier-manager
   namespace: projectsveltos
 spec:
   replicas: 1
   selector:
     matchLabels:
-      control-plane: sveltos-agent
+      app.kubernetes.io/name: sveltos-applier
   template:
     metadata:
       annotations:
-        kubectl.kubernetes.io/default-container: manager
+        kubectl.kubernetes.io/default-container: controller
       labels:
-        control-plane: sveltos-agent
+        app.kubernetes.io/name: sveltos-applier
     spec:
       containers:
       - args:
         - --diagnostics-address=:8443
-        - --v=5
         - --cluster-namespace=
         - --cluster-name=
         - --cluster-type=
+        - --secret-with-kubeconfig=
+        - --v=5
         - --version=v1.0.1
-        - --current-cluster=managed-cluster
-        - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: docker.io/projectsveltos/sveltos-agent@sha256:d80a977640bd94ec7deb849d4de37f417b9e09722070821b67608b531f1e1599
+        env:
+        - name: GOMEMLIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
+        - name: GOMAXPROCS
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.cpu
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        image: docker.io/projectsveltos/sveltos-applier@sha256:2de74461dd6b1e434b30e23cda4af80b2413cf370c03f54782bc55a6c1364c3a
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -207,7 +126,7 @@ spec:
             scheme: HTTP
           initialDelaySeconds: 15
           periodSeconds: 20
-        name: manager
+        name: controller
         ports:
         - containerPort: 8443
           name: metrics
@@ -228,15 +147,21 @@ spec:
             cpu: 500m
             memory: 512Mi
           requests:
-            cpu: 10m
-            memory: 128Mi
+            cpu: 200m
+            memory: 512Mi
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
             drop:
             - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts: []
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: sveltos-agent-manager
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: sveltos-applier-manager
       terminationGracePeriodSeconds: 10
+      volumes: []
 `)
