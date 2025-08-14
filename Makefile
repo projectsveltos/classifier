@@ -429,7 +429,7 @@ $(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/sveltos-a
 endef
 
 define get-digest-sveltos-applier
-$(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/sveltos-applier:${TAG}" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)
+$(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/sveltos-applier:main" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)
 endef
 
 sveltos-agent:
@@ -448,8 +448,11 @@ sveltos-applier:
 	@echo "Downloading sveltos applier yaml"
 	$(eval digest :=$(call get-digest-sveltos-applier))
 	@echo "image digest is $(get-digest-sveltos-applier)"
+	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-applier/main/manifest/manifest.yaml -o ./pkg/agent/sveltos-applier.yaml
+	sed -i '' -e "s#image: docker.io/projectsveltos/sveltos-applier:main#image: docker.io/projectsveltos/sveltos-applier@${digest}#g" ./pkg/agent/sveltos-applier.yaml
+	cd pkg/agent; go generate
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-applier/main/manifest/manifest.yaml -o ./test/pullmode-sveltosapplier.yaml
-	sed -i '' -e "s#image: docker.io/projectsveltos/sveltos-applier:${TAG}#image: docker.io/projectsveltos/sveltos-applier@${digest}#g" ./test/pullmode-sveltosapplier.yaml
+	sed -i '' -e "s#image: docker.io/projectsveltos/sveltos-applier:main#image: docker.io/projectsveltos/sveltos-applier@${digest}#g" ./test/pullmode-sveltosapplier.yaml
 	sed -i '' -e "s#cluster-namespace=#cluster-namespace=default#g" ./test/pullmode-sveltosapplier.yaml
 	sed -i '' -e "s#cluster-name=#cluster-name=clusterapi-workload#g" ./test/pullmode-sveltosapplier.yaml
 	sed -i '' -e "s#cluster-type=#cluster-type=sveltos#g" ./test/pullmode-sveltosapplier.yaml
