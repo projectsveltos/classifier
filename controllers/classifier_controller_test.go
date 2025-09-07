@@ -28,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -487,14 +487,14 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 
 	AfterEach(func() {
 		ns := &corev1.Namespace{}
-		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: cluster.Namespace}, ns)).To(Succeed())
-		Expect(testEnv.Client.Delete(context.TODO(), classifier)).To(Succeed())
-		Expect(testEnv.Client.Delete(context.TODO(), cluster)).To(Succeed())
-		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: cluster.Namespace}, ns)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), classifier)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), cluster)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), ns)).To(Succeed())
 	})
 
 	It("RequeueClassifierForCluster returns all existing Classifiers", func() {
-		Expect(testEnv.Client.Create(context.TODO(), classifier)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), classifier)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
 
@@ -539,8 +539,8 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 		}
 		cpMachine.Status.SetTypedPhase(clusterv1.MachinePhaseRunning)
 
-		Expect(testEnv.Client.Create(context.TODO(), classifier)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), cpMachine)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), classifier)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), cpMachine)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, cpMachine)).To(Succeed())
 

@@ -29,14 +29,14 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
-	"github.com/projectsveltos/libsveltos/lib/logsettings"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=debuggingconfigurations,verbs=get;list;watch
@@ -150,7 +150,7 @@ func removeStaleClassifierResources(ctx context.Context, logger logr.Logger) {
 		sveltosAgentDeployments := &appsv1.DeploymentList{}
 		err := c.List(ctx, sveltosAgentDeployments, listOptions...)
 		if err != nil {
-			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to collect sveltos-agent deployment: %v", err))
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect sveltos-agent deployment: %v", err))
 			continue
 		}
 
@@ -161,7 +161,7 @@ func removeStaleClassifierResources(ctx context.Context, logger logr.Logger) {
 			if !exist {
 				_, err = cleanClusterStaleResources(ctx, c, clusterNs, clusterName, clusterType, logger)
 				if err != nil {
-					logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to remove sveltos-agent resources: %v", err))
+					logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to remove sveltos-agent resources: %v", err))
 					continue
 				}
 			}
@@ -173,28 +173,28 @@ func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *apps
 	logger logr.Logger) (exist bool, clusterName, clusterNamespace string, clusterType libsveltosv1beta1.ClusterType) {
 
 	if depl.Labels == nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no label",
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no label",
 			depl.Namespace, depl.Name))
 		return true, "", "", ""
 	}
 
 	clusterNamespace, ok := depl.Labels[sveltosAgentClusterNamespaceLabel]
 	if !ok {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("sveltos-agent %s/%s has no %s label",
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("sveltos-agent %s/%s has no %s label",
 			depl.Namespace, depl.Name, sveltosAgentClusterNamespaceLabel))
 		return true, "", "", ""
 	}
 
 	clusterName, ok = depl.Labels[sveltosAgentClusterNameLabel]
 	if !ok {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("sveltos-agent %s/%s has no %s label",
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("sveltos-agent %s/%s has no %s label",
 			depl.Namespace, depl.Name, sveltosAgentClusterNameLabel))
 		return true, "", "", ""
 	}
 
 	clusterTypeString, ok := depl.Labels[sveltosAgentClusterTypeLabel]
 	if !ok {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("sveltos-agent %s/%s has no %s label",
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("sveltos-agent %s/%s has no %s label",
 			depl.Namespace, depl.Name, sveltosAgentClusterTypeLabel))
 		return true, "", "", ""
 	}
@@ -210,7 +210,7 @@ func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *apps
 		if apierrors.IsNotFound(err) {
 			return false, clusterNamespace, clusterName, clusterType
 		}
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get cluster %s:%s/%s: %v",
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get cluster %s:%s/%s: %v",
 			clusterNamespace, clusterName, clusterTypeString, err))
 	}
 
