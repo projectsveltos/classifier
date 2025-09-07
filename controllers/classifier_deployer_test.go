@@ -33,7 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -699,9 +699,11 @@ func prepareCluster() *clusterv1.Cluster {
 	Expect(testEnv.Create(context.TODO(), machine)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
+	initialized := true
 	cluster.Status = clusterv1.ClusterStatus{
-		InfrastructureReady: true,
-		ControlPlaneReady:   true,
+		Initialization: clusterv1.ClusterInitializationStatus{
+			ControlPlaneInitialized: &initialized,
+		},
 	}
 	Expect(testEnv.Status().Update(context.TODO(), cluster)).To(Succeed())
 
@@ -722,7 +724,7 @@ func prepareCluster() *clusterv1.Cluster {
 			"value": testEnv.Kubeconfig,
 		},
 	}
-	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+	Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
 
 	By("Create the ConfigMap with sveltos-agent version")
@@ -735,7 +737,7 @@ func prepareCluster() *clusterv1.Cluster {
 			"version": version,
 		},
 	}
-	err := testEnv.Client.Create(context.TODO(), cm)
+	err := testEnv.Create(context.TODO(), cm)
 	if err != nil {
 		Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
 	}
