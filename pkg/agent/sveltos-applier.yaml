@@ -83,7 +83,7 @@ spec:
         - --cluster-type=
         - --secret-with-kubeconfig=
         - --v=5
-        - --version=v1.1.0
+        - --version=main
         command:
         - /manager
         env:

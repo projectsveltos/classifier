@@ -45,7 +45,7 @@ ARCH ?= $(shell go env GOARCH)
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= v1.1.0
+TAG ?= main
 
 ## Tool Binaries
 CONTROLLER_GEN := $(TOOLS_BIN_DIR)/controller-gen
@@ -61,7 +61,7 @@ CLUSTERCTL := $(TOOLS_BIN_DIR)/clusterctl
 GOLANGCI_LINT_VERSION := "v2.4.0"
 CLUSTERCTL_VERSION := "v1.11.1"
 
-KUSTOMIZE_VER := v5.3.0
+KUSTOMIZE_VER := v5.7.0
 KUSTOMIZE_BIN := kustomize
 KUSTOMIZE := $(abspath $(TOOLS_BIN_DIR)/$(KUSTOMIZE_BIN)-$(KUSTOMIZE_VER))
 KUSTOMIZE_PKG := sigs.k8s.io/kustomize/kustomize/v5
