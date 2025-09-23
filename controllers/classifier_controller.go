@@ -130,6 +130,7 @@ type ClassifierReconciler struct {
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines/status,verbs=get;watch;list
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
+//+kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch
 
 func (r *ClassifierReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	if r.ShardKey != "" {
@@ -557,6 +558,9 @@ func (r *ClassifierReconciler) updateLabelsOnMatchingClusters(ctx context.Contex
 		ref := &classifierScope.Classifier.Status.MachingClusterStatuses[i].ClusterRef
 		cluster, err := clusterproxy.GetCluster(ctx, r.Client, ref.Namespace, ref.Name, clusterproxy.GetClusterType(ref))
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
 			logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to get cluster %s/%s", ref.Namespace, ref.Name))
 			return err
 		}
