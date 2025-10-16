@@ -106,9 +106,9 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
 
-	reportMode = controllers.ReportMode(tmpReportMode)
-
 	ctrl.SetLogger(klog.Background())
+
+	reportMode = controllers.ReportMode(tmpReportMode)
 
 	ctrlOptions := ctrl.Options{
 		Scheme:                 scheme,
