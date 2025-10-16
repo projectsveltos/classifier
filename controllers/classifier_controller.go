@@ -569,6 +569,10 @@ func (r *ClassifierReconciler) updateLabelsOnMatchingClusters(ctx context.Contex
 		l.V(logs.LogDebug).Info("update labels on cluster")
 		err = r.updateLabelsOnCluster(ctx, classifierScope, cluster, clusterproxy.GetClusterType(ref), l)
 		if err != nil {
+			// If cluster was removed before classifier had a chance to react to it, ignore the error
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
 			l.V(logs.LogDebug).Error(err, "failed to update labels on cluster")
 			return err
 		}
