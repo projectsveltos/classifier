@@ -16,7 +16,7 @@ Classifier currently supports the following classification criteria:
 1. Kubernetes version
 2. Kubernetes resources
 
-For instance, this Classifier instance will match any cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.25.0"
+For instance, this Classifier instance will match any cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.25.2"
 
 ```
 apiVersion: lib.projectsveltos.io/v1beta1
@@ -31,7 +31,7 @@ spec:
   - comparison: GreaterThanOrEqualTo
     version: 1.24.0
   - comparison: LessThan
-    version: 1.25.0    
+    version: 1.25.2
 ```
 
 When a cluster is a match for a Classifier instances, all classifierLabels will be automatically added to the Cluster instance.
@@ -45,8 +45,8 @@ Refer to [examples](./examples/) for more complex examples.
 ## A simple use case: upgrade helm charts automatically when Kubernetes cluster is upgraded
 Suppose you are managing several Kubernetes clusters with different versions.
 And you want to deploy:
-1. OPA Gatekeeper version 3.10.0 in any Kubernetes cluster whose version is >= v1.25.0
-2. OPA Gatekeeper version 3.9.0 in any Kubernetes cluster whose version is >= v1.24.0 && < v1.25.0
+1. OPA Gatekeeper version 3.10.0 in any Kubernetes cluster whose version is >= v1.25.2
+2. OPA Gatekeeper version 3.9.0 in any Kubernetes cluster whose version is >= v1.24.0 && < v1.25.2
 
 You can create following ClusterProfiles and Classifiers in the management cluster:
 ```
@@ -75,7 +75,7 @@ kind: ClusterProfile
 metadata:
   name: deploy-gatekeeper-3-9
 spec:
-  clusterSelector: 
+  clusterSelector:
     matchLabels:
       gatekeeper: v3-9
   syncMode: Continuous
@@ -102,7 +102,7 @@ spec:
     value: v3-10
   kubernetesVersionConstraints:
   - comparison: GreaterThanOrEqualTo
-    version: 1.25.0
+    version: 1.25.2
 ```
 
 ```
@@ -118,7 +118,7 @@ spec:
   - comparison: GreaterThanOrEqualTo
     version: 1.24.0
   - comparison: LessThan
-    version: 1.25.0
+    version: 1.25.2
 ```
 
 With the above configuration:
@@ -126,7 +126,7 @@ With the above configuration:
 2. Any cluster with a Kubernetes version v1.25.x will get label _gatekeeper:v3.10_ added and because of that Gatekeeper 3.10.0 helm chart will be deployed;
 3. As soon a cluster is upgraded from Kubernetes version v1.24.x to v1.25.x, Gatekeeper helm chart will be automatically upgraded from 3.9.0 to 3.10.0
 
-## Contributing 
+## Contributing
 
 ❤️ Your contributions are always welcome! If you want to contribute, have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
 
