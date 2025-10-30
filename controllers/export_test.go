@@ -38,6 +38,8 @@ var (
 	RemoveSveltosAgentFromManagementCluster = removeSveltosAgentFromManagementCluster
 	GetSveltosAgentLabels                   = getSveltosAgentLabels
 	GetSveltosAgentNamespace                = getSveltosAgentNamespace
+	GetSveltosAgentPatches                  = getSveltosAgentPatches
+	GetSveltosApplierPatches                = getSveltosApplierPatches
 
 	CreateAccessRequest                        = createAccessRequest
 	GetAccessRequestName                       = getAccessRequestName
