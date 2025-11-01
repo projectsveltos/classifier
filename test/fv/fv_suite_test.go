@@ -88,6 +88,7 @@ var (
 
 func TestFv(t *testing.T) {
 	RegisterFailHandler(Fail)
+	ctrl.SetLogger(klog.Background())
 
 	suiteConfig, reporterConfig := GinkgoConfiguration()
 	reporterConfig.FullTrace = true
@@ -112,8 +113,6 @@ func TestFv(t *testing.T) {
 }
 
 var _ = SynchronizedBeforeSuite(func() []byte {
-	ctrl.SetLogger(klog.Background())
-
 	restConfig := ctrl.GetConfigOrDie()
 	// To get rid of the annoying request.go log
 	restConfig.QPS = 100
