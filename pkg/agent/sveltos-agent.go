@@ -43,6 +43,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+- apiGroups:
   - '*'
   resources:
   - '*'
@@ -193,12 +201,12 @@ spec:
         - --cluster-namespace=
         - --cluster-name=
         - --cluster-type=
-        - --version=v1.2.0
+        - --version=v1.2.1
         - --current-cluster=managed-cluster
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: docker.io/projectsveltos/sveltos-agent@sha256:3a032cdc275e06827140968f64ae3fa41f603185c969a901b93cfb5203a66933
+        image: docker.io/projectsveltos/sveltos-agent@sha256:64ca9e88a9afd883f6142644f57b09fa652f83f976c1d0c38a49c340e1eedd1e
         livenessProbe:
           failureThreshold: 3
           httpGet:

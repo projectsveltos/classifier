@@ -1,5 +1,5 @@
 # Following Classifier will match any Cluster whose
-# Kubernetes version is >= v1.24.0 and < v1.25.2
+# Kubernetes version is >= v1.24.0 and < v1.25.3
 apiVersion: lib.projectsveltos.io/v1beta1
 kind: Classifier
 metadata:
@@ -12,4 +12,4 @@ spec:
   - comparison: GreaterThanOrEqualTo
     version: 1.24.0
   - comparison: LessThan
-    version: 1.25.2
+    version: 1.25.3
