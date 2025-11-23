@@ -196,8 +196,50 @@ func collectClassifierReports(c client.Client, shardKey, capiOnboardAnnotation, 
 	}
 }
 
+func skipCollecting(ctx context.Context, c client.Client, cluster *corev1.ObjectReference,
+	logger logr.Logger) (bool, error) {
+
+	clusterRef := &corev1.ObjectReference{
+		Namespace:  cluster.Namespace,
+		Name:       cluster.Name,
+		APIVersion: cluster.APIVersion,
+		Kind:       cluster.Kind,
+	}
+	ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, c, clusterRef, logger)
+	if err != nil {
+		logger.V(logs.LogDebug).Info("cluster is not ready yet")
+		return true, err
+	}
+
+	if !ready {
+		return true, nil
+	}
+
+	paused, err := clusterproxy.IsClusterPaused(ctx, c, cluster.Namespace, cluster.Name,
+		clusterproxy.GetClusterType(cluster))
+	if err != nil {
+		logger.V(logs.LogDebug).Error(err, "failed to verify if cluster is paused")
+		return true, err
+	}
+
+	if paused {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 	cluster *corev1.ObjectReference, version string, logger logr.Logger) error {
+
+	skipCollecting, err := skipCollecting(ctx, c, cluster, logger)
+	if err != nil {
+		return err
+	}
+
+	if skipCollecting {
+		return nil
+	}
 
 	isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, c, cluster.Namespace, cluster.Name,
 		clusterproxy.GetClusterType(cluster), logger)
@@ -206,17 +248,6 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 	}
 
 	if isPullMode {
-		return nil
-	}
-
-	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
-	ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, c, cluster, logger)
-	if err != nil {
-		logger.V(logs.LogDebug).Info("cluster is not ready yet")
-		return err
-	}
-
-	if !ready {
 		return nil
 	}
 
