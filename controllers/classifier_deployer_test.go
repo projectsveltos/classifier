@@ -19,6 +19,7 @@ package controllers_test
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"reflect"
 
 	"github.com/go-logr/logr"
@@ -667,6 +668,13 @@ var _ = Describe("Classifier Deployer", func() {
 	})
 
 	It("getSveltosAgentPatches reads post render patches from ConfigMap", func() {
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      upstreamClusterNamePrefix + randomString(),
+			},
+		}
+
 		cmYAML := `apiVersion: v1
 data:
   deployment-patch: |-
@@ -702,7 +710,7 @@ metadata:
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
 
-		initObjects := []client.Object{}
+		initObjects := []client.Object{sveltosCluster}
 		for i := range cm {
 			initObjects = append(initObjects, cm[i])
 		}
@@ -710,7 +718,8 @@ metadata:
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		controllers.SetSveltosAgentConfigMap("sveltos-agent-config")
-		patches, err := controllers.GetSveltosAgentPatches(context.TODO(), c, logger)
+		patches, err := controllers.GetSveltosAgentPatches(context.TODO(), c, sveltosCluster.Namespace,
+			sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos, logger)
 		Expect(err).To(BeNil())
 		Expect(len(patches)).To(Equal(2))
 		controllers.SetSveltosAgentConfigMap("")
@@ -719,6 +728,13 @@ metadata:
 	})
 
 	It("getSveltosApplierPatches reads post render patches from ConfigMap", func() {
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      upstreamClusterNamePrefix + randomString(),
+			},
+		}
+
 		cmYAML := `apiVersion: v1
 data:
   deployment-patch: |-
@@ -748,7 +764,7 @@ metadata:
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
 
-		initObjects := []client.Object{}
+		initObjects := []client.Object{sveltosCluster}
 		for i := range cm {
 			initObjects = append(initObjects, cm[i])
 		}
@@ -756,7 +772,134 @@ metadata:
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		controllers.SetSveltosApplierConfigMap("sveltos-applier-config")
-		patches, err := controllers.GetSveltosApplierPatches(context.TODO(), c, logger)
+		patches, err := controllers.GetSveltosApplierPatches(context.TODO(), c, sveltosCluster.Namespace,
+			sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos, logger)
+		Expect(err).To(BeNil())
+		Expect(len(patches)).To(Equal(2))
+		controllers.SetSveltosApplierConfigMap("")
+
+		verifyPatches(patches)
+	})
+
+	It("getSveltosAgentPatches reads post render patches from per cluster ConfigMap", func() {
+		configMapNamespace := randomString()
+		configMapName := randomString()
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      upstreamClusterNamePrefix + randomString(),
+				Annotations: map[string]string{
+					"sveltosagent.projectsveltos.io/config-override-ref": fmt.Sprintf("%s/%s",
+						configMapNamespace, configMapName),
+				},
+			},
+		}
+
+		cmYAML := fmt.Sprintf(`apiVersion: v1
+data:
+  deployment-patch: |-
+      patch: |-
+        - op: replace
+          path: /spec/template/spec/containers/0/resources/requests/cpu
+          value: 100m
+        - op: replace
+          path: /spec/template/spec/containers/0/resources/requests/memory
+          value: 256Mi
+        - op: replace
+          path: /spec/template/spec/containers/0/resources/limits/cpu
+          value: 500m
+        - op: replace
+          path: /spec/template/spec/containers/0/resources/limits/memory
+          value: 1024Mi
+      target:
+        kind: Deployment
+        name: sveltos-agent-manager
+        namespace: projectsveltos
+  clusterrole-patch: |-
+      patch: |-
+        - op: remove
+          path: /rules
+      target:
+        kind: ClusterRole
+        name: sveltos-agent-manager-role
+kind: ConfigMap
+metadata:
+  name: %s
+  namespace: %s`, configMapName, configMapNamespace)
+
+		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
+		Expect(err).To(BeNil())
+
+		initObjects := []client.Object{sveltosCluster}
+		for i := range cm {
+			initObjects = append(initObjects, cm[i])
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		controllers.SetSveltosAgentConfigMap("sveltos-agent-config")
+		patches, err := controllers.GetSveltosAgentPatches(context.TODO(), c, sveltosCluster.Namespace,
+			sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos, logger)
+		Expect(err).To(BeNil())
+		Expect(len(patches)).To(Equal(2))
+		controllers.SetSveltosAgentConfigMap("")
+
+		verifyPatches(patches)
+	})
+
+	It("getSveltosApplierPatches reads post render patches from per cluster ConfigMap", func() {
+		configMapNamespace := randomString()
+		configMapName := randomString()
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      upstreamClusterNamePrefix + randomString(),
+				Annotations: map[string]string{
+					"sveltosapplier.projectsveltos.io/config-override-ref": fmt.Sprintf("%s/%s",
+						configMapNamespace, configMapName),
+				},
+			},
+		}
+
+		cmYAML := fmt.Sprintf(`apiVersion: v1
+data:
+  deployment-patch: |-
+      patch: |-
+        - op: replace
+          path: /spec/template/spec/containers/0/resources/requests/cpu
+          value: 500m
+        - op: replace
+          path: /spec/template/spec/containers/0/resources/requests/memory
+          value: 512Mi
+      target:
+        kind: Deployment
+        name: sveltos-applier-manager
+        namespace: projectsveltos
+  clusterrole-patch: |-
+      patch: |-
+        - op: remove
+          path: /rules
+      target:
+        kind: ClusterRole
+        name: sveltos-applier-manager-role
+kind: ConfigMap
+metadata:
+  name: %s
+  namespace: %s`, configMapName, configMapNamespace)
+
+		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
+		Expect(err).To(BeNil())
+
+		initObjects := []client.Object{sveltosCluster}
+		for i := range cm {
+			initObjects = append(initObjects, cm[i])
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		controllers.SetSveltosApplierConfigMap("sveltos-applier-config")
+		patches, err := controllers.GetSveltosApplierPatches(context.TODO(), c, sveltosCluster.Namespace,
+			sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos, logger)
 		Expect(err).To(BeNil())
 		Expect(len(patches)).To(Equal(2))
 		controllers.SetSveltosApplierConfigMap("")
@@ -765,6 +908,13 @@ metadata:
 	})
 
 	It("getSveltosAgentPatches with Strategic Merge Patch", func() {
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      upstreamClusterNamePrefix + randomString(),
+			},
+		}
+
 		cmYAML := `apiVersion: v1
 data:
   deployment-spec-patch: |-
@@ -793,7 +943,7 @@ metadata:
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
 
-		initObjects := []client.Object{}
+		initObjects := []client.Object{sveltosCluster}
 		for i := range cm {
 			initObjects = append(initObjects, cm[i])
 		}
@@ -801,7 +951,8 @@ metadata:
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		controllers.SetSveltosAgentConfigMap("sveltos-agent-config")
-		patches, err := controllers.GetSveltosAgentPatches(context.TODO(), c, logger)
+		patches, err := controllers.GetSveltosAgentPatches(context.TODO(), c, sveltosCluster.Namespace,
+			sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos, logger)
 		Expect(err).To(BeNil())
 		Expect(len(patches)).To(Equal(1))
 		Expect(patches[0].Target.Kind).To(Equal("Deployment"))
@@ -810,6 +961,13 @@ metadata:
 	})
 
 	It("getSveltosAgentPatches reads old post render patches from ConfigMap", func() {
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      upstreamClusterNamePrefix + randomString(),
+			},
+		}
+
 		cmYAML := `apiVersion: v1
 data:
   deployment-patch: |-
@@ -841,7 +999,7 @@ metadata:
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
 
-		initObjects := []client.Object{}
+		initObjects := []client.Object{sveltosCluster}
 		for i := range cm {
 			initObjects = append(initObjects, cm[i])
 		}
@@ -849,13 +1007,21 @@ metadata:
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		controllers.SetSveltosAgentConfigMap("sveltos-agent-config-old")
-		patches, err := controllers.GetSveltosAgentPatches(context.TODO(), c, logger)
+		patches, err := controllers.GetSveltosAgentPatches(context.TODO(), c, sveltosCluster.Namespace,
+			sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos, logger)
 		Expect(err).To(BeNil())
 		Expect(len(patches)).To(Equal(1))
 		controllers.SetSveltosAgentConfigMap("")
 	})
 
 	It("getSveltosAgentPatches with old Strategic Merge Patch", func() {
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      upstreamClusterNamePrefix + randomString(),
+			},
+		}
+
 		cmYAML := `apiVersion: v1
 data:
   patch: |-
@@ -879,7 +1045,7 @@ metadata:
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
 
-		initObjects := []client.Object{}
+		initObjects := []client.Object{sveltosCluster}
 		for i := range cm {
 			initObjects = append(initObjects, cm[i])
 		}
@@ -887,7 +1053,8 @@ metadata:
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		controllers.SetSveltosAgentConfigMap("sveltos-agent-config-old")
-		patches, err := controllers.GetSveltosAgentPatches(context.TODO(), c, logger)
+		patches, err := controllers.GetSveltosAgentPatches(context.TODO(), c, sveltosCluster.Namespace,
+			sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos, logger)
 		Expect(err).To(BeNil())
 		Expect(len(patches)).To(Equal(1))
 		Expect(patches[0].Target.Kind).To(Equal("Deployment"))
