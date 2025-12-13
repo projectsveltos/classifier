@@ -201,12 +201,12 @@ spec:
         - --cluster-namespace=
         - --cluster-name=
         - --cluster-type=
-        - --version=v1.3.0
+        - --version=main
         - --current-cluster=managed-cluster
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: docker.io/projectsveltos/sveltos-agent@sha256:7eafa77a1a470748b1f99c3ac766330e23a1439f59ac09f856c7bfb0ebf7fbb3
+        image: docker.io/projectsveltos/sveltos-agent@sha256:a619d423001dd8e50797bdbb01e0a5fb4478e130e689e42d78f87f43bcbd0416
         livenessProbe:
           failureThreshold: 3
           httpGet:
