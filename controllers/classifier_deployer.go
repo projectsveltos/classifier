@@ -176,10 +176,10 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 		_, err := clusterproxy.GetCluster(ctx, r.Client, c.Namespace, c.Name, clusterproxy.GetClusterType(c))
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("cluster %s/%s does not exist", c.Namespace, c.Name))
+				logger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s/%s does not exist", c.Namespace, c.Name))
 				continue
 			}
-			logger.V(logs.LogInfo).Info("failed to get cluster")
+			logger.V(logs.LogInfo).Error(err, "failed to get cluster")
 			return err
 		}
 		clusters = append(clusters, c)
@@ -243,7 +243,7 @@ func getClassifierAndClusterClient(ctx context.Context, clusterNamespace, cluste
 	}
 
 	if !classifier.DeletionTimestamp.IsZero() {
-		logger.V(logs.LogInfo).Info("Classifier is marked for deletion. Nothing to do.")
+		logger.V(logs.LogDebug).Info("Classifier is marked for deletion. Nothing to do.")
 		// if classifier is marked for deletion, there is nothing to deploy
 		return nil, nil, fmt.Errorf("classifier is marked for deletion")
 	}
@@ -255,7 +255,7 @@ func getClassifierAndClusterClient(ctx context.Context, clusterNamespace, cluste
 	}
 
 	if !cluster.GetDeletionTimestamp().IsZero() {
-		logger.V(logs.LogInfo).Info("cluster is marked for deletion. Nothing to do.")
+		logger.V(logs.LogDebug).Info("cluster is marked for deletion. Nothing to do.")
 		// if cluster is marked for deletion, there is nothing to deploy
 		return nil, nil, fmt.Errorf("cluster is marked for deletion")
 	}
@@ -653,7 +653,7 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 	}
 
 	if !cluster.GetDeletionTimestamp().IsZero() {
-		logger.V(logs.LogInfo).Info("cluster is marked for deletion. Nothing to do.")
+		logger.V(logs.LogDebug).Info("cluster is marked for deletion. Nothing to do.")
 		return nil
 	}
 
@@ -682,10 +682,10 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 	err = remoteClient.Get(ctx, types.NamespacedName{Name: applicant}, currentClassifier)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.V(logs.LogInfo).Info("classifier not found")
+			logger.V(logs.LogDebug).Info("classifier not found")
 			return nil
 		}
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get classifier. Err: %v", err))
+		logger.V(logs.LogInfo).Error(err, "failed to get classifier")
 		return err
 	}
 
@@ -821,7 +821,7 @@ func (r *ClassifierReconciler) removeClassifier(ctx context.Context, classifierS
 		return err
 	}
 	if paused {
-		logger.V(logs.LogInfo).Info("cluster is paused. Do nothing.")
+		logger.V(logs.LogDebug).Info("cluster is paused. Do nothing.")
 		return nil
 	}
 
@@ -878,7 +878,7 @@ func (r *ClassifierReconciler) canProceed(ctx context.Context, classifierScope *
 	}
 
 	if !ready {
-		logger.V(logs.LogInfo).Info("Cluster is not ready yet")
+		logger.V(logs.LogDebug).Info("Cluster is not ready yet")
 		return false, nil
 	}
 
@@ -1004,7 +1004,7 @@ func (r *ClassifierReconciler) proceedProcessingClassifier(ctx context.Context, 
 	var result deployer.Result
 
 	if isConfigSame {
-		logger.V(logs.LogInfo).Info("classifier and kubeconfig have not changed")
+		logger.V(logs.LogDebug).Info("classifier and kubeconfig have not changed")
 		result = r.Deployer.GetResult(ctx, cluster.Namespace, cluster.Name, classifier.Name, f.id,
 			clusterproxy.GetClusterType(cluster), false)
 		deployerStatus = r.convertResultStatus(result)
@@ -1036,11 +1036,11 @@ func (r *ClassifierReconciler) proceedProcessingClassifier(ctx context.Context, 
 			return clusterInfo, fmt.Errorf("classifier is still being provisioned")
 		}
 	} else if isConfigSame && currentStatus != nil && *currentStatus == libsveltosv1beta1.SveltosStatusProvisioned {
-		logger.V(logs.LogInfo).Info("already deployed")
+		logger.V(logs.LogDebug).Info("already deployed")
 		s := libsveltosv1beta1.SveltosStatusProvisioned
 		deployerStatus = &s
 	} else {
-		logger.V(logs.LogInfo).Info("no result is available. queue job and mark status as provisioning")
+		logger.V(logs.LogDebug).Info("no result is available. queue job and mark status as provisioning")
 		s := libsveltosv1beta1.SveltosStatusProvisioning
 		deployerStatus = &s
 
@@ -1190,8 +1190,7 @@ func deployCRDInPullMode(ctx context.Context, clusterNamespace, clusterName, cla
 	err := pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
 		libsveltosv1beta1.ClassifierKind, classifierName, libsveltosv1beta1.FeatureClassifier, resources, true, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Info(
-			fmt.Sprintf("failed to stage DebuggingConfiguration CRD: %v", err))
+		logger.V(logs.LogInfo).Error(err, "failed to stage DebuggingConfiguration CRD")
 		return err
 	}
 	return nil
@@ -1209,7 +1208,7 @@ func applyCRD(ctx context.Context, clusterNamespace, clusterName string, u *unst
 
 	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, u.GroupVersionKind(), "")
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+		logger.V(logs.LogInfo).Error(err, "failed to get dynamic client")
 		return err
 	}
 
@@ -1219,7 +1218,7 @@ func applyCRD(ctx context.Context, clusterNamespace, clusterName string, u *unst
 	}
 	_, err = dr.Apply(ctx, u.GetName(), u, options)
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to apply Classifier CRD: %v", err))
+		logger.V(logs.LogInfo).Error(err, "failed to apply Classifier CRD")
 		return err
 	}
 
@@ -1232,7 +1231,7 @@ func deployClassifierCRD(ctx context.Context, clusterNamespace, clusterName, cla
 
 	classifierCRD, err := k8s_utils.GetUnstructured(crd.GetClassifierCRDYAML())
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get Classifier CRD unstructured: %v", err))
+		logger.V(logs.LogInfo).Error(err, "failed to get Classifier CRD unstructured")
 		return err
 	}
 
@@ -1249,8 +1248,7 @@ func deployClassifierReportCRD(ctx context.Context, clusterNamespace, clusterNam
 
 	classifierReportCRD, err := k8s_utils.GetUnstructured(crd.GetClassifierReportCRDYAML())
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClassifierReport CRD unstructured: %v",
-			err))
+		logger.V(logs.LogInfo).Error(err, "failed to get ClassifierReport CRD unstructured")
 		return err
 	}
 
@@ -1267,7 +1265,7 @@ func deployHealthCheckCRD(ctx context.Context, clusterNamespace, clusterName, cl
 
 	healthCheckCRD, err := k8s_utils.GetUnstructured(crd.GetHealthCheckCRDYAML())
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get HealthCheck CRD unstructured: %v", err))
+		logger.V(logs.LogInfo).Error(err, "failed to get HealthCheck CRD unstructured")
 		return err
 	}
 
@@ -1284,8 +1282,7 @@ func deployHealthCheckReportCRD(ctx context.Context, clusterNamespace, clusterNa
 
 	healthCheckReportCRD, err := k8s_utils.GetUnstructured(crd.GetHealthCheckReportCRDYAML())
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get healthCheckReport CRD unstructured: %v",
-			err))
+		logger.V(logs.LogInfo).Error(err, "failed to get healthCheckReport CRD unstructured")
 		return err
 	}
 
@@ -1302,7 +1299,7 @@ func deployEventSourceCRD(ctx context.Context, clusterNamespace, clusterName, cl
 
 	eventSourceCRD, err := k8s_utils.GetUnstructured(crd.GetEventSourceCRDYAML())
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get eventSourceCRD CRD unstructured: %v", err))
+		logger.V(logs.LogInfo).Error(err, "failed to get eventSourceCRD CRD unstructured")
 		return err
 	}
 
@@ -1319,8 +1316,7 @@ func deployEventReportCRD(ctx context.Context, clusterNamespace, clusterName, cl
 
 	eventReportCRD, err := k8s_utils.GetUnstructured(crd.GetEventReportCRDYAML())
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get eventReportCRD CRD unstructured: %v",
-			err))
+		logger.V(logs.LogInfo).Error(err, "failed to get eventReportCRD CRD unstructured")
 		return err
 	}
 
@@ -1392,8 +1388,7 @@ func deployDebuggingConfigurationCRD(ctx context.Context, clusterNamespace, clus
 
 	dcCRD, err := k8s_utils.GetUnstructured(crd.GetDebuggingConfigurationCRDYAML())
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get DebuggingConfiguration CRD unstructured: %v",
-			err))
+		logger.V(logs.LogInfo).Error(err, "failed to get DebuggingConfiguration CRD unstructured")
 		return err
 	}
 
@@ -1410,7 +1405,7 @@ func deployReloaderCRD(ctx context.Context, clusterNamespace, clusterName, class
 	// Deploy Reloader CRD
 	reloaderCRD, err := k8s_utils.GetUnstructured(crd.GetReloaderCRDYAML())
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get Reloader CRD unstructured: %v", err))
+		logger.V(logs.LogInfo).Error(err, "failed to get Reloader CRD unstructured")
 		return err
 	}
 
@@ -1427,8 +1422,7 @@ func deployReloaderReportCRD(ctx context.Context, clusterNamespace, clusterName,
 	// Deploy Reloader CRD
 	reloaderReportCRD, err := k8s_utils.GetUnstructured(crd.GetReloaderReportCRDYAML())
 	if err != nil {
-		logger.V(logs.LogInfo).Info(
-			fmt.Sprintf("failed to get ReloaderReport CRD unstructured: %v", err))
+		logger.V(logs.LogInfo).Error(err, "failed to get ReloaderReport CRD unstructured")
 		return err
 	}
 
@@ -1599,8 +1593,7 @@ func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest
 	lbls := getSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
 	name, err := getSveltosAgentDeploymentName(ctx, restConfig, clusterNamespace, clusterName, clusterType, lbls)
 	if err != nil {
-		logger.V(logs.LogInfo).Info(
-			fmt.Sprintf("failed to get name for sveltos-agent deployment: %v", err))
+		logger.V(logs.LogInfo).Error(err, "failed to get name for sveltos-agent deployment")
 		return err
 	}
 
@@ -1624,7 +1617,7 @@ func deploySveltosAgentResources(ctx context.Context, clusterNamespace, clusterN
 	for i := range elements {
 		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse sveltos agent yaml: %v", err))
+			logger.V(logs.LogInfo).Error(err, "failed to parse sveltos agent yaml")
 			return err
 		}
 
@@ -1642,7 +1635,7 @@ func deploySveltosAgentResources(ctx context.Context, clusterNamespace, clusterN
 			if policy.GetKind() == "Deployment" {
 				policy, err = addTemplateSpecLabels(policy, lbls)
 				if err != nil {
-					logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to set deployment spec.template.labels: %v", err))
+					logger.V(logs.LogInfo).Error(err, "failed to set deployment spec.template.labels")
 					return err
 				}
 			}
@@ -1656,7 +1649,7 @@ func deploySveltosAgentResources(ctx context.Context, clusterNamespace, clusterN
 				[]*unstructured.Unstructured{policy},
 			)
 			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to patch sveltos-agent: %v", err))
+				logger.V(logs.LogInfo).Error(err, "failed to patch sveltos-agent")
 				return err
 			}
 		} else {
@@ -1699,7 +1692,7 @@ func deploySveltosApplierResources(ctx context.Context, clusterNamespace, cluste
 	for i := range elements {
 		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse sveltos applier yaml: %v", err))
+			logger.V(logs.LogInfo).Error(err, "failed to parse sveltos applier yaml")
 			return err
 		}
 
@@ -1711,7 +1704,7 @@ func deploySveltosApplierResources(ctx context.Context, clusterNamespace, cluste
 				[]*unstructured.Unstructured{policy},
 			)
 			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to patch sveltos-applier: %v", err))
+				logger.V(logs.LogInfo).Error(err, "failed to patch sveltos-applier")
 				return err
 			}
 		} else {
@@ -1732,7 +1725,7 @@ func deploySveltosAgentPatchedResources(ctx context.Context, restConfig *rest.Co
 		policy := referencedUnstructured[i]
 		dr, err := k8s_utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+			logger.V(logs.LogInfo).Error(err, "failed to get dynamic client")
 			return err
 		}
 
@@ -1850,8 +1843,8 @@ func removeSveltosAgentFromManagementCluster(ctx context.Context,
 	name, err := getSveltosAgentDeploymentName(ctx, getManagementClusterConfig(),
 		clusterNamespace, clusterName, clusterType, lbls)
 	if err != nil {
-		logger.V(logs.LogInfo).Info(
-			fmt.Sprintf("failed to get name for sveltos-agent deployment name: %v", err))
+		logger.V(logs.LogInfo).Error(err,
+			"failed to get name for sveltos-agent deployment name")
 		return err
 	}
 
@@ -1864,13 +1857,13 @@ func removeSveltosAgentFromManagementCluster(ctx context.Context,
 	for i := range elements {
 		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse sveltos-agent yaml: %v", err))
+			logger.V(logs.LogInfo).Error(err, "failed to parse sveltos-agent yaml")
 			return err
 		}
 
 		dr, err := k8s_utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+			logger.V(logs.LogInfo).Error(err, "failed to get dynamic client")
 			return err
 		}
 
