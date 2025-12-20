@@ -141,7 +141,7 @@ func (r *ClassifierReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling")
+	logger.V(logs.LogDebug).Info("Reconciling")
 
 	// Fecth the Classifier instance
 	classifier := &libsveltosv1beta1.Classifier{}
@@ -197,7 +197,7 @@ func (r *ClassifierReconciler) reconcileDelete(
 ) (reconcile.Result, error) {
 
 	logger := classifierScope.Logger
-	logger.V(logs.LogInfo).Info("Reconciling Classifier delete")
+	logger.V(logs.LogDebug).Info("Reconciling Classifier delete")
 
 	err := r.removeAllRegistrations(ctx, classifierScope, logger)
 	if err != nil {
@@ -250,7 +250,7 @@ func (r *ClassifierReconciler) reconcileDelete(
 		controllerutil.RemoveFinalizer(classifierScope.Classifier, libsveltosv1beta1.ClassifierFinalizer)
 	}
 
-	logger.V(logs.LogInfo).Info("Reconcile delete success")
+	logger.V(logs.LogDebug).Info("Reconcile delete success")
 	return reconcile.Result{}, nil
 }
 
@@ -260,7 +260,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 ) (reconcile.Result, error) {
 
 	logger := classifierScope.Logger
-	logger.V(logs.LogInfo).Info("Reconciling Classifier")
+	logger.V(logs.LogDebug).Info("Reconciling Classifier")
 
 	if !controllerutil.ContainsFinalizer(classifierScope.Classifier, libsveltosv1beta1.ClassifierFinalizer) {
 		if err := r.addFinalizer(ctx, classifierScope); err != nil {
@@ -296,7 +296,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
-	logger.V(logs.LogInfo).Info("Reconcile success")
+	logger.V(logs.LogDebug).Info("Reconcile success")
 	return reconcile.Result{}, nil
 }
 
@@ -308,7 +308,8 @@ func (r *ClassifierReconciler) SetupWithManager(ctx context.Context,
 	// all Classifier with at least one conflict needs to be reconciled
 
 	c, err := ctrl.NewControllerManagedBy(mgr).
-		For(&libsveltosv1beta1.Classifier{}).
+		For(&libsveltosv1beta1.Classifier{}, builder.WithPredicates(
+			ClassifierPredicate{Logger: mgr.GetLogger().WithValues("classifierPredicate")})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
@@ -321,7 +322,7 @@ func (r *ClassifierReconciler) SetupWithManager(ctx context.Context,
 		Watches(&libsveltosv1beta1.Classifier{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifier),
 			builder.WithPredicates(
-				ClassifierPredicate(mgr.GetLogger().WithValues("predicate", "classifiepredicate")),
+				OtherClassifierPredicate(mgr.GetLogger().WithValues("predicate", "otherClassifiepredicate")),
 			),
 		).
 		Watches(&libsveltosv1beta1.SveltosCluster{},

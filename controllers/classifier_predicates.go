@@ -28,6 +28,52 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
+// ClassifierPredicate is a custom predicate that filters ClusterSummary s events
+type ClassifierPredicate struct {
+	Logger logr.Logger
+}
+
+func (p ClassifierPredicate) Create(e event.CreateEvent) bool {
+	// Always reconcile on creation
+	return true
+}
+
+func (p ClassifierPredicate) Update(e event.UpdateEvent) bool {
+	newClassifier := e.ObjectNew.(*libsveltosv1beta1.Classifier)
+	oldClassifier := e.ObjectOld.(*libsveltosv1beta1.Classifier)
+	log := p.Logger.WithValues("predicate", "updateClassifier",
+		"classifier", newClassifier.Name,
+	)
+
+	if oldClassifier == nil {
+		log.V(logs.LogVerbose).Info("Old Classifier is nil. Reconcile Classifier.")
+		return true
+	}
+
+	if !reflect.DeepEqual(oldClassifier.DeletionTimestamp, newClassifier.DeletionTimestamp) {
+		return true
+	}
+
+	if !reflect.DeepEqual(oldClassifier.Spec, newClassifier.Spec) {
+		log.V(logs.LogVerbose).Info(
+			"ClusterSummary Spec changed. Will attempt to reconcile ClusterSummary.",
+		)
+		return true
+	}
+
+	return false
+}
+
+func (p ClassifierPredicate) Delete(e event.DeleteEvent) bool {
+	// Always reconcile on deletion
+	return true
+}
+
+func (p ClassifierPredicate) Generic(e event.GenericEvent) bool {
+	// Ignore generic
+	return false
+}
+
 // SecretPredicates predicates for Secret. ClassifierReconciler watches Secret events
 // and react to those by reconciling itself based on following predicates
 func SecretPredicates(logger logr.Logger) predicate.Funcs {
@@ -251,9 +297,9 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 	}
 }
 
-// ClassifierPredicate predicates for Classifier. ClassifierReconciler watches Classifier events
+// OtherClassifierPredicate predicates for Classifier. ClassifierReconciler watches Classifier events
 // and react to those by reconciling itself based on following predicates
-func ClassifierPredicate(logger logr.Logger) predicate.Funcs {
+func OtherClassifierPredicate(logger logr.Logger) predicate.Funcs {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			newClassifer := e.ObjectNew.(*libsveltosv1beta1.Classifier)
