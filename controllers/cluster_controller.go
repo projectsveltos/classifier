@@ -42,7 +42,7 @@ type ClusterReconciler struct {
 
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling Cluster")
+	logger.V(logs.LogDebug).Info("Reconciling Cluster")
 
 	// Fecth the Cluster instance
 	cluster := &clusterv1.Cluster{}

@@ -357,7 +357,7 @@ var _ = Describe("Classifier Predicates: ClassifierReportPredicate", func() {
 	})
 })
 
-var _ = Describe("Classifier Predicates: ClassifierPredicate", func() {
+var _ = Describe("Classifier Predicates: OtherClassifierPredicate", func() {
 	var logger logr.Logger
 	var classifier *libsveltosv1beta1.Classifier
 
@@ -371,7 +371,7 @@ var _ = Describe("Classifier Predicates: ClassifierPredicate", func() {
 	})
 
 	It("Create does not reprocesses", func() {
-		classifierPredicate := controllers.ClassifierPredicate(logger)
+		classifierPredicate := controllers.OtherClassifierPredicate(logger)
 
 		e := event.CreateEvent{
 			Object: classifier,
@@ -381,7 +381,7 @@ var _ = Describe("Classifier Predicates: ClassifierPredicate", func() {
 		Expect(result).To(BeFalse())
 	})
 	It("Delete does reprocess ", func() {
-		classifierPredicate := controllers.ClassifierPredicate(logger)
+		classifierPredicate := controllers.OtherClassifierPredicate(logger)
 
 		e := event.DeleteEvent{
 			Object: classifier,
@@ -391,7 +391,7 @@ var _ = Describe("Classifier Predicates: ClassifierPredicate", func() {
 		Expect(result).To(BeTrue())
 	})
 	It("Update reprocesses when Status.MatchinClusterStatuses changes", func() {
-		classifierPredicate := controllers.ClassifierPredicate(logger)
+		classifierPredicate := controllers.OtherClassifierPredicate(logger)
 
 		classifier.Status.MachingClusterStatuses = []libsveltosv1beta1.MachingClusterStatus{
 			{
@@ -416,7 +416,7 @@ var _ = Describe("Classifier Predicates: ClassifierPredicate", func() {
 		Expect(result).To(BeTrue())
 	})
 	It("Update does not reprocess when Status.MatchinClusterStatuses does not change", func() {
-		classifierPredicate := controllers.ClassifierPredicate(logger)
+		classifierPredicate := controllers.OtherClassifierPredicate(logger)
 
 		classifier.Status.MachingClusterStatuses = []libsveltosv1beta1.MachingClusterStatus{
 			{
