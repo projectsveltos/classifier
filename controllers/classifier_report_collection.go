@@ -185,9 +185,10 @@ func collectClassifierReports(c client.Client, shardKey, capiOnboardAnnotation, 
 
 		for i := range clusterList {
 			cluster := &clusterList[i]
-			err = collectClassifierReportsFromCluster(ctx, c, cluster, version, logger)
+			l := logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", cluster.Kind, cluster.Namespace, cluster.Name))
+			err = collectClassifierReportsFromCluster(ctx, c, cluster, version, l)
 			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ClassifierReports from cluster: %s/%s %v",
+				l.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ClassifierReports from cluster: %s/%s %v",
 					cluster.Namespace, cluster.Name, err))
 			}
 		}
