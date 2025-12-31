@@ -216,3 +216,7 @@ func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *apps
 
 	return true, "", "", ""
 }
+
+func stringPtr(s string) *string {
+	return &s
+}
