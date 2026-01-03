@@ -300,11 +300,8 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 		l := logger.WithValues("classifierReport", cr.Name)
 
 		if !cr.DeletionTimestamp.IsZero() {
-			l.V(logs.LogDebug).Info("deleting from management cluster")
-			if err != nil {
-				logger.V(logs.LogInfo).Error(err, "failed to delete ClassifierReport in management cluster")
-				continue
-			}
+			// ignore deleted ClassifierReport
+			continue
 		}
 
 		err = updateClassifierReport(ctx, c, cluster, cr, l)
