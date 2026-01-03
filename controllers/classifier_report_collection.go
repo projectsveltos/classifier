@@ -190,6 +190,7 @@ func collectClassifierReports(c client.Client, shardKey, capiOnboardAnnotation, 
 			if err != nil {
 				l.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ClassifierReports from cluster: %s/%s %v",
 					cluster.Namespace, cluster.Name, err))
+				continue
 			}
 		}
 
@@ -247,7 +248,6 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 	if err != nil {
 		return err
 	}
-
 	if isPullMode {
 		return nil
 	}
@@ -292,17 +292,25 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 
 	for i := range classifierReportList.Items {
 		cr := &classifierReportList.Items[i]
-		if !cr.DeletionTimestamp.IsZero() {
-			// ignore deleted ClassifierReport
-			continue
-		}
+
 		if shouldIgnore(cr, isPullMode) {
 			continue
 		}
+
 		l := logger.WithValues("classifierReport", cr.Name)
+
+		if !cr.DeletionTimestamp.IsZero() {
+			l.V(logs.LogDebug).Info("deleting from management cluster")
+			if err != nil {
+				logger.V(logs.LogInfo).Error(err, "failed to delete ClassifierReport in management cluster")
+				continue
+			}
+		}
+
 		err = updateClassifierReport(ctx, c, cluster, cr, l)
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to process ClassifierReport. Err: %v", err))
+			l.V(logs.LogInfo).Error(err, "failed to update EventReport in management cluster")
+			continue
 		}
 	}
 

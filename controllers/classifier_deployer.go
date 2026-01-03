@@ -974,11 +974,12 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 	clusterInfo := &libsveltosv1beta1.ClusterInfo{
 		Cluster:        *cluster,
 		Hash:           currentHash,
-		FailureMessage: nil,
+		FailureMessage: stringPtr(""),
 		Status:         libsveltosv1beta1.SveltosStatusProvisioning,
 	}
 
-	proceed, err := r.canProceed(ctx, classifierScope, cluster, logger)
+	var proceed bool
+	proceed, err = r.canProceed(ctx, classifierScope, cluster, logger)
 	if err != nil {
 		failureMessage := err.Error()
 		clusterInfo.FailureMessage = &failureMessage
@@ -999,8 +1000,10 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 	if r.Deployer.IsInProgress(cluster.Namespace, cluster.Name, classifier.Name, f.id,
 		clusterproxy.GetClusterType(cluster), true) {
 
-		logger.V(logs.LogDebug).Info("cleanup is in progress")
-		return nil, fmt.Errorf("cleanup of %s in cluster still in progress. Wait before redeploying", f.id)
+		msg := "cleanup is in progress"
+		clusterInfo.FailureMessage = &msg
+		logger.V(logs.LogDebug).Info(msg)
+		return clusterInfo, fmt.Errorf("cleanup of %s in cluster still in progress. Wait before redeploying", f.id)
 	}
 
 	// Get the Classifier hash when Classifier was last deployed in this cluster (if ever)
@@ -1073,7 +1076,7 @@ func (r *ClassifierReconciler) proceedProcessingClassifier(ctx context.Context, 
 	} else if isConfigSame && currentStatus != nil && *currentStatus == libsveltosv1beta1.SveltosStatusProvisioned {
 		logger.V(logs.LogDebug).Info("already deployed")
 		clusterInfo.Status = libsveltosv1beta1.SveltosStatusProvisioned
-		clusterInfo.FailureMessage = nil
+		clusterInfo.FailureMessage = stringPtr("")
 	} else {
 		logger.V(logs.LogDebug).Info("no result is available. queue job and mark status as provisioning")
 		clusterInfo.Status = libsveltosv1beta1.SveltosStatusProvisioning
@@ -1116,7 +1119,7 @@ func (r *ClassifierReconciler) proceedDeployingClassifierInPullMode(ctx context.
 	clusterInfo := &libsveltosv1beta1.ClusterInfo{
 		Cluster:        *cluster,
 		Hash:           currentHash,
-		FailureMessage: nil,
+		FailureMessage: stringPtr(""),
 		Status:         libsveltosv1beta1.SveltosStatusProvisioning,
 	}
 
