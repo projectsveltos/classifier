@@ -64,13 +64,16 @@ const (
 )
 
 const (
-	// deleteRequeueAfter is how long to wait before checking again to see if the cluster still has
-	// children during deletion.
+	// deleteRequeueAfter is how long to wait before checking again to see if the classifier
+	// can be deleted
 	deleteRequeueAfter = 10 * time.Second
 
-	// normalRequeueAfter is how long to wait before checking again to see if the cluster can be moved
-	// to ready after or workload features (for instance ingress or reporter) have failed
+	// normalRequeueAfter is how long to wait before reconciling the classifier instance
 	normalRequeueAfter = 10 * time.Second
+
+	// conflictRequeueAfter is how long to wait before retrying when a label
+	// management conflict is detected with another classifier instance.
+	conflictRequeueAfter = time.Minute
 
 	controlplaneendpoint = "controlplaneendpoint-key"
 	configurationHash    = "configurationHash"
@@ -272,19 +275,19 @@ func (r *ClassifierReconciler) reconcileNormal(
 	err := r.updateMatchingClustersAndRegistrations(ctx, classifierScope, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Info("failed to update matchingClusterRefs")
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	err = r.updateLabelsOnMatchingClusters(ctx, classifierScope, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Info("failed to update cluster labels")
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	err = r.updateClusterInfo(ctx, classifierScope)
 	if err != nil {
 		logger.V(logs.LogDebug).Info("failed to update clusterInfo")
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	r.updateMaps(classifierScope)
@@ -294,6 +297,10 @@ func (r *ClassifierReconciler) reconcileNormal(
 	if err := r.deployClassifier(ctx, classifierScope, f, logger); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to deploy")
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+	}
+
+	if hasUnManagedLabels(classifierScope.Classifier) {
+		return reconcile.Result{Requeue: true, RequeueAfter: conflictRequeueAfter}, nil
 	}
 
 	logger.V(logs.LogDebug).Info("Reconcile success")
@@ -317,12 +324,6 @@ func (r *ClassifierReconciler) SetupWithManager(ctx context.Context,
 			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifierReport),
 			builder.WithPredicates(
 				ClassifierReportPredicate(mgr.GetLogger().WithValues("predicate", "classifierreportpredicate")),
-			),
-		).
-		Watches(&libsveltosv1beta1.Classifier{},
-			handler.EnqueueRequestsFromMapFunc(r.requeueClassifierForClassifier),
-			builder.WithPredicates(
-				OtherClassifierPredicate(mgr.GetLogger().WithValues("predicate", "otherClassifiepredicate")),
 			),
 		).
 		Watches(&libsveltosv1beta1.SveltosCluster{},
@@ -753,4 +754,16 @@ func startSveltosAgentInMgmtCluster(o deployer.Options) bool {
 	}
 
 	return runInMgtmCluster
+}
+
+// hasUnManagedLabels returns true if there is a conflict where this classifier
+// wants to manage labels that are already being managed by another instance.
+func hasUnManagedLabels(classifier *libsveltosv1beta1.Classifier) bool {
+	for i := range classifier.Status.MachingClusterStatuses {
+		if len(classifier.Status.MachingClusterStatuses[i].UnManagedLabels) > 0 {
+			return true
+		}
+	}
+
+	return false
 }

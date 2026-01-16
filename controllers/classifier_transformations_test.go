@@ -155,36 +155,3 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: classifierName}}))
 	})
 })
-
-var _ = Describe("ClassifierTransformations map functions", func() {
-	It("requeueClassifierForClassifier returns Classifiers with at least one conflict", func() {
-		c := fake.NewClientBuilder().WithScheme(scheme).Build()
-
-		reconciler := &controllers.ClassifierReconciler{
-			Client:     c,
-			Scheme:     scheme,
-			Mux:        sync.Mutex{},
-			ClusterMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-		}
-
-		classifierName1 := randomString()
-		classifierInfo1 := corev1.ObjectReference{
-			Kind: libsveltosv1beta1.ClassifierKind, Name: classifierName1, APIVersion: libsveltosv1beta1.GroupVersion.String()}
-		reconciler.ClassifierSet.Insert(&classifierInfo1)
-		classifierName2 := randomString()
-		classifierInfo2 := corev1.ObjectReference{
-			Kind: libsveltosv1beta1.ClassifierKind, Name: classifierName2, APIVersion: libsveltosv1beta1.GroupVersion.String()}
-		reconciler.ClassifierSet.Insert(&classifierInfo2)
-
-		classifier := &libsveltosv1beta1.Classifier{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
-			},
-		}
-
-		requests := controllers.RequeueClassifierForClassifier(reconciler, context.TODO(), classifier)
-		Expect(requests).To(HaveLen(2))
-		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: classifierName2}}))
-		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: classifierName1}}))
-	})
-})
