@@ -53,7 +53,6 @@ var (
 	RequeueClassifierForCluster            = (*ClassifierReconciler).requeueClassifierForCluster
 	RequeueClassifierForMachine            = (*ClassifierReconciler).requeueClassifierForMachine
 	RequeueClassifierForClassifierReport   = (*ClassifierReconciler).requeueClassifierForClassifierReport
-	RequeueClassifierForClassifier         = (*ClassifierReconciler).requeueClassifierForClassifier
 	UpdateMatchingClustersAndRegistrations = (*ClassifierReconciler).updateMatchingClustersAndRegistrations
 	UpdateLabelsOnMatchingClusters         = (*ClassifierReconciler).updateLabelsOnMatchingClusters
 	HandleLabelRegistrations               = (*ClassifierReconciler).handleLabelRegistrations
