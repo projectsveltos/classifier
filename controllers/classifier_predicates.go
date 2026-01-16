@@ -56,7 +56,7 @@ func (p ClassifierPredicate) Update(e event.UpdateEvent) bool {
 
 	if !reflect.DeepEqual(oldClassifier.Spec, newClassifier.Spec) {
 		log.V(logs.LogVerbose).Info(
-			"ClusterSummary Spec changed. Will attempt to reconcile ClusterSummary.",
+			"Classifier Spec changed. Will attempt to reconcile ClusterSummary.",
 		)
 		return true
 	}
@@ -201,7 +201,7 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 			}
 
 			log.V(logs.LogVerbose).Info(
-				"ConfigMap did match expected conditions.  Will attempt to reconcile associated Classifiers.")
+				"ConfigMap did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
@@ -217,7 +217,7 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 			}
 
 			log.V(logs.LogVerbose).Info(
-				"ConfigMap did match expected conditions.  Will attempt to reconcile associated Classifiers.")
+				"ConfigMap did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
 			return false
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
@@ -292,70 +292,6 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 
 			log.V(logs.LogVerbose).Info(
 				"ClassifierReport did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
-			return false
-		},
-	}
-}
-
-// OtherClassifierPredicate predicates for Classifier. ClassifierReconciler watches Classifier events
-// and react to those by reconciling itself based on following predicates
-func OtherClassifierPredicate(logger logr.Logger) predicate.Funcs {
-	return predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			newClassifer := e.ObjectNew.(*libsveltosv1beta1.Classifier)
-			oldClassifier := e.ObjectOld.(*libsveltosv1beta1.Classifier)
-			log := logger.WithValues("predicate", "updateEvent",
-				"name", newClassifer.Name,
-			)
-
-			if oldClassifier == nil {
-				log.V(logs.LogVerbose).Info("Old Classifier is nil. Reconcile Classifier")
-				return true
-			}
-
-			// return true if Classifier.Status has changed
-			if !reflect.DeepEqual(oldClassifier.Status.MachingClusterStatuses, newClassifer.Status.MachingClusterStatuses) {
-				log.V(logs.LogVerbose).Info(
-					"Classifier Status.MachingClusterStatuses changed. Will attempt to reconcile associated Classifiers.")
-				return true
-			}
-
-			// otherwise, return false
-			log.V(logs.LogVerbose).Info(
-				"ClassifierReport did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
-			return false
-		},
-		CreateFunc: func(e event.CreateEvent) bool {
-			classifier := e.Object.(*libsveltosv1beta1.Classifier)
-			log := logger.WithValues("predicate", "createEvent",
-				"namespace", classifier.Namespace,
-				"name", classifier.Name,
-			)
-
-			log.V(logs.LogVerbose).Info(
-				"Classifier did not match expected conditions.  Will attempt to reconcile associated Classifiers.")
-			return false
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			classifier := e.Object.(*libsveltosv1beta1.Classifier)
-			log := logger.WithValues("predicate", "createEvent",
-				"namespace", classifier.Namespace,
-				"name", classifier.Name,
-			)
-
-			log.V(logs.LogVerbose).Info(
-				"Classifier did match expected conditions.  Will attempt to reconcile associated Classifiers.")
-			return true
-		},
-		GenericFunc: func(e event.GenericEvent) bool {
-			classifier := e.Object.(*libsveltosv1beta1.Classifier)
-			log := logger.WithValues("predicate", "createEvent",
-				"namespace", classifier.Namespace,
-				"name", classifier.Name,
-			)
-
-			log.V(logs.LogVerbose).Info(
-				"Classifier did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")
 			return false
 		},
 	}
