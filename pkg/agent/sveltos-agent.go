@@ -206,7 +206,16 @@ spec:
         - --run-mode=do-not-send-reports
         command:
         - /manager
-        image: docker.io/projectsveltos/sveltos-agent@sha256:37a6846b7842f614c88757c990ab1a66af9e7ec20add0714c9ef17430b072dd8
+        env:
+        - name: GOMEMLIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
+        - name: GOMAXPROCS
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.cpu
+        image: docker.io/projectsveltos/sveltos-agent@sha256:3f5668baa073793be8cbebb6465ee641741bef61a4d56d7eb945209baf197fd6
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -236,7 +245,7 @@ spec:
             cpu: 500m
             memory: 512Mi
           requests:
-            cpu: 10m
+            cpu: 100m
             memory: 128Mi
         securityContext:
           allowPrivilegeEscalation: false
