@@ -79,38 +79,6 @@ func (r *ClassifierReconciler) requeueClassifierForACluster(o client.Object,
 	return requests
 }
 
-func (r *ClassifierReconciler) requeueClassifierForMachine(
-	ctx context.Context, machine *clusterv1.Machine,
-) []reconcile.Request {
-
-	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
-		"objectMapper",
-		"requeueClassifierForMachine",
-		"namespace",
-		machine.Namespace,
-		"cluster",
-		machine.Name,
-	)
-
-	r.Mux.Lock()
-	defer r.Mux.Unlock()
-
-	// Get all existing classifiers
-	classifiers := r.AllClassifierSet.Items()
-	requests := make([]ctrl.Request, r.AllClassifierSet.Len())
-
-	for i := range classifiers {
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("requeuing classifier %s", classifiers[i].Name))
-		requests[i] = ctrl.Request{
-			NamespacedName: client.ObjectKey{
-				Name: classifiers[i].Name,
-			},
-		}
-	}
-
-	return requests
-}
-
 func (r *ClassifierReconciler) requeueClassifierForSecret(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {

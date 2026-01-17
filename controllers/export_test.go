@@ -51,7 +51,6 @@ var (
 	ProcessClassifier                      = (*ClassifierReconciler).processClassifier
 	RemoveClassifier                       = (*ClassifierReconciler).removeClassifier
 	RequeueClassifierForCluster            = (*ClassifierReconciler).requeueClassifierForCluster
-	RequeueClassifierForMachine            = (*ClassifierReconciler).requeueClassifierForMachine
 	RequeueClassifierForClassifierReport   = (*ClassifierReconciler).requeueClassifierForClassifierReport
 	UpdateMatchingClustersAndRegistrations = (*ClassifierReconciler).updateMatchingClustersAndRegistrations
 	UpdateLabelsOnMatchingClusters         = (*ClassifierReconciler).updateLabelsOnMatchingClusters
