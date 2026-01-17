@@ -129,8 +129,6 @@ type ClassifierReconciler struct {
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=configurationbundles/status,verbs=get;list;watch;update
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;watch;list;update
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters/status,verbs=get;watch;list
-//+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;watch;list
-//+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines/status,verbs=get;watch;list
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 //+kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch
@@ -373,18 +371,6 @@ func (r *ClassifierReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Contr
 		predicates.ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
 	)
 	if err := c.Watch(sourceCluster); err != nil {
-		return err
-	}
-
-	// When cluster-api machine changes, according to ClusterPredicates,
-	// one or more ClusterProfiles need to be reconciled.
-	machineCluster := source.Kind[*clusterv1.Machine](
-		mgr.GetCache(),
-		&clusterv1.Machine{},
-		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClassifierForMachine),
-		predicates.MachinePredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
-	)
-	if err := c.Watch(machineCluster); err != nil {
 		return err
 	}
 
