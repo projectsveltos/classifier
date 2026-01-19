@@ -68,7 +68,29 @@ func verifyFlow(namePrefix string) {
 	}
 
 	verifyClassifierReport(classifier.Name, true)
+	verifyClusterLabels(classifier)
 
+	Byf("Changing classifier so cluster is not a match anymore")
+	currentClassifer := &libsveltosv1beta1.Classifier{}
+	Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: classifier.Name},
+		currentClassifer)).To(Succeed())
+	Expect(currentClassifer.Spec.KubernetesVersionConstraints).ToNot(BeNil())
+	currentClassifer.Spec.KubernetesVersionConstraints[0].Comparison =
+		string(libsveltosv1beta1.ComparisonLessThan)
+	Expect(k8sClient.Update(context.TODO(), currentClassifer)).To(Succeed())
+
+	verifyClassifierReport(classifier.Name, false)
+	verifyClusterLabelsAreGone(classifier)
+
+	Byf("Changing classifier so cluster is a match again")
+	Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: classifier.Name},
+		currentClassifer)).To(Succeed())
+	Expect(currentClassifer.Spec.KubernetesVersionConstraints).ToNot(BeNil())
+	currentClassifer.Spec.KubernetesVersionConstraints[0].Comparison =
+		string(libsveltosv1beta1.ComparisonGreaterThanOrEqualTo)
+	Expect(k8sClient.Update(context.TODO(), currentClassifer)).To(Succeed())
+
+	verifyClassifierReport(classifier.Name, true)
 	verifyClusterLabels(classifier)
 
 	Byf("Deleting classifier instance %s in the management cluster", classifier.Name)
@@ -96,7 +118,7 @@ func verifyFlow(namePrefix string) {
 	}, timeout, pollingInterval).Should(BeTrue())
 
 	Byf("Verifying Cluster labels are not updated because of Classifier being deleted")
-	verifyClusterLabels(classifier)
+	verifyClusterLabelsAreGone(classifier)
 
 	removeLabels(classifier)
 }

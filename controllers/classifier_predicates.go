@@ -252,7 +252,7 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 			// return true if ClassifierReport.Spec.Match has changed
 			if oldReport.Spec.Match != newReport.Spec.Match {
 				log.V(logs.LogVerbose).Info(
-					"Cluster was unpaused. Will attempt to reconcile associated Classifiers.")
+					"ClassifierReport Spec.Match changed. Will attempt to reconcile associated Classifiers.")
 				return true
 			}
 

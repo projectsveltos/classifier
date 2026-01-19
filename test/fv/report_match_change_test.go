@@ -129,8 +129,8 @@ var _ = Describe("Classifier: update cluster labels", func() {
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		Byf("Verifying Cluster labels are not updated because of Classifier being deleted")
-		verifyClusterLabels(classifier)
+		Byf("Verifying Cluster labels are removed because of Classifier being deleted")
+		verifyClusterLabelsAreGone(classifier)
 
 		removeLabels(classifier)
 	})
