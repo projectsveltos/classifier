@@ -18,12 +18,12 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -150,11 +150,10 @@ func (r *ClassifierReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if apierrors.IsNotFound(err) {
 			return reconcile.Result{}, nil
 		}
-		logger.Error(err, "Failed to fetch Classifier")
-		return reconcile.Result{}, errors.Wrapf(
-			err,
-			"Failed to fetch Classifier %s",
-			req.NamespacedName,
+		logger.Error(err, "failed to fetch Classifier")
+		return reconcile.Result{}, fmt.Errorf(
+			"failed to fetch Classifier %s: %w",
+			req.NamespacedName, err,
 		)
 	}
 
@@ -167,11 +166,10 @@ func (r *ClassifierReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		ControllerName: "classifier",
 	})
 	if err != nil {
-		logger.Error(err, "Failed to create classifierScope")
-		return reconcile.Result{}, errors.Wrapf(
-			err,
-			"unable to create classifier scope for %s",
-			req.NamespacedName,
+		logger.Error(err, "failed to create classifierScope")
+		return reconcile.Result{}, fmt.Errorf(
+			"unable to create classifier scope for %s: %w",
+			req.NamespacedName, err,
 		)
 	}
 
@@ -200,7 +198,13 @@ func (r *ClassifierReconciler) reconcileDelete(
 	logger := classifierScope.Logger
 	logger.V(logs.LogDebug).Info("Reconciling Classifier delete")
 
-	err := r.removeAllRegistrations(ctx, classifierScope, logger)
+	err := r.removeLabelsFromClusters(ctx, classifierScope, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to remove managed labels from clusters")
+		return reconcile.Result{}, err
+	}
+
+	err = r.removeAllRegistrations(ctx, classifierScope, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clear Classifier label registrations")
 		return reconcile.Result{}, err
@@ -270,21 +274,38 @@ func (r *ClassifierReconciler) reconcileNormal(
 		}
 	}
 
-	err := r.updateMatchingClustersAndRegistrations(ctx, classifierScope, logger)
+	// get list of clusters currently matching this Classifier instance
+	matchingClusters, err := r.getMatchingClusters(ctx, classifierScope, logger)
 	if err != nil {
-		logger.V(logs.LogDebug).Info("failed to update matchingClusterRefs")
+		logger.V(logs.LogDebug).Error(err, "failed to get matching clusters")
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
+	// For clusters that no longer match, remove managed labels and clear internal registrations
+	err = r.cleanUpManagedResources(ctx, classifierScope, matchingClusters, logger)
+	if err != nil {
+		// Use Error level because this indicates a failure to clean up resources
+		logger.V(logs.LogDebug).Error(err, "failed to clean up labels/registrations for non-matching clusters")
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+	}
+
+	// For every currently matching cluster, update label ownership registrations
+	err = r.updateMatchingClustersAndRegistrations(ctx, classifierScope, matchingClusters, logger)
+	if err != nil {
+		logger.V(logs.LogDebug).Error(err, "failed to update status/registrations for matching clusters")
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+	}
+
+	// Apply the labels to the clusters
 	err = r.updateLabelsOnMatchingClusters(ctx, classifierScope, logger)
 	if err != nil {
-		logger.V(logs.LogDebug).Info("failed to update cluster labels")
+		logger.V(logs.LogDebug).Error(err, "failed to apply labels to matching clusters")
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	err = r.updateClusterInfo(ctx, classifierScope)
 	if err != nil {
-		logger.V(logs.LogDebug).Info("failed to update clusterInfo")
+		logger.V(logs.LogDebug).Error(err, "failed to update clusterInfo")
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
@@ -344,7 +365,7 @@ func (r *ClassifierReconciler) SetupWithManager(ctx context.Context,
 		).
 		Build(r)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating controller")
+		return nil, fmt.Errorf("error creating controller: %w", err)
 	}
 
 	// At this point we don't know yet whether CAPI is present in the cluster.
@@ -391,11 +412,10 @@ func (r *ClassifierReconciler) addFinalizer(ctx context.Context, classifierScope
 	controllerutil.AddFinalizer(classifierScope.Classifier, libsveltosv1beta1.ClassifierFinalizer)
 	// Register the finalizer immediately to avoid orphaning clusterprofile resources on delete
 	if err := classifierScope.PatchObject(ctx); err != nil {
-		classifierScope.Error(err, "Failed to add finalizer")
-		return errors.Wrapf(
-			err,
-			"Failed to add finalizer for %s",
-			classifierScope.Name(),
+		classifierScope.Error(err, "failed to add finalizer")
+		return fmt.Errorf(
+			"failed to add finalizer for %s: %w",
+			classifierScope.Name(), err,
 		)
 	}
 	return nil
@@ -439,11 +459,10 @@ func (r *ClassifierReconciler) updateClusterInfo(ctx context.Context, classifier
 	return nil
 }
 
-// updateMatchingClustersAndRegistrations does two things:
-// - updates Classifier Status.MachingClusterStatuses
-// - update label key registration with keymanager instance
-func (r *ClassifierReconciler) updateMatchingClustersAndRegistrations(ctx context.Context,
-	classifierScope *scope.ClassifierScope, logger logr.Logger) error {
+// getMatchingClusters returns the set of clusters currently matching the Classifier
+// based on the existing ClassifierReport resources.
+func (r *ClassifierReconciler) getMatchingClusters(ctx context.Context,
+	classifierScope *scope.ClassifierScope, logger logr.Logger) (map[corev1.ObjectReference]bool, error) {
 
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
@@ -452,71 +471,86 @@ func (r *ClassifierReconciler) updateMatchingClustersAndRegistrations(ctx contex
 	}
 
 	classifierReportList := &libsveltosv1beta1.ClassifierReportList{}
-	err := r.List(ctx, classifierReportList, listOptions...)
-	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list ClassifierReports. Err: %v", err))
-		return err
+	if err := r.List(ctx, classifierReportList, listOptions...); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to list ClassifierReports")
+		return nil, err
 	}
 
-	logger.V(logs.LogDebug).Info(fmt.Sprintf("found %d ClassifierReports for this Classifier instance",
-		len(classifierReportList.Items)))
-
-	// create map of current matching clusters
 	currentMatchingClusters := make(map[corev1.ObjectReference]bool)
 	for i := range classifierReportList.Items {
 		report := &classifierReportList.Items[i]
-		// If Sveltos is managing the management cluster as well,
-		// there will be two types of ClassifierReports:
-		// 1. created by sveltos-agent running in the management cluster.
-		// Those will have Spec.ClusterNamespace not set
-		// 2. pulled by classifier or pushed by sveltos-agent running
-		// in the managed cluster. Those will have Spec.ClusterNamespace set
-		// Consider only type #2
+
+		// Only consider reports with ClusterNamespace set (type #2 in your logic)
 		if report.Spec.ClusterNamespace == "" {
 			continue
 		}
+
 		if report.Spec.Match {
 			cluster := getClusterRefFromClassifierReport(report)
-			l := logger.WithValues("cluster", fmt.Sprintf("type: %s cluster %s/%s", report.Spec.ClusterType, cluster.Namespace, cluster.Name))
-			l.V(logs.LogDebug).Info("is a match")
 			currentMatchingClusters[*cluster] = true
 		}
 	}
 
-	// create map of old matching clusters
+	return currentMatchingClusters, nil
+}
+
+// updateMatchingClustersAndRegistrations synchronizes the KeyManager registrations
+// and updates the Classifier's Status with the current set of matching clusters.
+func (r *ClassifierReconciler) updateMatchingClustersAndRegistrations(ctx context.Context,
+	classifierScope *scope.ClassifierScope, matchingClusters map[corev1.ObjectReference]bool,
+	logger logr.Logger) error {
+
+	// Sync registrations first so classifyLabels knows what we are allowed to manage
+	if err := r.registerMatchingClusters(ctx, classifierScope.Classifier, matchingClusters, logger); err != nil {
+		return fmt.Errorf("failed to register labels with keymanager: %w", err)
+	}
+
+	matchingClusterStatus := make([]libsveltosv1beta1.MachingClusterStatus, 0, len(matchingClusters))
+	var hasUnmanaged bool
+
+	for c := range matchingClusters {
+		managed, unmanaged, err := r.classifyLabels(ctx, classifierScope.Classifier, &c, logger)
+		if err != nil {
+			return fmt.Errorf("failed to classify labels for cluster %s/%s: %w", c.Namespace, c.Name, err)
+		}
+
+		if len(unmanaged) > 0 {
+			hasUnmanaged = true
+		}
+
+		matchingClusterStatus = append(matchingClusterStatus, libsveltosv1beta1.MachingClusterStatus{
+			ClusterRef:      c,
+			ManagedLabels:   managed,
+			UnManagedLabels: unmanaged,
+		})
+	}
+
+	// updateClassifierSet likely updates a boolean if any cluster has label conflicts
+	r.updateClassifierSet(classifierScope, hasUnmanaged)
+	classifierScope.SetMachingClusterStatuses(matchingClusterStatus)
+
+	return nil
+}
+
+func (r *ClassifierReconciler) cleanUpManagedResources(ctx context.Context,
+	classifierScope *scope.ClassifierScope, matchingClusters map[corev1.ObjectReference]bool,
+	logger logr.Logger) error {
+
+	// create map of old matching clusters from the Classifier Status
 	oldMatchingClusters := make(map[corev1.ObjectReference]bool)
 	for i := range classifierScope.Classifier.Status.MachingClusterStatuses {
 		ref := classifierScope.Classifier.Status.MachingClusterStatuses[i]
 		oldMatchingClusters[ref.ClusterRef] = true
 	}
 
-	err = r.handleLabelRegistrations(ctx, classifierScope.Classifier, currentMatchingClusters,
-		oldMatchingClusters, logger)
+	// Identify and clean up clusters that are no longer matches.
+	// This will remove managed labels from the clusters and, if successful,
+	// clear the registrations from the KeyManager.
+	err := r.cleanUpNonMatchingClusters(ctx, classifierScope.Classifier,
+		matchingClusters, oldMatchingClusters, logger)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to clean up non-matching clusters: %w", err)
 	}
-
-	matchingClusterStatus := make([]libsveltosv1beta1.MachingClusterStatus, len(currentMatchingClusters))
-	i := 0
-	unManaged := 0
-	for c := range currentMatchingClusters {
-		tmpManaged, tmpUnmanaged, err := r.classifyLabels(ctx, classifierScope.Classifier, &c, logger)
-		if err != nil {
-			return err
-		}
-		unManaged += len(tmpUnmanaged)
-		matchingClusterStatus[i] =
-			libsveltosv1beta1.MachingClusterStatus{
-				ClusterRef:      c,
-				ManagedLabels:   tmpManaged,
-				UnManagedLabels: tmpUnmanaged,
-			}
-		i++
-	}
-
-	r.updateClassifierSet(classifierScope, unManaged != 0)
-
-	classifierScope.SetMachingClusterStatuses(matchingClusterStatus)
 
 	return nil
 }
@@ -535,35 +569,78 @@ func (r *ClassifierReconciler) updateClassifierSet(classifierScope *scope.Classi
 	r.AllClassifierSet.Insert(classifierInfo)
 }
 
-// updateLabelsOnMatchingClusters set labels on all matching clusters (only for clusters
-// for which permission is granted by keymanager)
+// updateLabelsOnMatchingClusters applies the desired labels to all clusters
+// currently matching the Classifier, skipping clusters that are not found.
 func (r *ClassifierReconciler) updateLabelsOnMatchingClusters(ctx context.Context,
 	classifierScope *scope.ClassifierScope, logger logr.Logger) error {
 
-	// Register Classifier instance as wanting to manage any labels in ClassifierLabels
-	// for all the clusters currently matching
-	for i := range classifierScope.Classifier.Status.MachingClusterStatuses {
-		ref := &classifierScope.Classifier.Status.MachingClusterStatuses[i].ClusterRef
+	var errs []error
+	statuses := classifierScope.Classifier.Status.MachingClusterStatuses
+
+	for i := range statuses {
+		ref := &statuses[i].ClusterRef
+
 		cluster, err := clusterproxy.GetCluster(ctx, r.Client, ref.Namespace, ref.Name, clusterproxy.GetClusterType(ref))
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				continue
+				continue // Cluster was likely deleted; cleanUpManagedResources will handle it next time
 			}
-			logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to get cluster %s/%s", ref.Namespace, ref.Name))
-			return err
+			logger.Error(err, "failed to fetch cluster for label update", "cluster", ref.Name)
+			errs = append(errs, err)
+			continue
 		}
 
-		l := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.GetNamespace(), cluster.GetName()))
-		l.V(logs.LogDebug).Info("update labels on cluster")
-		err = r.updateLabelsOnCluster(ctx, classifierScope, cluster, clusterproxy.GetClusterType(ref), l)
-		if err != nil {
-			// If cluster was removed before classifier had a chance to react to it, ignore the error
-			if apierrors.IsNotFound(err) {
-				return nil
+		clusterLogger := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.GetNamespace(), cluster.GetName()))
+
+		// Attempt to update labels on the physical cluster
+		if err := r.updateLabelsOnCluster(ctx, classifierScope, cluster, clusterproxy.GetClusterType(ref), clusterLogger); err != nil {
+			if !apierrors.IsNotFound(err) {
+				clusterLogger.Error(err, "failed to apply labels to cluster")
+				errs = append(errs, err)
 			}
-			l.V(logs.LogDebug).Error(err, "failed to update labels on cluster")
-			return err
 		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// removeLabelsFromCluster removes all labels from the provided cluster that were
+// specifically managed by this Classifier instance. It uses the KeyManager
+// to ensure it only deletes labels it has permission to manage.
+func (r *ClassifierReconciler) removeLabelsFromCluster(ctx context.Context,
+	classifier *libsveltosv1beta1.Classifier, cluster client.Object, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) error {
+
+	manager, err := keymanager.GetKeyManagerInstance(ctx, r.Client)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get label key manager")
+		return err
+	}
+
+	labels := cluster.GetLabels()
+	if labels == nil {
+		return nil // Nothing to remove
+	}
+
+	labelsChanged := false
+	for i := range classifier.Spec.ClassifierLabels {
+		label := classifier.Spec.ClassifierLabels[i]
+
+		// Only remove the label if this specific Classifier is authorized to manage it
+		if manager.CanManageLabel(classifier, cluster.GetNamespace(), cluster.GetName(), label.Key,
+			clusterType) {
+
+			if _, exists := labels[label.Key]; exists {
+				delete(labels, label.Key)
+				labelsChanged = true
+			}
+		}
+	}
+
+	// Only trigger a cluster update if labels were actually modified
+	if labelsChanged {
+		cluster.SetLabels(labels)
+		return r.Update(ctx, cluster)
 	}
 
 	return nil
@@ -631,6 +708,49 @@ func (r *ClassifierReconciler) updateMaps(classifierScope *scope.ClassifierScope
 	r.ClassifierMap[*classifierInfo] = currentClusters
 }
 
+// removeLabelsFromClusters identifies all clusters currently matching the Classifier's
+// selector and removes labels managed by this Classifier instance from each of them.
+// It continues processing remaining clusters even if an individual cluster update fails,
+// returning a combined error at the end.
+func (r *ClassifierReconciler) removeLabelsFromClusters(ctx context.Context,
+	classifierScope *scope.ClassifierScope, logger logr.Logger) error {
+
+	var errs []error
+
+	// Iterate through all clusters currently tracked in the Classifier status
+	for i := range classifierScope.Classifier.Status.MachingClusterStatuses {
+		ref := &classifierScope.Classifier.Status.MachingClusterStatuses[i].ClusterRef
+
+		cluster, err := clusterproxy.GetCluster(ctx, r.Client, ref.Namespace, ref.Name,
+			clusterproxy.GetClusterType(ref))
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			logger.V(logs.LogInfo).Error(err, "failed to get cluster",
+				"namespace", ref.Namespace, "name", ref.Name)
+			errs = append(errs, err)
+			continue
+		}
+
+		clusterLogger := logger.WithValues(
+			"cluster", fmt.Sprintf("%s/%s", cluster.GetNamespace(), cluster.GetName()),
+			"clusterType", clusterproxy.GetClusterType(ref),
+		)
+
+		clusterLogger.V(logs.LogDebug).Info("removing managed labels from cluster")
+
+		// Remove labels and collect error if the operation fails
+		if err := r.removeLabelsFromCluster(ctx, classifierScope.Classifier, cluster,
+			clusterproxy.GetClusterType(ref), clusterLogger); err != nil {
+			clusterLogger.Error(err, "failed to remove labels")
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
 // removeAllRegistrations unregisters Classifier for all cluster labels
 // it used to manage (in any matching cluster)
 func (r *ClassifierReconciler) removeAllRegistrations(ctx context.Context,
@@ -651,41 +771,83 @@ func (r *ClassifierReconciler) removeAllRegistrations(ctx context.Context,
 	return nil
 }
 
-// handleLabelRegistrations registers Classifier for all labels, considering all clusters
-// currently matching Classifier
-// Clear old registrations
-func (r *ClassifierReconciler) handleLabelRegistrations(ctx context.Context,
+// registerMatchingClusters updates the label ownership registrations for all clusters
+// currently matching the Classifier. It also ensures stale registrations for these
+// specific clusters are cleared.
+func (r *ClassifierReconciler) registerMatchingClusters(ctx context.Context,
 	classifier *libsveltosv1beta1.Classifier,
-	currentMatchingClusters, oldMatchingClusters map[corev1.ObjectReference]bool,
+	currentMatchingClusters map[corev1.ObjectReference]bool,
 	logger logr.Logger) error {
 
-	// Register Classifier instance as wanting to manage any labels in ClassifierLabels
-	// for all the clusters currently matching
 	manager, err := keymanager.GetKeyManagerInstance(ctx, r.Client)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get label key manager")
 		return err
 	}
 
-	matchingClusterRefs := make([]corev1.ObjectReference, len(currentMatchingClusters))
-	i := 0
 	for c := range currentMatchingClusters {
 		clusterType := clusterproxy.GetClusterType(&c)
+		// Ensure the manager is up-to-date for this specific cluster
 		manager.RemoveStaleRegistrations(classifier, c.Namespace, c.Name, clusterType)
 		manager.RegisterClassifierForLabels(classifier, c.Namespace, c.Name, clusterType)
-		matchingClusterRefs[i] = c
-		i++
-	}
-
-	// For every cluster which is not a match anymore, remove registations
-	for c := range oldMatchingClusters {
-		if _, ok := currentMatchingClusters[c]; !ok {
-			clusterType := clusterproxy.GetClusterType(&c)
-			manager.RemoveAllRegistrations(classifier, c.Namespace, c.Name, clusterType)
-		}
 	}
 
 	return nil
+}
+
+// cleanUpNonMatchingClusters identifies clusters that no longer match the Classifier.
+// It removes managed labels from the clusters first; only upon successful label removal
+// does it clear the internal registrations in the KeyManager.
+func (r *ClassifierReconciler) cleanUpNonMatchingClusters(ctx context.Context,
+	classifier *libsveltosv1beta1.Classifier,
+	currentMatchingClusters, oldMatchingClusters map[corev1.ObjectReference]bool,
+	logger logr.Logger) error {
+
+	manager, err := keymanager.GetKeyManagerInstance(ctx, r.Client)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get label key manager")
+		return err
+	}
+
+	var errs []error
+	for c := range oldMatchingClusters {
+		// Only process clusters that were in the old set but are NOT in the current set
+		if _, ok := currentMatchingClusters[c]; ok {
+			continue
+		}
+
+		clusterType := clusterproxy.GetClusterType(&c)
+		clusterLogger := logger.WithValues("cluster", fmt.Sprintf("%s/%s", c.Namespace, c.Name))
+
+		// 1. Attempt to fetch the cluster
+		cluster, err := clusterproxy.GetCluster(ctx, r.Client, c.Namespace, c.Name, clusterType)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				// Cluster is gone, so labels are effectively removed. Safe to clear registrations.
+				manager.RemoveAllRegistrations(classifier, c.Namespace, c.Name, clusterType)
+				continue
+			}
+
+			wrappedErr := fmt.Errorf("failed to get cluster %s/%s for cleanup: %w", c.Namespace, c.Name, err)
+			clusterLogger.Error(wrappedErr, "lookup failed, skipping registration removal")
+			errs = append(errs, wrappedErr)
+			continue
+		}
+
+		// 2. Attempt to remove the managed labels
+		// Passing the classifier object as the owner to removeLabelsFromCluster
+		if err := r.removeLabelsFromCluster(ctx, classifier, cluster, clusterType, clusterLogger); err != nil {
+			wrappedErr := fmt.Errorf("failed to remove labels from cluster %s/%s: %w", c.Namespace, c.Name, err)
+			clusterLogger.Error(wrappedErr, "label removal failed, skipping registration removal")
+			errs = append(errs, wrappedErr)
+			continue
+		}
+
+		// 3. Only remove registrations if label removal was successful
+		manager.RemoveAllRegistrations(classifier, c.Namespace, c.Name, clusterType)
+	}
+
+	return errors.Join(errs...)
 }
 
 // classifyLabels divides labels in Managed and UnManaged

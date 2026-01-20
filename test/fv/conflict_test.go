@@ -149,7 +149,7 @@ var _ = Describe("Classifier: update cluster labels", func() {
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		verifyClusterLabels(classifier2)
+		verifyClusterLabelsAreGone(classifier2)
 
 		removeLabels(classifier1)
 		removeLabels(classifier2)

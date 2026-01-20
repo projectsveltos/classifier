@@ -66,7 +66,7 @@ func getClassifier(namePrefix string, clusterLabels map[string]string) *libsvelt
 			ClassifierLabels: labels,
 			KubernetesVersionConstraints: []libsveltosv1beta1.KubernetesVersionConstraint{
 				{
-					Version:    "1.25.0",
+					Version:    "1.30.0",
 					Comparison: string(libsveltosv1beta1.ComparisonGreaterThanOrEqualTo),
 				},
 			},
@@ -123,6 +123,27 @@ func verifyClusterLabels(classifier *libsveltosv1beta1.Classifier) {
 				return false
 			}
 			if v != cLabel.Value {
+				return false
+			}
+		}
+		return true
+	}, timeout, pollingInterval).Should(BeTrue())
+}
+
+func verifyClusterLabelsAreGone(classifier *libsveltosv1beta1.Classifier) {
+	Byf("Verifying Classifier labels are removed from cluster %s", classifier.Name)
+	Eventually(func() bool {
+		currentCuster, err := getCluster()
+		if err != nil {
+			return false
+		}
+		if currentCuster.GetLabels() == nil {
+			return false
+		}
+		for i := range classifier.Spec.ClassifierLabels {
+			cLabel := classifier.Spec.ClassifierLabels[i]
+			_, ok := currentCuster.GetLabels()[cLabel.Key]
+			if ok {
 				return false
 			}
 		}

@@ -54,10 +54,11 @@ var (
 	RequeueClassifierForClassifierReport   = (*ClassifierReconciler).requeueClassifierForClassifierReport
 	UpdateMatchingClustersAndRegistrations = (*ClassifierReconciler).updateMatchingClustersAndRegistrations
 	UpdateLabelsOnMatchingClusters         = (*ClassifierReconciler).updateLabelsOnMatchingClusters
-	HandleLabelRegistrations               = (*ClassifierReconciler).handleLabelRegistrations
+	RegisterMatchingClusters               = (*ClassifierReconciler).registerMatchingClusters
 	UndeployClassifier                     = (*ClassifierReconciler).undeployClassifier
 	RemoveAllRegistrations                 = (*ClassifierReconciler).removeAllRegistrations
 	ClassifyLabels                         = (*ClassifierReconciler).classifyLabels
+	CleanUpNonMatchingClusters             = (*ClassifierReconciler).cleanUpNonMatchingClusters
 )
 
 var (
