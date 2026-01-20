@@ -9,8 +9,9 @@ spec:
   - key: env
     value: large
   deployedResourceConstraint:
-  - group: ""
-    version: v1
-    kind: Namespace
-    minCount: 10
-    maxCount: 20
+    resourceSelectors:
+    - group: ""
+      version: v1
+      kind: Namespace
+      minCount: 10
+      maxCount: 20
