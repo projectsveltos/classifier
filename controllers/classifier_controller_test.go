@@ -67,6 +67,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
+			Logger:        logger,
 		}
 
 		classifierName := client.ObjectKey{
@@ -144,6 +145,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
 			Deployer:      dep,
+			Logger:        logger,
 		}
 
 		// Because Classifier is currently deployed in a Cluster (Status.ClusterInfo is set
@@ -207,6 +209,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
+			Logger:        logger,
 		}
 
 		classifierScope, err := scope.NewClassifierScope(scope.ClassifierScopeParams{
@@ -275,6 +278,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
+			Logger:        logger,
 		}
 
 		classifierScope, err := scope.NewClassifierScope(scope.ClassifierScopeParams{
@@ -340,6 +344,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
+			Logger:        logger,
 		}
 
 		classifierScope, err := scope.NewClassifierScope(scope.ClassifierScopeParams{
@@ -416,6 +421,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
+			Logger:        logger,
 		}
 
 		classifierScope, err := scope.NewClassifierScope(scope.ClassifierScopeParams{
@@ -483,6 +489,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
+			Logger:        logger,
 		}
 
 		oldMatches := map[corev1.ObjectReference]bool{clusterRef: true}
@@ -553,6 +560,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
+			Logger:        logger,
 		}
 
 		clusterRef := &corev1.ObjectReference{

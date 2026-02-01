@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -90,11 +91,13 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
 			WithObjects(initObjects...).Build()
 
+		logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
 		reconciler := &controllers.ClassifierReconciler{
 			Client:     c,
 			Scheme:     scheme,
 			Mux:        sync.Mutex{},
 			ClusterMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			Logger:     logger,
 		}
 
 		set := libsveltosset.Set{}
@@ -143,11 +146,13 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
 			WithObjects(initObjects...).Build()
 
+		logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
 		reconciler := &controllers.ClassifierReconciler{
 			Client:     c,
 			Scheme:     scheme,
 			Mux:        sync.Mutex{},
 			ClusterMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			Logger:     logger,
 		}
 
 		requests := controllers.RequeueClassifierForClassifierReport(reconciler, context.TODO(), report)

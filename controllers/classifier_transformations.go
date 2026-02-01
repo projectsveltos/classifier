@@ -161,7 +161,7 @@ func (r *ClassifierReconciler) requeueClassifierForClassifierReport(
 ) []reconcile.Request {
 
 	report := o.(*libsveltosv1beta1.ClassifierReport)
-	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
+	logger := r.Logger.WithValues(
 		"objectMapper",
 		"requeueClassifierForClassifierReport",
 		"namespace",

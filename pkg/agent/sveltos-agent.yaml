@@ -25,14 +25,6 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-  - update
-- apiGroups:
   - '*'
   resources:
   - '*'
@@ -61,6 +53,14 @@ rules:
   - subjectaccessreviews
   verbs:
   - create
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
 - apiGroups:
   - lib.projectsveltos.io
   resources:
@@ -197,7 +197,7 @@ spec:
           valueFrom:
             resourceFieldRef:
               resource: limits.cpu
-        image: docker.io/projectsveltos/sveltos-agent@sha256:79acceb672f25d21f2f998240c71f6881450b94adec51b4e81c2d1adc82087c7
+        image: docker.io/projectsveltos/sveltos-agent@sha256:223cbaddaf09396e8f0330060be805ca9639c75418ea798519717c76f8789731
         livenessProbe:
           failureThreshold: 3
           httpGet:

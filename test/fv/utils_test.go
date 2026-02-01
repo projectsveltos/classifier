@@ -76,6 +76,30 @@ func getClassifier(namePrefix string, clusterLabels map[string]string) *libsvelt
 	return classifier
 }
 
+func verifyClassfierIsProvisioned(classifier *libsveltosv1beta1.Classifier) {
+	Byf("Verifying classifier %s is provisioned on cluster", classifier.Name)
+	currentCuster, err := getCluster()
+	Expect(err).To(BeNil())
+	Eventually(func() bool {
+		currentClassifier := &libsveltosv1beta1.Classifier{}
+		err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: classifier.Name}, currentClassifier)
+		if err != nil {
+			return false
+		}
+		for i := range currentClassifier.Status.ClusterInfo {
+			if currentClassifier.Status.ClusterInfo[i].Cluster.Namespace == currentCuster.GetNamespace() &&
+				currentClassifier.Status.ClusterInfo[i].Cluster.Name == currentCuster.GetName() &&
+				currentClassifier.Status.ClusterInfo[i].Status == libsveltosv1beta1.SveltosStatusProvisioned {
+
+				return true
+			}
+		}
+
+		return false
+	}, timeout, pollingInterval).Should(BeTrue())
+}
+
 // getKindWorkloadClusterKubeconfig returns client to access the kind cluster used as workload cluster
 func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 	kubeconfigPath := "workload_kubeconfig" // this file is created in this directory by Makefile during cluster creation
@@ -108,6 +132,7 @@ func verifyClassifierReport(classifierName string, isMatch bool) {
 
 func verifyClusterLabels(classifier *libsveltosv1beta1.Classifier) {
 	Byf("Verifying Cluster labels are updated with labels from Classifier %s", classifier.Name)
+	Byf("Classifier labels: %v", classifier.Spec.ClassifierLabels)
 	Eventually(func() bool {
 		currentCuster, err := getCluster()
 		if err != nil {
@@ -116,6 +141,7 @@ func verifyClusterLabels(classifier *libsveltosv1beta1.Classifier) {
 		if currentCuster.GetLabels() == nil {
 			return false
 		}
+		Byf("Current cluster labels: %v", currentCuster.GetLabels())
 		for i := range classifier.Spec.ClassifierLabels {
 			cLabel := classifier.Spec.ClassifierLabels[i]
 			v, ok := currentCuster.GetLabels()[cLabel.Key]

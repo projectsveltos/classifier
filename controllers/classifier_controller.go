@@ -116,6 +116,8 @@ type ClassifierReconciler struct {
 
 	// List of current existing Classifiers
 	AllClassifierSet libsveltosset.Set
+
+	Logger logr.Logger
 }
 
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=classifiers,verbs=get;list;watch;create;update;patch;delete
@@ -480,7 +482,7 @@ func (r *ClassifierReconciler) getMatchingClusters(ctx context.Context,
 	for i := range classifierReportList.Items {
 		report := &classifierReportList.Items[i]
 
-		// Only consider reports with ClusterNamespace set (type #2 in your logic)
+		// Only consider reports with ClusterNamespace set
 		if report.Spec.ClusterNamespace == "" {
 			continue
 		}
@@ -591,7 +593,6 @@ func (r *ClassifierReconciler) updateLabelsOnMatchingClusters(ctx context.Contex
 		}
 
 		clusterLogger := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.GetNamespace(), cluster.GetName()))
-
 		// Attempt to update labels on the physical cluster
 		if err := r.updateLabelsOnCluster(ctx, classifierScope, cluster, clusterproxy.GetClusterType(ref), clusterLogger); err != nil {
 			if !apierrors.IsNotFound(err) {

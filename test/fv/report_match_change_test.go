@@ -31,7 +31,7 @@ import (
 
 var _ = Describe("Classifier: update cluster labels", func() {
 	const (
-		namePrefix = "labels-"
+		namePrefix = "match-"
 	)
 
 	It("Cluster labels are updated when classifier starts matching", Label("FV", "PULLMODE"), func() {

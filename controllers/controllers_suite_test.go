@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -184,7 +185,7 @@ func getClassifierReport(classifierName, clusterNamespace, clusterName string) *
 }
 
 func getClassifierInstance(name string) *libsveltosv1beta1.Classifier {
-	classifierLabels := []libsveltosv1beta1.ClassifierLabel{{Key: "version", Value: "v1.25.5"}}
+	classifierLabels := []libsveltosv1beta1.ClassifierLabel{{Key: "version", Value: "v1.25.6"}}
 	return &libsveltosv1beta1.Classifier{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -192,7 +193,7 @@ func getClassifierInstance(name string) *libsveltosv1beta1.Classifier {
 		Spec: libsveltosv1beta1.ClassifierSpec{
 			KubernetesVersionConstraints: []libsveltosv1beta1.KubernetesVersionConstraint{
 				{
-					Version:    "1.25.5",
+					Version:    "1.25.6",
 					Comparison: string(libsveltosv1beta1.ComparisonEqual),
 				},
 			},
@@ -202,6 +203,7 @@ func getClassifierInstance(name string) *libsveltosv1beta1.Classifier {
 }
 
 func getClassifierReconciler(c client.Client, dep deployer.DeployerInterface) *controllers.ClassifierReconciler {
+	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
 	return &controllers.ClassifierReconciler{
 		Client:        c,
 		Scheme:        scheme,
@@ -209,6 +211,7 @@ func getClassifierReconciler(c client.Client, dep deployer.DeployerInterface) *c
 		ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 		Mux:           sync.Mutex{},
+		Logger:        logger,
 	}
 }
 
