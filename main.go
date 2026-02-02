@@ -345,6 +345,7 @@ func getClassifierReconciler(mgr manager.Manager) *controllers.ClassifierReconci
 		ClassifierReportMode:  reportMode,
 		ControlPlaneEndpoint:  managementClusterControlPlaneEndpoint,
 		Mux:                   sync.Mutex{},
+		Logger:                ctrl.Log.WithName("classifierreconiler"),
 	}
 }
 

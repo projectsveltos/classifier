@@ -45,6 +45,8 @@ var _ = Describe("Classifier: update cluster labels", func() {
 		Byf("Creating classifier instance %s in the management cluster", classifier1.Name)
 		Expect(k8sClient.Create(context.TODO(), classifier1)).To(Succeed())
 
+		verifyClassfierIsProvisioned(classifier1)
+
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
 		Expect(err).To(BeNil())
@@ -82,6 +84,8 @@ var _ = Describe("Classifier: update cluster labels", func() {
 					types.NamespacedName{Name: classifier2.Name}, currentClassifier)
 			}, timeout, pollingInterval).Should(BeNil())
 		}
+
+		verifyClassfierIsProvisioned(classifier2)
 
 		verifyClassifierReport(classifier2.Name, true)
 

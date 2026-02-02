@@ -256,6 +256,14 @@ func ClassifierReportPredicate(logger logr.Logger) predicate.Funcs {
 				return true
 			}
 
+			// return true if ClassifierReport.Spec.ClusterNamespace has changed
+			// This happens in agentless mode as sveltos
+			if oldReport.Spec.ClusterNamespace != newReport.Spec.ClusterNamespace {
+				log.V(logs.LogVerbose).Info(
+					"ClassifierReport Spec.ClusterNamespace changed. Will attempt to reconcile associated Classifiers.")
+				return true
+			}
+
 			// otherwise, return false
 			log.V(logs.LogVerbose).Info(
 				"ClassifierReport did not match expected conditions.  Will not attempt to reconcile associated Classifiers.")

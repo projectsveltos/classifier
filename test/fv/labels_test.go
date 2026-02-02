@@ -46,6 +46,12 @@ func verifyFlow(namePrefix string) {
 	Byf("Creating classifier instance %s in the management cluster", classifier.Name)
 	Expect(k8sClient.Create(context.TODO(), classifier)).To(Succeed())
 
+	verifyClassfierIsProvisioned(classifier)
+
+	currentClassifier := &libsveltosv1beta1.Classifier{}
+	Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: classifier.Name},
+		currentClassifier)).To(Succeed())
+
 	Byf("Getting client to access the workload cluster")
 	workloadClient, err := getKindWorkloadClusterKubeconfig()
 	Expect(err).To(BeNil())
@@ -68,7 +74,7 @@ func verifyFlow(namePrefix string) {
 	}
 
 	verifyClassifierReport(classifier.Name, true)
-	verifyClusterLabels(classifier)
+	verifyClusterLabels(currentClassifier)
 
 	Byf("Changing classifier so cluster is not a match anymore")
 	currentClassifer := &libsveltosv1beta1.Classifier{}
@@ -94,7 +100,6 @@ func verifyFlow(namePrefix string) {
 	verifyClusterLabels(classifier)
 
 	Byf("Deleting classifier instance %s in the management cluster", classifier.Name)
-	currentClassifier := &libsveltosv1beta1.Classifier{}
 	Expect(k8sClient.Get(context.TODO(),
 		types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
 	Expect(k8sClient.Delete(context.TODO(), currentClassifier)).To(Succeed())

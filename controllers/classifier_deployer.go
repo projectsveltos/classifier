@@ -1391,6 +1391,12 @@ func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 	logger.V(logs.LogDebug).Info("deploy classifier instance")
 
 	if !isPullMode {
+		if getAgentInMgmtCluster() {
+			// If sveltos-agent is deployed in the management cluster, Classifier instance
+			// does not need to be deployed in the managed cluster. So return here
+			return nil
+		}
+
 		currentClassifier := &libsveltosv1beta1.Classifier{}
 		err := remoteClient.Get(ctx, types.NamespacedName{Name: classifier.Name}, currentClassifier)
 		if err != nil {
