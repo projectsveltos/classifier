@@ -45,6 +45,7 @@ spec:
         - --version=main
         - --current-cluster=management-cluster
         - --run-mode=do-not-send-reports
+        - --discard-managed-fields=true
         command:
         - /manager
         env:
@@ -56,7 +57,7 @@ spec:
           valueFrom:
             resourceFieldRef:
               resource: limits.cpu
-        image: docker.io/projectsveltos/sveltos-agent@sha256:223cbaddaf09396e8f0330060be805ca9639c75418ea798519717c76f8789731
+        image: docker.io/projectsveltos/sveltos-agent@sha256:b8ab44ce9ba1f2839282e7c59f07bee3076b4c4c643e3067212bd52cd4b78121
         livenessProbe:
           failureThreshold: 3
           httpGet:
