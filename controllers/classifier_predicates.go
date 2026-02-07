@@ -21,6 +21,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -233,28 +234,12 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 }
 
 func isConfigMapWithPatches(cm *corev1.ConfigMap) bool {
-	isPerClusterPatch := false
-	annotations := cm.Annotations
-	if annotations != nil {
-		_, ok := annotations[sveltosAgentOverrideAnnotation]
-		if ok {
-			isPerClusterPatch = true
-		}
-		_, ok = annotations[sveltosApplierOverrideAnnotation]
-		if ok {
-			isPerClusterPatch = true
-		}
-	}
-
-	if isPerClusterPatch {
-		return true
-	}
-
 	if cm.Namespace == projectsveltos && cm.Name == getSveltosAgentConfigMap() {
 		return true
 	}
 
-	return false
+	tracker := getPatchTracker()
+	return tracker.IsPatchConfigMap(types.NamespacedName{Namespace: cm.Namespace, Name: cm.Name})
 }
 
 // ClassifierReportPredicate predicates for ClassifierReport. ClassifierReconciler watches ClassifierReport events

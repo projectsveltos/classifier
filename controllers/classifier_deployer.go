@@ -2187,28 +2187,16 @@ func getPerClusterPatches(ctx context.Context, c client.Client,
 		return nil, nil // Annotation present but empty, or not present
 	}
 
-	var configMapNamespace, configMapName string
-	// get configMap namespace, name from annotation
-	parts := strings.Split(configMapRef, "/")
-	const two = 2
-	// If only one part is present, assume it is the ConfigMap name and use the cluster's namespace.
-	if len(parts) == 1 {
-		configMapNamespace = clusterNamespace
-		configMapName = parts[0]
-	} else if len(parts) == two {
-		configMapNamespace = parts[0]
-		configMapName = parts[1]
-
-		// If the namespace part is empty (e.g., "/my-config"), use the cluster's namespace.
-		if configMapNamespace == "" {
-			configMapNamespace = clusterNamespace
-		}
-	} else {
+	cmInfo, err := getConfigMapNamespacedName(configMapRef, clusterNamespace)
+	if err != nil {
 		logger.Error(nil, "invalid configMap reference format in annotation",
 			"annotation", annotationKey, "value", configMapRef)
 		return nil, fmt.Errorf("invalid configMap reference format: %s. Expected <namespace>/<name> or just <name>",
 			configMapRef)
 	}
+
+	configMapNamespace := cmInfo.Namespace
+	configMapName := cmInfo.Name
 
 	patches, err := getSveltosApplierPatchesNew(ctx, c, configMapNamespace, configMapName, logger)
 	if err != nil {

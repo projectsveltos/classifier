@@ -19,11 +19,14 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -66,6 +69,14 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			libsveltosv1beta1.ClusterTypeSveltos, logger)
 	}
 
+	clusterRef := &corev1.ObjectReference{
+		Kind:       libsveltosv1beta1.SveltosClusterKind,
+		APIVersion: libsveltosv1beta1.GroupVersion.String(),
+		Namespace:  sveltosCluster.Namespace,
+		Name:       sveltosCluster.Name,
+	}
+	trackPatchConfigMaps(clusterRef, sveltosCluster.Annotations)
+
 	return ctrl.Result{}, nil
 }
 
@@ -101,4 +112,62 @@ func cleanClusterStaleResources(ctx context.Context, c client.Client,
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func trackPatchConfigMaps(clusterRef *corev1.ObjectReference, clusterAnnotations map[string]string) {
+	if clusterAnnotations == nil {
+		return
+	}
+
+	configMapRef, ok := clusterAnnotations[sveltosAgentOverrideAnnotation]
+	if ok {
+		tracker := getPatchTracker()
+
+		cmInfo, err := getConfigMapNamespacedName(configMapRef, clusterRef.Namespace)
+		if err == nil {
+			tracker.TrackConfigMap(cmInfo, clusterRef)
+		}
+	}
+
+	configMapRef, ok = clusterAnnotations[sveltosApplierOverrideAnnotation]
+	if ok {
+		tracker := getPatchTracker()
+
+		cmInfo, err := getConfigMapNamespacedName(configMapRef, clusterRef.Namespace)
+		if err == nil {
+			tracker.TrackConfigMap(cmInfo, clusterRef)
+		}
+	}
+}
+
+// getConfigMapNamespacedName parses a "namespace/name" or "name" string.
+// Returns an error if the format is invalid (e.g., empty or too many slashes).
+func getConfigMapNamespacedName(ref, defaultNamespace string) (types.NamespacedName, error) {
+	if ref == "" {
+		return types.NamespacedName{}, fmt.Errorf("annotation value is empty")
+	}
+
+	parts := strings.Split(ref, "/")
+
+	const two = 2 // namespace and name
+	switch len(parts) {
+	case 1:
+		// Case: "my-configmap"
+		return types.NamespacedName{
+			Namespace: defaultNamespace,
+			Name:      parts[0],
+		}, nil
+	case two:
+		// Case: "my-namespace/my-configmap"
+		if parts[0] == "" || parts[1] == "" {
+			return types.NamespacedName{}, fmt.Errorf("invalid format '%s': namespace or name is empty", ref)
+		}
+		return types.NamespacedName{
+			Namespace: parts[0],
+			Name:      parts[1],
+		}, nil
+	default:
+		// Case: "too/many/slashes/here" or other malformed strings
+		return types.NamespacedName{}, fmt.Errorf("invalid format '%s': expected 'name' or 'namespace/name'", ref)
+	}
 }

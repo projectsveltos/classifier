@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -64,6 +65,14 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return cleanClusterStaleResources(ctx, r.Client, req.Namespace, req.Name,
 			libsveltosv1beta1.ClusterTypeCapi, logger)
 	}
+
+	clusterRef := &corev1.ObjectReference{
+		Kind:       clusterv1.ClusterKind,
+		APIVersion: clusterv1.GroupVersion.String(),
+		Namespace:  cluster.Namespace,
+		Name:       cluster.Name,
+	}
+	trackPatchConfigMaps(clusterRef, cluster.Annotations)
 
 	return ctrl.Result{}, nil
 }
