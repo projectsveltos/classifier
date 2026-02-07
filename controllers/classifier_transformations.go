@@ -138,7 +138,7 @@ func (r *ClassifierReconciler) requeueClassifierForConfigMap(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	if configMap.Namespace != projectsveltos || configMap.Name != getSveltosAgentConfigMap() {
+	if !isConfigMapWithPatches(configMap) {
 		return nil
 	}
 

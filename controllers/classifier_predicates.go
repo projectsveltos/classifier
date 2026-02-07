@@ -167,7 +167,7 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 				"configMap", newConfigMap.Name,
 			)
 
-			if newConfigMap.Namespace != projectsveltos || newConfigMap.Name != getSveltosAgentConfigMap() {
+			if !isConfigMapWithPatches(newConfigMap) {
 				return false
 			}
 
@@ -195,8 +195,8 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 				"configMap", configMap.Name,
 			)
 
-			if configMap.Namespace == projectsveltos && configMap.Name == getSveltosAgentConfigMap() {
-				log.V(logs.LogVerbose).Info("ConfigMap created. Will attempt to reconcile associated Classifiers.")
+			if isConfigMapWithPatches(configMap) {
+				log.V(logs.LogVerbose).Info("Patch ConfigMap created. Will attempt to reconcile associated Classifiers.")
 				return true
 			}
 
@@ -211,8 +211,8 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 				"configMap", configMap.Name,
 			)
 
-			if configMap.Namespace == projectsveltos && configMap.Name == getSveltosAgentConfigMap() {
-				log.V(logs.LogVerbose).Info("ConfigMap deleted. Will attempt to reconcile associated Classifiers.")
+			if isConfigMapWithPatches(configMap) {
+				log.V(logs.LogVerbose).Info("Patch ConfigMap deleted. Will attempt to reconcile associated Classifiers.")
 				return true
 			}
 
@@ -230,6 +230,31 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 			return false
 		},
 	}
+}
+
+func isConfigMapWithPatches(cm *corev1.ConfigMap) bool {
+	isPerClusterPatch := false
+	annotations := cm.Annotations
+	if annotations != nil {
+		_, ok := annotations[sveltosAgentOverrideAnnotation]
+		if ok {
+			isPerClusterPatch = true
+		}
+		_, ok = annotations[sveltosApplierOverrideAnnotation]
+		if ok {
+			isPerClusterPatch = true
+		}
+	}
+
+	if isPerClusterPatch {
+		return true
+	}
+
+	if cm.Namespace == projectsveltos && cm.Name == getSveltosAgentConfigMap() {
+		return true
+	}
+
+	return false
 }
 
 // ClassifierReportPredicate predicates for ClassifierReport. ClassifierReconciler watches ClassifierReport events
