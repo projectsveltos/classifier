@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -906,39 +907,55 @@ func (r *ClassifierReconciler) canProceed(ctx context.Context, classifierScope *
 // the kubeconfig to access management cluster
 func (r *ClassifierReconciler) getCurrentHash(ctx context.Context, classifierScope *scope.ClassifierScope,
 	cpEndpoint string, cluster *corev1.ObjectReference, f feature, logger logr.Logger) ([]byte, error) {
+
 	// Get Classifier Spec hash (at this very precise moment)
 	currentHash := f.currentHash(classifierScope.Classifier)
 
-	// If sveltos-agent configuration is in a ConfigMap. fetch ConfigMap and use its Data
-	// section in the hash evaluation.
-	if sveltosAgentConfigMap := getSveltosAgentConfigMap(); sveltosAgentConfigMap != "" {
-		configMap, err := collectAgentConfigMap(ctx, sveltosAgentConfigMap)
+	sveltosAgentPatches, err := getSveltosAgentPatches(ctx, r.Client, cluster.Namespace, cluster.Name,
+		clusterproxy.GetClusterType(cluster), logger)
+	if err != nil {
+		return nil, err
+	}
+	if len(sveltosAgentPatches) > 0 {
+		sortPatches(sveltosAgentPatches)
+
+		patchBytes, err := json.Marshal(sveltosAgentPatches)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to marshal patches for hashing: %w", err)
 		}
+
+		// Use the hash interface to avoid linter-unfriendly appends
 		h := sha256.New()
-		config := string(currentHash)
-		config += render.AsCode(configMap.Data)
-		h.Write([]byte(config))
+		h.Write(currentHash)
+		h.Write(patchBytes)
+
+		// currentHash is now the hash of (classifier + patches)
 		currentHash = h.Sum(nil)
 	}
 
-	// If sveltos-applier configuration is in a ConfigMap. fetch ConfigMap and use its Data
-	// section in the hash evaluation.
-	if sveltosApplierConfigMap := getSveltosApplierConfigMap(); sveltosApplierConfigMap != "" {
-		configMap, err := collectAgentConfigMap(ctx, sveltosApplierConfigMap)
+	sveltosApplierPatches, err := getSveltosApplierPatches(ctx, r.Client, cluster.Namespace, cluster.Name,
+		clusterproxy.GetClusterType(cluster), logger)
+	if err != nil {
+		return nil, err
+	}
+	if len(sveltosApplierPatches) > 0 {
+		sortPatches(sveltosApplierPatches)
+
+		patchBytes, err := json.Marshal(sveltosApplierPatches)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to marshal patches for hashing: %w", err)
 		}
+
+		// Use the hash interface to avoid linter-unfriendly appends
 		h := sha256.New()
-		config := string(currentHash)
-		config += render.AsCode(configMap.Data)
-		h.Write([]byte(config))
+		h.Write(currentHash)
+		h.Write(patchBytes)
+
+		// currentHash is now the hash of (classifier + patches)
 		currentHash = h.Sum(nil)
 	}
 
 	var kubeconfig []byte
-	var err error
 	if r.ClassifierReportMode == AgentSendReportsNoGateway {
 		h := sha256.New()
 		config := string(currentHash)

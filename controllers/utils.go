@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -219,4 +220,42 @@ func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *apps
 
 func stringPtr(s string) *string {
 	return &s
+}
+
+func sortPatches(patches []libsveltosv1beta1.Patch) {
+	sort.Slice(patches, func(i, j int) bool {
+		p1 := patches[i].Target
+		p2 := patches[j].Target
+
+		// Handle cases where Target might be nil
+		if p1 == nil && p2 == nil {
+			return false
+		}
+		if p1 == nil {
+			return true // Nil targets first
+		}
+		if p2 == nil {
+			return false
+		}
+
+		// Comparison chain
+		if p1.Group != p2.Group {
+			return p1.Group < p2.Group
+		}
+		if p1.Version != p2.Version {
+			return p1.Version < p2.Version
+		}
+		if p1.Kind != p2.Kind {
+			return p1.Kind < p2.Kind
+		}
+		if p1.Namespace != p2.Namespace {
+			return p1.Namespace < p2.Namespace
+		}
+		if p1.Name != p2.Name {
+			return p1.Name < p2.Name
+		}
+
+		// Finally, sort by the patch content itself if targets are identical
+		return patches[i].Patch < patches[j].Patch
+	})
 }
