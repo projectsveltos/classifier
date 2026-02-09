@@ -39,7 +39,7 @@ spec:
           valueFrom:
             resourceFieldRef:
               resource: limits.cpu
-        image: docker.io/projectsveltos/sveltos-agent@sha256:06259bfff13c49ab01bd8063082c5584147f68875118025d0aed04be8f3bddfc
+        image: docker.io/projectsveltos/sveltos-agent@sha256:cc24e317e14175e0446e28770f8d461c4b46cdc7c8173f76b845af81e2fee58e
         livenessProbe:
           failureThreshold: 3
           httpGet:
