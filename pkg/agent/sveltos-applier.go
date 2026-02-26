@@ -101,7 +101,7 @@ spec:
         - --cluster-type=
         - --secret-with-kubeconfig=
         - --v=5
-        - --version=v1.5.0
+        - --version=main
         command:
         - /manager
         env:
@@ -117,7 +117,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/sveltos-applier:v1.5.0
+        image: docker.io/projectsveltos/sveltos-applier@sha256:5a65667b59b64ab00bfa1ad8bc95dd1affe3c19b1650b0e2fab703a9449972d4
         livenessProbe:
           failureThreshold: 3
           httpGet:
