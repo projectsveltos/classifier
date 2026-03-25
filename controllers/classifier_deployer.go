@@ -1510,7 +1510,11 @@ func prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode stri
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-type=", fmt.Sprintf("cluster-type=%s", clusterType))
 	agentYAML = strings.ReplaceAll(agentYAML, "v=5", "v=0")
 
-	registry := GetSveltosAgentRegistry()
+	if getSveltosAgentEnableNATS() {
+		agentYAML = strings.ReplaceAll(agentYAML, "enable-nats-watcher=false", "enable-nats-watcher=true")
+	}
+
+	registry := getSveltosAgentRegistry()
 	if registry != "" {
 		agentYAML = replaceRegistry(agentYAML, registry)
 	}
@@ -1526,7 +1530,7 @@ func prepareSveltosApplierYAML(agentYAML, clusterNamespace, clusterName string,
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-type=", fmt.Sprintf("cluster-type=%s", clusterType))
 	agentYAML = strings.ReplaceAll(agentYAML, "secret-with-kubeconfig=", fmt.Sprintf("secret-with-kubeconfig=%s-sveltos-kubeconfig", clusterName))
 
-	registry := GetSveltosAgentRegistry()
+	registry := getSveltosAgentRegistry()
 	if registry != "" {
 		agentYAML = replaceRegistry(agentYAML, registry)
 	}

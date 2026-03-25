@@ -166,35 +166,42 @@ func shouldIgnore(cr *libsveltosv1beta1.ClassifierReport, isPullMode bool) bool 
 
 // Periodically collects ClassifierReports from each cluster.
 // If sharding is used, it will collect only from clusters matching shard.
-func collectClassifierReports(c client.Client, shardKey, capiOnboardAnnotation, version string, logger logr.Logger) {
+func collectClassifierReports(ctx context.Context, c client.Client, shardKey, capiOnboardAnnotation, version string,
+	logger logr.Logger) {
+
 	interval := 10 * time.Second
 	if shardKey != "" {
 		// This controller will only fetch ClassifierReport instances
 		// so it can be more aggressive
 		interval = 5 * time.Second
 	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
-	ctx := context.TODO()
 	for {
-		logger.V(logs.LogDebug).Info("collecting ClassifierReports")
-		// Get a selectors that matches everything
-		clusterList, err := clusterproxy.GetListOfClustersForShardKey(ctx, c, "", capiOnboardAnnotation, shardKey, logger)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
-		}
-
-		for i := range clusterList {
-			cluster := &clusterList[i]
-			l := logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", cluster.Kind, cluster.Namespace, cluster.Name))
-			err = collectClassifierReportsFromCluster(ctx, c, cluster, version, l)
+		select {
+		case <-ctx.Done():
+			logger.Info("stopping collecting ClassifierReports")
+			return
+		case <-ticker.C:
+			logger.V(logs.LogDebug).Info("collecting ClassifierReports")
+			// Get a selectors that matches everything
+			clusterList, err := clusterproxy.GetListOfClustersForShardKey(ctx, c, "", capiOnboardAnnotation, shardKey, logger)
 			if err != nil {
-				l.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ClassifierReports from cluster: %s/%s %v",
-					cluster.Namespace, cluster.Name, err))
-				continue
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
+			}
+
+			for i := range clusterList {
+				cluster := &clusterList[i]
+				l := logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", cluster.Kind, cluster.Namespace, cluster.Name))
+				err = collectClassifierReportsFromCluster(ctx, c, cluster, version, l)
+				if err != nil {
+					l.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ClassifierReports from cluster: %s/%s %v",
+						cluster.Namespace, cluster.Name, err))
+					continue
+				}
 			}
 		}
-
-		time.Sleep(interval)
 	}
 }
 

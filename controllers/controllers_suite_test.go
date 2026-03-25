@@ -185,7 +185,7 @@ func getClassifierReport(classifierName, clusterNamespace, clusterName string) *
 }
 
 func getClassifierInstance(name string) *libsveltosv1beta1.Classifier {
-	classifierLabels := []libsveltosv1beta1.ClassifierLabel{{Key: "version", Value: "v1.25.6"}}
+	classifierLabels := []libsveltosv1beta1.ClassifierLabel{{Key: "version", Value: "v1.26.1"}}
 	return &libsveltosv1beta1.Classifier{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -193,7 +193,7 @@ func getClassifierInstance(name string) *libsveltosv1beta1.Classifier {
 		Spec: libsveltosv1beta1.ClassifierSpec{
 			KubernetesVersionConstraints: []libsveltosv1beta1.KubernetesVersionConstraint{
 				{
-					Version:    "1.25.6",
+					Version:    "1.26.1",
 					Comparison: string(libsveltosv1beta1.ComparisonEqual),
 				},
 			},
