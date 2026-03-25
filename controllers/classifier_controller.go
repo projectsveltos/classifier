@@ -374,7 +374,7 @@ func (r *ClassifierReconciler) SetupWithManager(ctx context.Context,
 	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
 
 	if r.ClassifierReportMode == CollectFromManagementCluster {
-		go collectClassifierReports(mgr.GetClient(), r.ShardKey, r.CapiOnboardAnnotation, getVersion(), mgr.GetLogger())
+		go collectClassifierReports(ctx, mgr.GetClient(), r.ShardKey, r.CapiOnboardAnnotation, getVersion(), mgr.GetLogger())
 	}
 
 	if getAgentInMgmtCluster() {

@@ -143,27 +143,34 @@ func removeStaleClassifierResources(ctx context.Context, logger logr.Logger) {
 		},
 	}
 
+	const interval = 5 * time.Minute
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
 	for {
-		const five = 5
-		time.Sleep(five * time.Minute)
+		select {
+		case <-ctx.Done():
+			logger.Info("stopping detection and removal of stale classifier resources")
+			return
+		case <-ticker.C:
+			c := getManagementClusterClient()
+			sveltosAgentDeployments := &appsv1.DeploymentList{}
+			err := c.List(ctx, sveltosAgentDeployments, listOptions...)
+			if err != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect sveltos-agent deployment: %v", err))
+				continue
+			}
 
-		c := getManagementClusterClient()
-		sveltosAgentDeployments := &appsv1.DeploymentList{}
-		err := c.List(ctx, sveltosAgentDeployments, listOptions...)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect sveltos-agent deployment: %v", err))
-			continue
-		}
+			for i := range sveltosAgentDeployments.Items {
+				depl := &sveltosAgentDeployments.Items[i]
 
-		for i := range sveltosAgentDeployments.Items {
-			depl := &sveltosAgentDeployments.Items[i]
-
-			exist, clusterNs, clusterName, clusterType := deplAssociatedClusterExist(ctx, c, depl, logger)
-			if !exist {
-				_, err = cleanClusterStaleResources(ctx, c, clusterNs, clusterName, clusterType, logger)
-				if err != nil {
-					logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to remove sveltos-agent resources: %v", err))
-					continue
+				exist, clusterNs, clusterName, clusterType := deplAssociatedClusterExist(ctx, c, depl, logger)
+				if !exist {
+					_, err = cleanClusterStaleResources(ctx, c, clusterNs, clusterName, clusterType, logger)
+					if err != nil {
+						logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to remove sveltos-agent resources: %v", err))
+						continue
+					}
 				}
 			}
 		}

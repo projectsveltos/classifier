@@ -29,6 +29,7 @@ var (
 	sveltosApplierConfigMap string
 	registry                string
 	agentInMgmtCluster      bool
+	enableNatsWatcher       bool
 )
 
 func SetManagementClusterAccess(config *rest.Config, c client.Client) {
@@ -52,6 +53,10 @@ func SetAgentInMgmtCluster(isInMgmtCluster bool) {
 	agentInMgmtCluster = isInMgmtCluster
 }
 
+func SetSveltosAgentEnableNATS(enable bool) {
+	enableNatsWatcher = enable
+}
+
 func getManagementClusterConfig() *rest.Config {
 	return managementClusterConfig
 }
@@ -72,10 +77,14 @@ func getSveltosApplierConfigMap() string {
 	return sveltosApplierConfigMap
 }
 
-func GetSveltosAgentRegistry() string {
+func getSveltosAgentRegistry() string {
 	return registry
 }
 
 func getAgentInMgmtCluster() bool {
 	return agentInMgmtCluster
+}
+
+func getSveltosAgentEnableNATS() bool {
+	return enableNatsWatcher
 }

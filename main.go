@@ -80,6 +80,7 @@ var (
 	sveltosApplierConfigMap               string
 	capiOnboardAnnotation                 string
 	registry                              string
+	enableNatsWatcher                     bool
 )
 
 const (
@@ -236,6 +237,9 @@ func initFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&registry, "registry", "",
 		"Container registry for sveltos-agent images. Defaults to docker.io/ if empty.")
+
+	fs.BoolVar(&enableNatsWatcher, "enable-nats-watcher", false,
+		"Enable NATS.io configuration watcher on sveltos-agents to listen for cloud events. Disabled by default.")
 
 	const defautlRestConfigQPS = 20
 	fs.Float32Var(&restConfigQPS, "kube-api-qps", defautlRestConfigQPS,

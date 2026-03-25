@@ -205,6 +205,7 @@ spec:
         - --current-cluster=managed-cluster
         - --run-mode=do-not-send-reports
         - --discard-managed-fields=true
+        - --enable-nats-watcher=false
         command:
         - /manager
         env:
@@ -216,7 +217,7 @@ spec:
           valueFrom:
             resourceFieldRef:
               resource: limits.cpu
-        image: docker.io/projectsveltos/sveltos-agent@sha256:fb65087f04fab47e64f13bdce571b29ea382803e8e348aeef2bd1a4be599a821
+        image: docker.io/projectsveltos/sveltos-agent@sha256:bcf55c0990093653ee62d10a4f0cee4ece611daa991ef335045b4ec02178b4bb
         livenessProbe:
           failureThreshold: 3
           httpGet:
