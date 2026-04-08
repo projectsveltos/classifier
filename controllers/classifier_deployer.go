@@ -434,7 +434,7 @@ func updateSecretWithAccessManagementKubeconfig(ctx context.Context, c client.Cl
 func deployCRDs(ctx context.Context, clusterNamespace, clusterName, classifierName string,
 	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
 
-	if getAgentInMgmtCluster() {
+	if getAgentInMgmtCluster() && !isPullMode {
 		// CRDs must be deployed alongside the agent. Since the management cluster already contains these CRDs,
 		// this operation is a no-op if the agent is deployed there.
 		return nil
@@ -616,7 +616,7 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
-	if getAgentInMgmtCluster() {
+	if getAgentInMgmtCluster() && !isPullMode {
 		// If sveltos-agent is deployed in the management cluster, Classifier instance
 		// does not need to be deployed in the managed cluster. So return here
 		return nil
@@ -1579,12 +1579,18 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 	}
 
 	// Deploy SveltosAgent
-	if startInMgmtCluster {
+	if isPullMode {
+		err = deploySveltosAgentInManagedCluster(ctx, nil, clusterNamespace,
+			clusterName, classifierName, "do-not-send-reports", clusterType, patches, true, logger)
+		if err != nil {
+			return err
+		}
+	} else if startInMgmtCluster {
 		// Use management cluster restConfig
 		restConfig := getManagementClusterConfig()
 		return deploySveltosAgentInManagementCluster(ctx, restConfig, c, clusterNamespace, clusterName,
 			classifierName, "do-not-send-reports", clusterType, patches, logger)
-	} else if !isPullMode {
+	} else {
 		// Use managed cluster restConfig
 		remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 			"", "", clusterType, logger)
@@ -1599,12 +1605,6 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 		}
 		err = deploySveltosAgentInManagedCluster(ctx, remoteRestConfig, clusterNamespace,
 			clusterName, classifierName, "do-not-send-reports", clusterType, patches, false, logger)
-		if err != nil {
-			return err
-		}
-	} else {
-		err = deploySveltosAgentInManagedCluster(ctx, nil, clusterNamespace,
-			clusterName, classifierName, "do-not-send-reports", clusterType, patches, true, logger)
 		if err != nil {
 			return err
 		}
