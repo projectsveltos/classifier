@@ -16,6 +16,28 @@ limitations under the License.
 
 package controllers
 
+import (
+	corev1 "k8s.io/api/core/v1"
+
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+)
+
+// GroupClassifierReportsByCluster is the test-facing wrapper around groupClassifierReportsByCluster.
+// It accepts a plain cluster list (instead of the internal shard map) and returns a map from
+// cluster ref to its reports so tests don't need to know about internal types.
+func GroupClassifierReportsByCluster(
+	reports []libsveltosv1beta1.ClassifierReport,
+	clusterList []corev1.ObjectReference,
+) map[corev1.ObjectReference][]*libsveltosv1beta1.ClassifierReport {
+
+	groups := groupClassifierReportsByCluster(reports, buildShardClustersMap(clusterList))
+	result := make(map[corev1.ObjectReference][]*libsveltosv1beta1.ClassifierReport, len(groups))
+	for _, g := range groups {
+		result[g.ref] = g.items
+	}
+	return result
+}
+
 var (
 	DeployClassifierCRD                     = deployClassifierCRD
 	DeployClassifierReportCRD               = deployClassifierReportCRD
