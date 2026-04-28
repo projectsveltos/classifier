@@ -36,6 +36,86 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
+var _ = Describe("groupClassifierReportsByCluster", func() {
+	var (
+		sveltosCluster = corev1.ObjectReference{
+			Namespace:  "ns-one",
+			Name:       "sveltos-cluster",
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
+		}
+		capiCluster = corev1.ObjectReference{
+			Namespace:  "ns-two",
+			Name:       "capi-cluster",
+			Kind:       "Cluster",
+			APIVersion: clusterv1.GroupVersion.String(),
+		}
+	)
+
+	makeReport := func(ns, clusterName, clusterType string) libsveltosv1beta1.ClassifierReport {
+		return libsveltosv1beta1.ClassifierReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: ns,
+				Name:      randomString(),
+				Labels: map[string]string{
+					libsveltosv1beta1.ClassifierReportClusterNameLabel: clusterName,
+					libsveltosv1beta1.ClassifierReportClusterTypeLabel: clusterType,
+				},
+			},
+		}
+	}
+
+	It("groups reports by cluster and filters out non-shard and malformed reports", func() {
+		reports := []libsveltosv1beta1.ClassifierReport{
+			// two reports for sveltosCluster
+			makeReport("ns-one", "sveltos-cluster", "sveltos"),
+			makeReport("ns-one", "sveltos-cluster", "sveltos"),
+			// one report for capiCluster
+			makeReport("ns-two", "capi-cluster", "capi"),
+			// nil labels — excluded
+			{ObjectMeta: metav1.ObjectMeta{Namespace: "ns-one", Name: "no-labels"}},
+			// missing cluster-name label — excluded
+			{ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns-one", Name: "missing-name",
+				Labels: map[string]string{
+					libsveltosv1beta1.ClassifierReportClusterTypeLabel: "sveltos",
+				},
+			}},
+			// missing cluster-type label — excluded
+			{ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns-one", Name: "missing-type",
+				Labels: map[string]string{
+					libsveltosv1beta1.ClassifierReportClusterNameLabel: "sveltos-cluster",
+				},
+			}},
+			// cluster not in shard — excluded
+			makeReport("ns-three", "other-cluster", "sveltos"),
+		}
+
+		clusterList := []corev1.ObjectReference{sveltosCluster, capiCluster}
+		byCluster := controllers.GroupClassifierReportsByCluster(reports, clusterList)
+
+		Expect(byCluster).To(HaveLen(2))
+		Expect(byCluster[sveltosCluster]).To(HaveLen(2))
+		Expect(byCluster[capiCluster]).To(HaveLen(1))
+	})
+
+	It("returns an empty map when no reports match shard clusters", func() {
+		reports := []libsveltosv1beta1.ClassifierReport{
+			makeReport("ns-other", "unknown", "sveltos"),
+		}
+		clusterList := []corev1.ObjectReference{sveltosCluster}
+		byCluster := controllers.GroupClassifierReportsByCluster(reports, clusterList)
+		Expect(byCluster).To(BeEmpty())
+	})
+
+	It("returns an empty map when the report list is empty", func() {
+		clusterList := []corev1.ObjectReference{sveltosCluster}
+		byCluster := controllers.GroupClassifierReportsByCluster(nil, clusterList)
+		Expect(byCluster).To(BeEmpty())
+	})
+})
+
 var _ = Describe("Classifier Deployer", func() {
 	var classifier *libsveltosv1beta1.Classifier
 	var logger logr.Logger
