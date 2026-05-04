@@ -277,7 +277,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 	}
 
 	// get list of clusters currently matching this Classifier instance
-	matchingClusters, err := r.getMatchingClusters(ctx, classifierScope, logger)
+	matchingClusters, err := r.syncAndGetMatchingClusters(ctx, classifierScope, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to get matching clusters")
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
@@ -462,9 +462,22 @@ func (r *ClassifierReconciler) updateClusterInfo(ctx context.Context, classifier
 }
 
 // getMatchingClusters returns the set of clusters currently matching the Classifier
-// based on the existing ClassifierReport resources.
-func (r *ClassifierReconciler) getMatchingClusters(ctx context.Context,
+// based on the existing ClassifierReport resources. If a ClassifierReport is found but
+// the cluster no longer exist, removes the ClassifierReport
+func (r *ClassifierReconciler) syncAndGetMatchingClusters(ctx context.Context,
 	classifierScope *scope.ClassifierScope, logger logr.Logger) (map[corev1.ObjectReference]bool, error) {
+
+	// Get existing clusters first
+	existingClusters, err := clusterproxy.GetListOfClusters(ctx, r.Client, "", "", logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get existing clusters")
+		return nil, err
+	}
+
+	existingClustersMap := make(map[corev1.ObjectReference]struct{}, len(existingClusters))
+	for i := range existingClusters {
+		existingClustersMap[existingClusters[i]] = struct{}{}
+	}
 
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
@@ -489,7 +502,13 @@ func (r *ClassifierReconciler) getMatchingClusters(ctx context.Context,
 
 		if report.Spec.Match {
 			cluster := getClusterRefFromClassifierReport(report)
-			currentMatchingClusters[*cluster] = true
+			// Only add if it actually exists in the cluster list
+			if _, exists := existingClustersMap[*cluster]; exists {
+				currentMatchingClusters[*cluster] = true
+			} else {
+				_ = removeClusterClassifierReports(ctx, r.Client, cluster.Namespace, cluster.Name,
+					clusterproxy.GetClusterType(cluster), logger)
+			}
 		}
 	}
 
