@@ -24,7 +24,7 @@ spec:
         - --cluster-namespace=
         - --cluster-name=
         - --cluster-type=
-        - --version=main
+        - --version=v1.9.0
         - --current-cluster=management-cluster
         - --run-mode=do-not-send-reports
         - --discard-managed-fields=true
@@ -40,7 +40,7 @@ spec:
           valueFrom:
             resourceFieldRef:
               resource: limits.cpu
-        image: docker.io/projectsveltos/sveltos-agent@sha256:0b4dbfdd0c1711e8ea000ab7df5b9445fa1d38414ff8e2e6c10bcc5ea4521f60
+        image: docker.io/projectsveltos/sveltos-agent@sha256:967837f487950108605a5edbc265d1b63628f857145274e34c183b753241fca1
         livenessProbe:
           failureThreshold: 3
           httpGet:

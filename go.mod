@@ -1,6 +1,6 @@
 module github.com/projectsveltos/classifier
 
-go 1.26.1
+go 1.26.2
 
 require (
 	github.com/TwiN/go-color v1.4.1
@@ -9,7 +9,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.28.3
 	github.com/onsi/gomega v1.40.0
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v1.8.1-0.20260504084132-12f98fc4a775
+	github.com/projectsveltos/libsveltos v1.9.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/pflag v1.0.10
 	golang.org/x/text v0.36.0
