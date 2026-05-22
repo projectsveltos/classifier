@@ -52,10 +52,11 @@ import (
 )
 
 var (
-	testEnv *helpers.TestEnvironment
-	cancel  context.CancelFunc
-	ctx     context.Context
-	scheme  *runtime.Scheme
+	testEnv          *helpers.TestEnvironment
+	cancel           context.CancelFunc
+	ctx              context.Context
+	scheme           *runtime.Scheme
+	sveltosNamespace string
 )
 
 var (
@@ -71,7 +72,6 @@ const (
 	upstreamClusterNamePrefix = "upstream-cluster"
 	upstreamMachineNamePrefix = "upstream-machine"
 	clusterKind               = "Cluster"
-	projectsveltosNamespace   = "projectsveltos"
 )
 
 const (
@@ -102,6 +102,8 @@ var _ = BeforeSuite(func() {
 		panic(err)
 	}
 
+	sveltosNamespace = randomString()
+	controllers.SetSveltosNamespace(sveltosNamespace)
 	controllers.SetManagementClusterAccess(testEnv.Config, testEnv.Client)
 	controllers.CreatFeatureHandlerMaps()
 
@@ -127,7 +129,7 @@ var _ = BeforeSuite(func() {
 
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: projectsveltosNamespace,
+			Name: sveltosNamespace,
 		},
 	}
 	Expect(testEnv.Create(ctx, ns)).To(Succeed())

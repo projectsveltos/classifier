@@ -101,11 +101,11 @@ spec:
         - --cluster-type=
         - --secret-with-kubeconfig=
         - --v=5
-        - --version=v1.9.0
+        - --version=main
         command:
         - /manager
         env:
-        - name: GOMEMLIMIT
+        - name: TOTAL_MEMORY_LIMIT
           valueFrom:
             resourceFieldRef:
               resource: limits.memory
@@ -117,7 +117,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/sveltos-applier:v1.9.0
+        image: docker.io/projectsveltos/sveltos-applier@sha256:9e7170faec7d9bf58c857d193f9c682f286eef20c3875a9a05a71fb74cf203e3
         livenessProbe:
           failureThreshold: 3
           httpGet:

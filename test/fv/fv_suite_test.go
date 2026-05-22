@@ -19,6 +19,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -50,7 +51,8 @@ var (
 	k8sClient           client.Client
 	scheme              *runtime.Scheme
 	kindWorkloadCluster *unstructured.Unstructured // This is the name of the kind workload cluster, in the form namespace/name
-
+	deplNamespace       string
+	configMapConfig     string
 )
 
 const (
@@ -59,13 +61,17 @@ const (
 )
 
 const (
-	deplNamespace        = "projectsveltos"
 	deplName             = "classifier-manager"
 	managerContainerName = "manager"
 )
 
-var (
-	configMapConfig = `    apiVersion: v1
+func init() {
+	deplNamespace = os.Getenv("SVELTOS_NAMESPACE")
+	if deplNamespace == "" {
+		deplNamespace = "projectsveltos"
+	}
+
+	configMapConfig = fmt.Sprintf(`    apiVersion: v1
     data:
       patch: |-
         apiVersion: apps/v1
@@ -83,8 +89,8 @@ var (
     kind: ConfigMap
     metadata:
       name: sveltos-agent
-      namespace: projectsveltos`
-)
+      namespace: %s`, deplNamespace)
+}
 
 func TestFv(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -112,6 +118,7 @@ func TestFv(t *testing.T) {
 }
 
 var _ = SynchronizedBeforeSuite(func() []byte {
+	By(fmt.Sprintf("Running with Sveltos namespace: %s", deplNamespace))
 	ctrl.SetLogger(klog.Background())
 
 	restConfig := ctrl.GetConfigOrDie()

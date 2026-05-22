@@ -30,6 +30,7 @@ var (
 	registry                string
 	agentInMgmtCluster      bool
 	enableNatsWatcher       bool
+	sveltosNamespace        string
 )
 
 func SetManagementClusterAccess(config *rest.Config, c client.Client) {
@@ -55,6 +56,10 @@ func SetAgentInMgmtCluster(isInMgmtCluster bool) {
 
 func SetSveltosAgentEnableNATS(enable bool) {
 	enableNatsWatcher = enable
+}
+
+func SetSveltosNamespace(ns string) {
+	sveltosNamespace = ns
 }
 
 func getManagementClusterConfig() *rest.Config {
@@ -87,4 +92,8 @@ func getAgentInMgmtCluster() bool {
 
 func getSveltosAgentEnableNATS() bool {
 	return enableNatsWatcher
+}
+
+func getSveltosNamespace() string {
+	return sveltosNamespace
 }

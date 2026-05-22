@@ -174,7 +174,7 @@ var _ = Describe("Classifier Predicates: ConfigMapPredicates", func() {
 
 		configMap = &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "projectsveltos",
+				Namespace: sveltosNamespace,
 				Name:      randomString(),
 			},
 		}

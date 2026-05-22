@@ -108,8 +108,8 @@ const (
 	sveltosApplierOverrideAnnotation = "sveltosapplier.projectsveltos.io/config-override-ref"
 )
 
-func getSveltosAgentNamespace() string {
-	return projectsveltos
+func getSveltosAgentNamespace(sveltosNamespace string) string {
+	return sveltosNamespace
 }
 
 func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierScope *scope.ClassifierScope,
@@ -374,10 +374,10 @@ func getKubeconfigFromAccessRequest(ctx context.Context, c client.Client, cluste
 
 func createSecretNamespace(ctx context.Context, c client.Client) error {
 	ns := &corev1.Namespace{}
-	err := c.Get(ctx, types.NamespacedName{Name: libsveltosv1beta1.ClassifierSecretNamespace}, ns)
+	err := c.Get(ctx, types.NamespacedName{Name: getSveltosNamespace()}, ns)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			ns.Name = libsveltosv1beta1.ClassifierSecretNamespace
+			ns.Name = getSveltosNamespace()
 			return c.Create(ctx, ns)
 		}
 		return err
@@ -406,14 +406,14 @@ func updateSecretWithAccessManagementKubeconfig(ctx context.Context, c client.Cl
 
 	secret := &corev1.Secret{}
 	key := client.ObjectKey{
-		Namespace: libsveltosv1beta1.ClassifierSecretNamespace,
+		Namespace: getSveltosNamespace(),
 		Name:      libsveltosv1beta1.ClassifierSecretName,
 	}
 
 	dataKey := "kubeconfig"
 	err = remoteClient.Get(ctx, key, secret)
 	if err != nil {
-		secret.Namespace = libsveltosv1beta1.ClassifierSecretNamespace
+		secret.Namespace = getSveltosNamespace()
 		secret.Name = libsveltosv1beta1.ClassifierSecretName
 		secret.Data = map[string][]byte{
 			dataKey: kubeconfig,
@@ -1553,7 +1553,7 @@ func createSveltosAgentNamespaceInManagedCluster(ctx context.Context, c client.C
 
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: getSveltosAgentNamespace(),
+			Name: getSveltosAgentNamespace(getSveltosNamespace()),
 		},
 	}
 
@@ -1671,6 +1671,40 @@ func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest
 		restConfig, agentYAML, lbls, patches, false, logger)
 }
 
+// updateResourceNamespace sets the namespace on a resource that requires it.
+// For namespaced resources the object metadata namespace is updated.
+// For ClusterRoleBinding the subjects are also patched: the resource is cluster-scoped so
+// GetNamespace() returns "" and the plain SetNamespace call would not reach it, but each
+// ServiceAccount subject still carries an explicit namespace that must match the actual
+// location of the ServiceAccount.
+func updateResourceNamespace(policy *unstructured.Unstructured, namespace string) error {
+	if policy.GetNamespace() != "" {
+		policy.SetNamespace(namespace)
+	}
+
+	if policy.GetKind() != "ClusterRoleBinding" {
+		return nil
+	}
+
+	subjects, found, err := unstructured.NestedSlice(policy.Object, "subjects")
+	if err != nil || !found {
+		return err
+	}
+
+	for i := range subjects {
+		subject, ok := subjects[i].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if subject["kind"] == "ServiceAccount" {
+			subject["namespace"] = namespace
+			subjects[i] = subject
+		}
+	}
+
+	return unstructured.SetNestedSlice(policy.Object, subjects, "subjects")
+}
+
 func deploySveltosAgentResources(ctx context.Context, clusterNamespace, clusterName, classifierName string,
 	restConfig *rest.Config, agentYAML string, lbls map[string]string, patches []libsveltosv1beta1.Patch,
 	isPullMode bool, logger logr.Logger) error {
@@ -1708,6 +1742,11 @@ func deploySveltosAgentResources(ctx context.Context, clusterNamespace, clusterN
 					return err
 				}
 			}
+		}
+
+		if err := updateResourceNamespace(policy, getSveltosNamespace()); err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to update resource namespace")
+			return err
 		}
 
 		var referencedUnstructured []*unstructured.Unstructured
@@ -1762,6 +1801,11 @@ func deploySveltosApplierResources(ctx context.Context, clusterNamespace, cluste
 		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to parse sveltos applier yaml")
+			return err
+		}
+
+		if err := updateResourceNamespace(policy, getSveltosNamespace()); err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to update resource namespace")
 			return err
 		}
 
@@ -1851,7 +1895,8 @@ func getSveltosAgentDeploymentName(ctx context.Context, restConfig *rest.Config,
 	}
 
 	// using client and a List would require permission at cluster level. So using clientset instead
-	deployments, err := clientset.AppsV1().Deployments(getSveltosAgentNamespace()).List(ctx, listOptions)
+	deployments, err := clientset.AppsV1().Deployments(getSveltosAgentNamespace(getSveltosNamespace())).
+		List(ctx, listOptions)
 	if err != nil {
 		return "", err
 	}
@@ -1928,6 +1973,10 @@ func removeSveltosAgentFromManagementCluster(ctx context.Context,
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to parse sveltos-agent yaml")
 			return err
+		}
+
+		if policy.GetNamespace() != "" {
+			policy.SetNamespace(getSveltosNamespace())
 		}
 
 		dr, err := k8s_utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
@@ -2028,7 +2077,7 @@ func getSveltosAgentPatchesOld(ctx context.Context, c client.Client,
 	configMap := &corev1.ConfigMap{}
 	if configMapName != "" {
 		err := c.Get(ctx,
-			types.NamespacedName{Namespace: projectsveltos, Name: configMapName},
+			types.NamespacedName{Namespace: getSveltosNamespace(), Name: configMapName},
 			configMap)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %s: %v",
@@ -2060,7 +2109,7 @@ func getSveltosApplierPatchesOld(ctx context.Context, c client.Client,
 	configMap := &corev1.ConfigMap{}
 	if configMapName != "" {
 		err := c.Get(ctx,
-			types.NamespacedName{Namespace: projectsveltos, Name: configMapName},
+			types.NamespacedName{Namespace: getSveltosNamespace(), Name: configMapName},
 			configMap)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %s: %v",
@@ -2098,7 +2147,7 @@ func getSveltosAgentPatches(ctx context.Context, c client.Client,
 	}
 
 	configMapName := getSveltosAgentConfigMap()
-	patches, err = getSveltosAgentPatchesNew(ctx, c, projectsveltos, configMapName, logger)
+	patches, err = getSveltosAgentPatchesNew(ctx, c, getSveltosNamespace(), configMapName, logger)
 	if err == nil {
 		return patches, nil
 	}
@@ -2120,7 +2169,7 @@ func getSveltosApplierPatches(ctx context.Context, c client.Client,
 	}
 
 	configMapName := getSveltosApplierConfigMap()
-	patches, err = getSveltosApplierPatchesNew(ctx, c, projectsveltos, configMapName, logger)
+	patches, err = getSveltosApplierPatchesNew(ctx, c, getSveltosNamespace(), configMapName, logger)
 	if err == nil {
 		return patches, nil
 	}

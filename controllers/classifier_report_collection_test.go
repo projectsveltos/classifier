@@ -181,10 +181,9 @@ var _ = Describe("Classifier Deployer", func() {
 
 		// In managed cluster this is the namespace where ClassifierReports
 		// are created
-		const classifierReportNamespace = "projectsveltos"
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: classifierReportNamespace,
+				Name: sveltosNamespace,
 			},
 		}
 		err := testEnv.Create(context.TODO(), ns)
@@ -199,7 +198,7 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
 
 		classifierReport := getClassifierReport(classifierName, "", "")
-		classifierReport.Namespace = classifierReportNamespace
+		classifierReport.Namespace = sveltosNamespace
 		Expect(testEnv.Create(context.TODO(), classifierReport)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifierReport)).To(Succeed())
