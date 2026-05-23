@@ -77,6 +77,11 @@ const (
 )
 
 const (
+	namespaceKind          = "Namespace"
+	clusterRoleBindingKind = "ClusterRoleBinding"
+)
+
+const (
 	// This optional annotation enables **per-cluster configuration overrides** for Sveltos sveltos-agent,
 	// addressing the limitation of the global configuration.
 	// The value must be a reference to a ConfigMap and supports the following formats:
@@ -1672,17 +1677,23 @@ func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest
 }
 
 // updateResourceNamespace sets the namespace on a resource that requires it.
+// For Namespace resources the metadata.name is updated (the namespace is its identity).
 // For namespaced resources the object metadata namespace is updated.
 // For ClusterRoleBinding the subjects are also patched: the resource is cluster-scoped so
 // GetNamespace() returns "" and the plain SetNamespace call would not reach it, but each
 // ServiceAccount subject still carries an explicit namespace that must match the actual
 // location of the ServiceAccount.
 func updateResourceNamespace(policy *unstructured.Unstructured, namespace string) error {
+	if policy.GetKind() == namespaceKind {
+		policy.SetName(namespace)
+		return nil
+	}
+
 	if policy.GetNamespace() != "" {
 		policy.SetNamespace(namespace)
 	}
 
-	if policy.GetKind() != "ClusterRoleBinding" {
+	if policy.GetKind() != clusterRoleBindingKind {
 		return nil
 	}
 
@@ -1975,7 +1986,9 @@ func removeSveltosAgentFromManagementCluster(ctx context.Context,
 			return err
 		}
 
-		if policy.GetNamespace() != "" {
+		if policy.GetKind() == namespaceKind {
+			policy.SetName(getSveltosNamespace())
+		} else if policy.GetNamespace() != "" {
 			policy.SetNamespace(getSveltosNamespace())
 		}
 
