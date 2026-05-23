@@ -34,6 +34,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -111,18 +112,7 @@ func main() {
 
 	reportMode = controllers.ReportMode(tmpReportMode)
 
-	ctrlOptions := ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                getDiagnosticsOptions(),
-		HealthProbeBindAddress: healthAddr,
-		WebhookServer: webhook.NewServer(
-			webhook.Options{
-				Port: webhookPort,
-			}),
-		Cache: cache.Options{
-			SyncPeriod: &syncPeriod,
-		},
-	}
+	ctrlOptions := getCtrlOptions(scheme)
 
 	restConfig := ctrl.GetConfigOrDie()
 	restConfig.QPS = restConfigQPS
@@ -134,11 +124,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	sveltosNamespace := getSveltosNamespace()
+
 	controllers.SetManagementClusterAccess(mgr.GetConfig(), mgr.GetClient())
 	controllers.SetSveltosAgentConfigMap(sveltosAgentConfigMap)
 	controllers.SetSveltosApplierConfigMap(sveltosApplierConfigMap)
 	controllers.SetSveltosAgentRegistry(registry)
 	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
+	controllers.SetSveltosNamespace(sveltosNamespace)
 
 	setupLog.V(logs.LogInfo).Info(fmt.Sprintf("Running in managemnt cluster: %t", agentInMgmtCluster))
 
@@ -171,13 +164,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.SveltosClusterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SveltosCluster")
-		os.Exit(1)
-	}
+	startSveltosClusterReconciler(mgr)
 	//+kubebuilder:scaffold:builder
 
 	setupChecks(mgr)
@@ -382,4 +369,38 @@ func getDiagnosticsOptions() metricsserver.Options {
 		SecureServing:  true,
 		FilterProvider: filters.WithAuthenticationAndAuthorization,
 	}
+}
+
+func getCtrlOptions(scheme *runtime.Scheme) ctrl.Options {
+	return ctrl.Options{
+		Scheme:                 scheme,
+		Metrics:                getDiagnosticsOptions(),
+		HealthProbeBindAddress: healthAddr,
+		WebhookServer: webhook.NewServer(
+			webhook.Options{
+				Port: webhookPort,
+			}),
+		Cache: cache.Options{
+			SyncPeriod: &syncPeriod,
+		},
+	}
+}
+
+func startSveltosClusterReconciler(mgr manager.Manager) {
+	if err := (&controllers.SveltosClusterReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SveltosCluster")
+		os.Exit(1)
+	}
+}
+
+func getSveltosNamespace() string {
+	sveltosNamespace := os.Getenv("NAMESPACE")
+	if sveltosNamespace == "" {
+		setupLog.V(logs.LogInfo).Error(nil, "Missing required environment variables NAMESPACE")
+		os.Exit(1)
+	}
+	return sveltosNamespace
 }

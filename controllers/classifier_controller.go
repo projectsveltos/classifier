@@ -77,8 +77,6 @@ const (
 
 	controlplaneendpoint = "controlplaneendpoint-key"
 	configurationHash    = "configurationHash"
-
-	projectsveltos = "projectsveltos"
 )
 
 // ClassifierReconciler reconciles a Classifier object

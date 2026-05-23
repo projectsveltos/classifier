@@ -187,7 +187,7 @@ func verifySveltosAgent(workloadClient client.Client, name string) {
 	Eventually(func() bool {
 		depl := &appsv1.Deployment{}
 		err := workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: "projectsveltos", Name: name}, depl)
+			types.NamespacedName{Namespace: deplNamespace, Name: name}, depl)
 		if err != nil {
 			return false
 		}

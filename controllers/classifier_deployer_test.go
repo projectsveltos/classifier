@@ -506,7 +506,7 @@ var _ = Describe("Classifier Deployer", func() {
 		Eventually(func() error {
 			currentSveltosAgent := &appsv1.Deployment{}
 			return testEnv.Get(context.TODO(),
-				types.NamespacedName{Namespace: "projectsveltos", Name: "sveltos-agent-manager"},
+				types.NamespacedName{Namespace: sveltosNamespace, Name: "sveltos-agent-manager"},
 				currentSveltosAgent)
 		}, timeout, pollingInterval).Should(BeNil())
 	})
@@ -605,7 +605,7 @@ var _ = Describe("Classifier Deployer", func() {
 		Eventually(func() bool {
 			secret := &corev1.Secret{}
 			err := testEnv.Get(context.TODO(),
-				types.NamespacedName{Namespace: libsveltosv1beta1.ClassifierSecretNamespace, Name: libsveltosv1beta1.ClassifierSecretName},
+				types.NamespacedName{Namespace: sveltosNamespace, Name: libsveltosv1beta1.ClassifierSecretName},
 				secret)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -625,7 +625,7 @@ var _ = Describe("Classifier Deployer", func() {
 		expectedLabels := controllers.GetSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
 
 		listOptions := []client.ListOption{
-			client.InNamespace(controllers.GetSveltosAgentNamespace()),
+			client.InNamespace(controllers.GetSveltosAgentNamespace(sveltosNamespace)),
 		}
 		Eventually(func() bool {
 			deployments := &appsv1.DeploymentList{}
@@ -675,7 +675,7 @@ var _ = Describe("Classifier Deployer", func() {
 			},
 		}
 
-		cmYAML := `apiVersion: v1
+		cmYAML := fmt.Sprintf(`apiVersion: v1
 data:
   deployment-patch: |-
       patch: |-
@@ -694,7 +694,7 @@ data:
       target:
         kind: Deployment
         name: sveltos-agent-manager
-        namespace: projectsveltos
+        namespace: %s
   clusterrole-patch: |-
       patch: |-
         - op: remove
@@ -705,7 +705,7 @@ data:
 kind: ConfigMap
 metadata:
   name: sveltos-agent-config
-  namespace: projectsveltos`
+  namespace: %s`, sveltosNamespace, sveltosNamespace)
 
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
@@ -735,7 +735,7 @@ metadata:
 			},
 		}
 
-		cmYAML := `apiVersion: v1
+		cmYAML := fmt.Sprintf(`apiVersion: v1
 data:
   deployment-patch: |-
       patch: |-
@@ -748,7 +748,7 @@ data:
       target:
         kind: Deployment
         name: sveltos-applier-manager
-        namespace: projectsveltos
+        namespace: %s
   clusterrole-patch: |-
       patch: |-
         - op: remove
@@ -759,7 +759,7 @@ data:
 kind: ConfigMap
 metadata:
   name: sveltos-applier-config
-  namespace: projectsveltos`
+  namespace: %s`, sveltosNamespace, sveltosNamespace)
 
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
@@ -814,7 +814,7 @@ data:
       target:
         kind: Deployment
         name: sveltos-agent-manager
-        namespace: projectsveltos
+        namespace: %s
   clusterrole-patch: |-
       patch: |-
         - op: remove
@@ -825,7 +825,7 @@ data:
 kind: ConfigMap
 metadata:
   name: %s
-  namespace: %s`, configMapName, configMapNamespace)
+  namespace: %s`, sveltosNamespace, configMapName, configMapNamespace)
 
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
@@ -874,7 +874,7 @@ data:
       target:
         kind: Deployment
         name: sveltos-applier-manager
-        namespace: projectsveltos
+        namespace: %s
   clusterrole-patch: |-
       patch: |-
         - op: remove
@@ -885,7 +885,7 @@ data:
 kind: ConfigMap
 metadata:
   name: %s
-  namespace: %s`, configMapName, configMapNamespace)
+  namespace: %s`, sveltosNamespace, configMapName, configMapNamespace)
 
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
@@ -915,7 +915,7 @@ metadata:
 			},
 		}
 
-		cmYAML := `apiVersion: v1
+		cmYAML := fmt.Sprintf(`apiVersion: v1
 data:
   deployment-spec-patch: |-
     patch: |-
@@ -938,7 +938,7 @@ data:
 kind: ConfigMap
 metadata:
   name: sveltos-agent-config
-  namespace: projectsveltos`
+  namespace: %s`, sveltosNamespace)
 
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
@@ -968,7 +968,7 @@ metadata:
 			},
 		}
 
-		cmYAML := `apiVersion: v1
+		cmYAML := fmt.Sprintf(`apiVersion: v1
 data:
   deployment-patch: |-
             image-patch: |-
@@ -994,7 +994,7 @@ data:
 kind: ConfigMap
 metadata:
   name: sveltos-agent-config-old
-  namespace: projectsveltos`
+  namespace: %s`, sveltosNamespace)
 
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
@@ -1022,7 +1022,7 @@ metadata:
 			},
 		}
 
-		cmYAML := `apiVersion: v1
+		cmYAML := fmt.Sprintf(`apiVersion: v1
 data:
   patch: |-
     apiVersion: apps/v1
@@ -1040,7 +1040,7 @@ data:
 kind: ConfigMap
 metadata:
   name: sveltos-agent-config-old
-  namespace: projectsveltos`
+  namespace: %s`, sveltosNamespace)
 
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
@@ -1126,7 +1126,7 @@ func prepareCluster() *clusterv1.Cluster {
 	By("Create the ConfigMap with sveltos-agent version")
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: projectsveltosNamespace,
+			Namespace: sveltosNamespace,
 			Name:      "sveltos-agent-version",
 		},
 		Data: map[string]string{

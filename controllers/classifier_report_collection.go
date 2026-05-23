@@ -323,8 +323,8 @@ func processClassifierReportsForClusterInAgentlessMode(ctx context.Context, c cl
 		return nil
 	}
 
-	if !sveltos_upgrade.IsSveltosAgentVersionCompatible(ctx, getManagementClusterClient(), version, ref.Namespace,
-		ref.Name, clusterproxy.GetClusterType(ref), true, logger) {
+	if !sveltos_upgrade.IsSveltosAgentVersionCompatible(ctx, getManagementClusterClient(), getSveltosNamespace(),
+		version, ref.Namespace, ref.Name, clusterproxy.GetClusterType(ref), true, logger) {
 
 		logger.V(logs.LogDebug).Info(compatibilityCheckErrorMsg)
 		return errors.New(compatibilityCheckErrorMsg)
@@ -399,8 +399,8 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	if !sveltos_upgrade.IsSveltosAgentVersionCompatible(ctx, getManagementClusterClient(), version, cluster.Namespace,
-		cluster.Name, clusterproxy.GetClusterType(cluster), getAgentInMgmtCluster(), logger) {
+	if !sveltos_upgrade.IsSveltosAgentVersionCompatible(ctx, getManagementClusterClient(), getSveltosNamespace(), version,
+		cluster.Namespace, cluster.Name, clusterproxy.GetClusterType(cluster), getAgentInMgmtCluster(), logger) {
 
 		logger.V(logs.LogDebug).Info(compatibilityCheckErrorMsg)
 		return errors.New(compatibilityCheckErrorMsg)

@@ -234,7 +234,7 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 }
 
 func isConfigMapWithPatches(cm *corev1.ConfigMap) bool {
-	if cm.Namespace == projectsveltos && cm.Name == getSveltosAgentConfigMap() {
+	if cm.Namespace == getSveltosNamespace() && cm.Name == getSveltosAgentConfigMap() {
 		return true
 	}
 
