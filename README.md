@@ -1,6 +1,6 @@
 [![CI](https://github.com/projectsveltos/classifier/actions/workflows/main.yaml/badge.svg)](https://github.com/projectsveltos/classifier/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/projectsveltos/classifier)](https://goreportcard.com/report/github.com/projectsveltos/classifier)
-[![Release](https://img.shields.io/github/v/release/projectsveltos/addon-controller)](https://github.com/projectsveltos/addon-controller/releases)
+[![Release](https://img.shields.io/github/v/release/projectsveltos/classifier)](https://github.com/projectsveltos/classifier/releases)
 [![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)
 [![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q)
 [![Website](https://img.shields.io/badge/website-projectsveltos.io-blue)](https://website.projectsveltos.io)
