@@ -75,6 +75,8 @@ func verifyFlow(namePrefix string) {
 
 	verifyClassifierReport(classifier.Name, true)
 	verifyClusterLabels(currentClassifier)
+	verifyClassifierReportManagedLabels(currentClassifier)
+	verifyClassifierStatusEmpty(classifier.Name)
 
 	Byf("Changing classifier so cluster is not a match anymore")
 	currentClassifer := &libsveltosv1beta1.Classifier{}

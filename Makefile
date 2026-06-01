@@ -1,6 +1,7 @@
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+PULL_POLICY ?= IfNotPresent
 # KUBEBUILDER_ENVTEST_KUBERNETES_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 KUBEBUILDER_ENVTEST_KUBERNETES_VERSION = 1.35.0
 
@@ -343,7 +344,7 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 
 .PHONY: build
 build: sveltos-agent generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+	go build -o bin/manager .
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.

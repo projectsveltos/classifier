@@ -354,45 +354,42 @@ func isClassifierAlreadyRegistered(classifiers []string, classifierKey string) b
 
 // rebuildRegistrations rebuilds internal structures to identify Classifiers managing
 // labels and Classifiers currently just registered but not managing.
-// Relies completely on Classifier.Status
+// Reads from ClassifierReport.Status (the authoritative post-migration location).
 func (m *instance) rebuildRegistrations(ctx context.Context, c client.Client) error {
 	// Lock here
 	m.chartMux.Lock()
 	defer m.chartMux.Unlock()
 
-	classifierList := &libsveltosv1beta1.ClassifierList{}
-	err := c.List(ctx, classifierList)
-	if err != nil {
+	reportList := &libsveltosv1beta1.ClassifierReportList{}
+	if err := c.List(ctx, reportList); err != nil {
 		return err
 	}
 
-	for i := range classifierList.Items {
-		cs := &classifierList.Items[i]
-		m.addManagers(cs)
+	// First pass: register primary managers (ManagedLabels).
+	for i := range reportList.Items {
+		report := &reportList.Items[i]
+		if report.Spec.ClusterNamespace == "" || len(report.Status.ManagedLabels) == 0 {
+			continue
+		}
+		clusterKey := m.getClusterKey(report.Spec.ClusterNamespace, report.Spec.ClusterName, report.Spec.ClusterType)
+		classifierKey := m.getClassifierKey(report.Spec.ClassifierName)
+		m.addManagedLabelsInCluster(classifierKey, clusterKey, report.Status.ManagedLabels)
 	}
 
-	for i := range classifierList.Items {
-		cs := &classifierList.Items[i]
-		m.addNonManagers(cs)
+	// Second pass: register non-managers (UnManagedLabels) so they appear in the list
+	// and can take over when the current manager is removed.
+	for i := range reportList.Items {
+		report := &reportList.Items[i]
+		if report.Spec.ClusterNamespace == "" || len(report.Status.UnManagedLabels) == 0 {
+			continue
+		}
+		clusterKey := m.getClusterKey(report.Spec.ClusterNamespace, report.Spec.ClusterName, report.Spec.ClusterType)
+		classifierKey := m.getClassifierKey(report.Spec.ClassifierName)
+		unManagedKeys := m.buildSliceOfUnManagedLabels(report.Status.UnManagedLabels)
+		m.addManagedLabelsInCluster(classifierKey, clusterKey, unManagedKeys)
 	}
 
 	return nil
-}
-
-// addManagers walks Classifier's status and registers it for each label currently managed
-func (m *instance) addManagers(classifier *libsveltosv1beta1.Classifier) {
-	classifierKey := m.getClassifierKey(classifier.Name)
-
-	for i := range classifier.Status.MachingClusterStatuses {
-		clusterStatus := &classifier.Status.MachingClusterStatuses[i]
-		clusterType := libsveltosv1beta1.ClusterTypeCapi
-		if clusterStatus.ClusterRef.APIVersion == libsveltosv1beta1.GroupVersion.String() {
-			clusterType = libsveltosv1beta1.ClusterTypeSveltos
-		}
-		clusterKey := m.getClusterKey(clusterStatus.ClusterRef.Namespace, clusterStatus.ClusterRef.Name, clusterType)
-
-		m.addManagedLabelsInCluster(classifierKey, clusterKey, clusterStatus.ManagedLabels)
-	}
 }
 
 func (m *instance) addManagedLabelsInCluster(classifierKey, clusterKey string, managedLabels []string) {
@@ -401,24 +398,6 @@ func (m *instance) addManagedLabelsInCluster(classifierKey, clusterKey string, m
 		m.addClusterEntry(clusterKey)
 		m.addLabelKeyEntry(clusterKey, labelKey)
 		m.addClassifierEntry(clusterKey, labelKey, classifierKey)
-	}
-}
-
-// addNonManagers walks Classifier's status and registers it for each labels currently not managed
-// (not managed because other Classifier is)
-func (m *instance) addNonManagers(classifier *libsveltosv1beta1.Classifier) {
-	classifierKey := m.getClassifierKey(classifier.Name)
-
-	for i := range classifier.Status.MachingClusterStatuses {
-		clusterStatus := &classifier.Status.MachingClusterStatuses[i]
-		clusterType := libsveltosv1beta1.ClusterTypeCapi
-		if clusterStatus.ClusterRef.APIVersion == libsveltosv1beta1.GroupVersion.String() {
-			clusterType = libsveltosv1beta1.ClusterTypeSveltos
-		}
-		clusterKey := m.getClusterKey(clusterStatus.ClusterRef.Namespace, clusterStatus.ClusterRef.Name, clusterType)
-
-		unManagedLabels := m.buildSliceOfUnManagedLabels(clusterStatus.UnManagedLabels)
-		m.addManagedLabelsInCluster(classifierKey, clusterKey, unManagedLabels)
 	}
 }
 

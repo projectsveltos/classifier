@@ -89,6 +89,13 @@ var _ = Describe("Classifier: update cluster labels", func() {
 
 		verifyClassifierReport(classifier2.Name, true)
 
+		// classifier1 wins the conflict: its labels must appear in ManagedLabels.
+		// classifier2 asked for the same keys but lost: they must appear in UnManagedLabels.
+		verifyClassifierReportManagedLabels(classifier1)
+		verifyClassifierReportUnManagedLabels(classifier2)
+		verifyClassifierStatusEmpty(classifier1.Name)
+		verifyClassifierStatusEmpty(classifier2.Name)
+
 		verifyClusterLabels(classifier1)
 
 		Byf("Deleting classifier instance %s in the management cluster", classifier1.Name)

@@ -102,13 +102,12 @@ func main() {
 	}
 
 	klog.InitFlags(nil)
+	ctrl.SetLogger(klog.Background())
 
 	initFlags(pflag.CommandLine)
 	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
-
-	ctrl.SetLogger(klog.Background())
 
 	reportMode = controllers.ReportMode(tmpReportMode)
 
@@ -125,13 +124,13 @@ func main() {
 	}
 
 	sveltosNamespace := getSveltosNamespace()
+	configureGlobalState(mgr, sveltosNamespace)
 
-	controllers.SetManagementClusterAccess(mgr.GetConfig(), mgr.GetClient())
-	controllers.SetSveltosAgentConfigMap(sveltosAgentConfigMap)
-	controllers.SetSveltosApplierConfigMap(sveltosApplierConfigMap)
-	controllers.SetSveltosAgentRegistry(registry)
-	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
-	controllers.SetSveltosNamespace(sveltosNamespace)
+	if isInitContainer() {
+		setupLog.V(logs.LogInfo).Info("running migration")
+		runMigrateMode(scheme)
+		os.Exit(0)
+	}
 
 	setupLog.V(logs.LogInfo).Info(fmt.Sprintf("Running in managemnt cluster: %t", agentInMgmtCluster))
 
@@ -255,6 +254,39 @@ func setupChecks(mgr ctrl.Manager) {
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
+}
+
+// isInitContainer returns true when the binary is running as the migration init container.
+// The init container sets IS_INITIALIZATION=true in its env to signal this mode.
+func isInitContainer() bool {
+	return os.Getenv("IS_INITIALIZATION") == "true"
+}
+
+// configureGlobalState sets all package-level state that controllers depend on.
+// Extracted to keep main() within the funlen limit.
+func configureGlobalState(mgr ctrl.Manager, sveltosNamespace string) {
+	controllers.SetManagementClusterAccess(mgr.GetConfig(), mgr.GetClient())
+	controllers.SetSveltosAgentConfigMap(sveltosAgentConfigMap)
+	controllers.SetSveltosApplierConfigMap(sveltosApplierConfigMap)
+	controllers.SetSveltosAgentRegistry(registry)
+	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
+	controllers.SetSveltosNamespace(sveltosNamespace)
+}
+
+// runMigrateMode runs the one-shot Classifier status migration and exits.
+// Extracted to keep main() within the funlen limit.
+func runMigrateMode(scheme *runtime.Scheme) {
+	restConfig := ctrl.GetConfigOrDie()
+	migrationClient, err := client.New(restConfig, client.Options{Scheme: scheme})
+	if err != nil {
+		setupLog.Error(err, "failed to create client for migration")
+		os.Exit(1)
+	}
+	if err := runMigration(context.Background(), migrationClient,
+		ctrl.Log.WithName("migrate")); err != nil {
+		setupLog.Error(err, "migration failed")
 		os.Exit(1)
 	}
 }

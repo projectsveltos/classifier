@@ -118,21 +118,24 @@ var _ = Describe("Classifier: Reconciler", func() {
 		Expect(c.Get(context.TODO(), classifierName, currentClassifier)).To(Succeed())
 		Expect(c.Delete(context.TODO(), currentClassifier)).To(Succeed())
 
-		Expect(c.Get(context.TODO(), classifierName, currentClassifier)).To(Succeed())
-		currentClassifier.Status.ClusterInfo = []libsveltosv1beta1.ClusterInfo{
-			{
-				Cluster: corev1.ObjectReference{
-					Namespace:  cluster.Namespace,
-					Name:       cluster.Name,
-					APIVersion: cluster.APIVersion,
-					Kind:       cluster.Kind,
-				},
-				Status: libsveltosv1beta1.SveltosStatusProvisioned,
-				Hash:   []byte(randomString()),
+		// Create a ClassifierReport for the cluster so undeployClassifier sees it and queues removal.
+		clusterType := libsveltosv1beta1.ClusterTypeCapi
+		reportName := libsveltosv1beta1.GetClassifierReportName(classifier.Name, cluster.Name, &clusterType)
+		classifierReport := &libsveltosv1beta1.ClassifierReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: cluster.Namespace,
+				Name:      reportName,
+				Labels: libsveltosv1beta1.GetClassifierReportLabels(
+					classifier.Name, cluster.Name, &clusterType),
+			},
+			Spec: libsveltosv1beta1.ClassifierReportSpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      clusterType,
+				ClassifierName:   classifier.Name,
 			},
 		}
-
-		Expect(c.Status().Update(context.TODO(), currentClassifier)).To(Succeed())
+		Expect(c.Create(context.TODO(), classifierReport)).To(Succeed())
 
 		dep := fakedeployer.GetClient(context.TODO(),
 			logger, testEnv.Client)
@@ -148,8 +151,8 @@ var _ = Describe("Classifier: Reconciler", func() {
 			Logger:        logger,
 		}
 
-		// Because Classifier is currently deployed in a Cluster (Status.ClusterInfo is set
-		// indicating that) Reconcile won't be removed Finalizer
+		// Because a ClassifierReport exists for the cluster, undeployClassifier queues
+		// a removal job and returns an error, so the finalizer is kept.
 		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
 			NamespacedName: classifierName,
 		})
@@ -159,13 +162,11 @@ var _ = Describe("Classifier: Reconciler", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(controllerutil.ContainsFinalizer(currentClassifier, libsveltosv1beta1.ClassifierFinalizer)).To(BeTrue())
 
-		Expect(c.Get(context.TODO(), classifierName, currentClassifier)).To(Succeed())
+		// Delete the ClassifierReport to simulate that the cluster has been fully undeployed.
+		Expect(c.Delete(context.TODO(), classifierReport)).To(Succeed())
 
-		currentClassifier.Status.ClusterInfo = []libsveltosv1beta1.ClusterInfo{}
-		Expect(c.Status().Update(context.TODO(), currentClassifier)).To(Succeed())
-
-		// Because Classifier is currently deployed nowhere (Status.ClusterInfo is set
-		// indicating that) Reconcile will be removed Finalizer
+		// With no ClassifierReports remaining, undeployClassifier returns nil and
+		// reconcileDelete removes the finalizer, deleting the Classifier.
 		_, err = reconciler.Reconcile(context.TODO(), ctrl.Request{
 			NamespacedName: classifierName,
 		})
@@ -193,11 +194,31 @@ var _ = Describe("Classifier: Reconciler", func() {
 			Kind:       clusterv1.ClusterKind,
 		}] = true
 
+		// Create a ClassifierReport with the name the controller will look up when persisting
+		// label-management status, so we can verify ClassifierReport.Status is updated.
+		capiClusterType := libsveltosv1beta1.ClusterTypeCapi
+		persistedReportName := libsveltosv1beta1.GetClassifierReportName(classifier.Name, clusterName, &capiClusterType)
+		persistedReport := &libsveltosv1beta1.ClassifierReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterNamespace,
+				Name:      persistedReportName,
+				Labels: libsveltosv1beta1.GetClassifierReportLabels(
+					classifier.Name, clusterName, &capiClusterType),
+			},
+			Spec: libsveltosv1beta1.ClassifierReportSpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      clusterName,
+				ClusterType:      capiClusterType,
+				ClassifierName:   classifier.Name,
+			},
+		}
+
 		initObjects := []client.Object{
 			classifier,
 			classifierReport0,
 			classifierReport1,
 			classifierReport2,
+			persistedReport,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
@@ -220,13 +241,21 @@ var _ = Describe("Classifier: Reconciler", func() {
 		})
 		Expect(err).To(BeNil())
 
-		Expect(controllers.UpdateMatchingClustersAndRegistrations(reconciler, context.TODO(), classifierScope, matchingClusters,
-			logger)).To(Succeed())
+		statuses, err := controllers.UpdateMatchingClustersAndRegistrations(reconciler, context.TODO(), classifierScope, matchingClusters,
+			logger)
+		Expect(err).To(BeNil())
 
-		Expect(classifier.Status.MachingClusterStatuses).ToNot(BeNil())
-		Expect(len(classifier.Status.MachingClusterStatuses)).To(Equal(1))
-		Expect(classifier.Status.MachingClusterStatuses[0].ManagedLabels).ToNot(BeNil())
-		Expect(len(classifier.Status.MachingClusterStatuses[0].ManagedLabels)).To(Equal(len(classifier.Spec.ClassifierLabels)))
+		Expect(statuses).ToNot(BeNil())
+		Expect(len(statuses)).To(Equal(1))
+		Expect(statuses[0].ManagedLabels).ToNot(BeNil())
+		Expect(len(statuses[0].ManagedLabels)).To(Equal(len(classifier.Spec.ClassifierLabels)))
+
+		// Verify label-management data was persisted into ClassifierReport.Status.
+		updatedReport := &libsveltosv1beta1.ClassifierReport{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterNamespace, Name: persistedReportName},
+			updatedReport)).To(Succeed())
+		Expect(updatedReport.Status.ManagedLabels).To(HaveLen(len(classifier.Spec.ClassifierLabels)))
 	})
 
 	It("updateMatchingClustersAndRegistrations updates Classifier Status with detected misconfigurations", func() {
@@ -254,11 +283,31 @@ var _ = Describe("Classifier: Reconciler", func() {
 		classifierReport1 := getClassifierReport(classifier1.Name, clusterNamespace, clusterName)
 		classifierReport1.Spec.Match = true
 
+		// Create a ClassifierReport with the name the controller will look up when persisting
+		// label-management status, so we can verify ClassifierReport.Status is updated.
+		capiClusterType := libsveltosv1beta1.ClusterTypeCapi
+		persistedReportName := libsveltosv1beta1.GetClassifierReportName(classifier.Name, clusterName, &capiClusterType)
+		persistedReport := &libsveltosv1beta1.ClassifierReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterNamespace,
+				Name:      persistedReportName,
+				Labels: libsveltosv1beta1.GetClassifierReportLabels(
+					classifier.Name, clusterName, &capiClusterType),
+			},
+			Spec: libsveltosv1beta1.ClassifierReportSpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      clusterName,
+				ClusterType:      capiClusterType,
+				ClassifierName:   classifier.Name,
+			},
+		}
+
 		initObjects := []client.Object{
 			classifier,
 			classifier1,
 			classifierReport0,
 			classifierReport1,
+			persistedReport,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
@@ -289,17 +338,26 @@ var _ = Describe("Classifier: Reconciler", func() {
 		})
 		Expect(err).To(BeNil())
 
-		Expect(controllers.UpdateMatchingClustersAndRegistrations(reconciler, context.TODO(), classifierScope, matchingClusters,
-			logger)).To(Succeed())
+		statuses, err := controllers.UpdateMatchingClustersAndRegistrations(reconciler, context.TODO(), classifierScope, matchingClusters,
+			logger)
+		Expect(err).To(BeNil())
 
-		Expect(classifier.Status.MachingClusterStatuses).ToNot(BeNil())
-		Expect(len(classifier.Status.MachingClusterStatuses)).To(Equal(1))
-		Expect(classifier.Status.MachingClusterStatuses[0].ClusterRef.Namespace).To(Equal(clusterNamespace))
-		Expect(classifier.Status.MachingClusterStatuses[0].ClusterRef.Name).To(Equal(clusterName))
-		Expect(classifier.Status.MachingClusterStatuses[0].ClusterRef.APIVersion).To(Equal(clusterv1.GroupVersion.String()))
-		Expect(classifier.Status.MachingClusterStatuses[0].ClusterRef.Kind).To(Equal(clusterKind))
-		Expect(len(classifier.Status.MachingClusterStatuses[0].ManagedLabels)).To(BeZero())
-		Expect(len(classifier.Status.MachingClusterStatuses[0].UnManagedLabels)).To(Equal(len(classifier.Spec.ClassifierLabels)))
+		Expect(statuses).ToNot(BeNil())
+		Expect(len(statuses)).To(Equal(1))
+		Expect(statuses[0].ClusterRef.Namespace).To(Equal(clusterNamespace))
+		Expect(statuses[0].ClusterRef.Name).To(Equal(clusterName))
+		Expect(statuses[0].ClusterRef.APIVersion).To(Equal(clusterv1.GroupVersion.String()))
+		Expect(statuses[0].ClusterRef.Kind).To(Equal(clusterKind))
+		Expect(len(statuses[0].ManagedLabels)).To(BeZero())
+		Expect(len(statuses[0].UnManagedLabels)).To(Equal(len(classifier.Spec.ClassifierLabels)))
+
+		// Verify unmanaged label conflicts were persisted into ClassifierReport.Status.
+		updatedReport := &libsveltosv1beta1.ClassifierReport{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterNamespace, Name: persistedReportName},
+			updatedReport)).To(Succeed())
+		Expect(updatedReport.Status.ManagedLabels).To(BeEmpty())
+		Expect(updatedReport.Status.UnManagedLabels).To(HaveLen(len(classifier.Spec.ClassifierLabels)))
 	})
 
 	It("updateLabelsOnMatchingClusters updates CAPI Cluster labels", func() {
@@ -318,7 +376,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			managedLabels = append(managedLabels, classifier.Spec.ClassifierLabels[i].Key)
 		}
 
-		classifier.Status.MachingClusterStatuses = []libsveltosv1beta1.MachingClusterStatus{
+		matchingStatuses := []libsveltosv1beta1.MachingClusterStatus{
 			{
 				ClusterRef: corev1.ObjectReference{
 					Namespace:  cluster.Namespace,
@@ -365,7 +423,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			logger)).To(Succeed())
 
 		Expect(controllers.UpdateLabelsOnMatchingClusters(reconciler, context.TODO(), classifierScope,
-			logger)).To(Succeed())
+			matchingStatuses, logger)).To(Succeed())
 
 		currentCluster := &clusterv1.Cluster{}
 		Expect(c.Get(context.TODO(),
@@ -390,20 +448,27 @@ var _ = Describe("Classifier: Reconciler", func() {
 		classifier.Spec.ClassifierLabels = []libsveltosv1beta1.ClassifierLabel{
 			{Key: label, Value: randomString()},
 		}
-		classifier.Status.MachingClusterStatuses = []libsveltosv1beta1.MachingClusterStatus{
-			{
-				ClusterRef: corev1.ObjectReference{
-					Namespace:  clusterNamespace,
-					Name:       clusterName,
-					Kind:       clusterKind,
-					APIVersion: clusterv1.GroupVersion.String(),
-				},
-				ManagedLabels: []string{label},
+		// Create a ClassifierReport for the cluster so removeAllRegistrations finds it.
+		clusterType := libsveltosv1beta1.ClusterTypeCapi
+		reportName := libsveltosv1beta1.GetClassifierReportName(classifier.Name, clusterName, &clusterType)
+		classifierReport := &libsveltosv1beta1.ClassifierReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterNamespace,
+				Name:      reportName,
+				Labels: libsveltosv1beta1.GetClassifierReportLabels(
+					classifier.Name, clusterName, &clusterType),
+			},
+			Spec: libsveltosv1beta1.ClassifierReportSpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      clusterName,
+				ClusterType:      clusterType,
+				ClassifierName:   classifier.Name,
 			},
 		}
 
 		initObjects := []client.Object{
 			classifier,
+			classifierReport,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
@@ -464,24 +529,38 @@ var _ = Describe("Classifier: Reconciler", func() {
 			Name:       clusterName,
 		}
 
-		classifier.Status.MachingClusterStatuses = []libsveltosv1beta1.MachingClusterStatus{
-			{
-				ClusterRef: corev1.ObjectReference{
-					Namespace:  clusterNamespace,
-					Name:       clusterName,
-					Kind:       clusterKind,
-					APIVersion: clusterv1.GroupVersion.String(),
-				},
-				ManagedLabels: []string{labelKey},
+		// Create a ClassifierReport pre-populated with ManagedLabels so we can verify
+		// that cleanUpNonMatchingClusters clears ClassifierReport.Status after label removal.
+		sveltosClusterType := libsveltosv1beta1.ClusterTypeSveltos
+		reportName := libsveltosv1beta1.GetClassifierReportName(classifier.Name, clusterName, &sveltosClusterType)
+		classifierReport := &libsveltosv1beta1.ClassifierReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterNamespace,
+				Name:      reportName,
+				Labels: libsveltosv1beta1.GetClassifierReportLabels(
+					classifier.Name, clusterName, &sveltosClusterType),
+			},
+			Spec: libsveltosv1beta1.ClassifierReportSpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      clusterName,
+				ClusterType:      sveltosClusterType,
+				ClassifierName:   classifier.Name,
 			},
 		}
 
 		initObjects := []client.Object{
-			classifier, cluster,
+			classifier, cluster, classifierReport,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
 			WithObjects(initObjects...).Build()
+
+		// Seed ManagedLabels into the ClassifierReport.Status to simulate a previous reconcile.
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterNamespace, Name: reportName}, classifierReport)).To(Succeed())
+		patchBase := classifierReport.DeepCopy()
+		classifierReport.Status.ManagedLabels = []string{labelKey}
+		Expect(c.Status().Patch(context.TODO(), classifierReport, client.MergeFrom(patchBase))).To(Succeed())
 
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
@@ -509,6 +588,13 @@ var _ = Describe("Classifier: Reconciler", func() {
 		// Register classifier as managing labels on cluster
 		manager.RegisterClassifierForLabels(classifier, clusterNamespace, clusterName, libsveltosv1beta1.ClusterTypeSveltos)
 
+		// Re-seed ManagedLabels (first call cleared them; second call should clear them again after removal).
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterNamespace, Name: reportName}, classifierReport)).To(Succeed())
+		patchBase = classifierReport.DeepCopy()
+		classifierReport.Status.ManagedLabels = []string{labelKey}
+		Expect(c.Status().Patch(context.TODO(), classifierReport, client.MergeFrom(patchBase))).To(Succeed())
+
 		err = controllers.CleanUpNonMatchingClusters(reconciler, context.TODO(), classifier, currentMatches, oldMatches, logger)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -516,6 +602,12 @@ var _ = Describe("Classifier: Reconciler", func() {
 		err = c.Get(context.TODO(), client.ObjectKey{Name: clusterRef.Name, Namespace: clusterRef.Namespace}, currentCluster)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(currentCluster.Labels).ToNot(HaveKey(labelKey))
+
+		// Verify ClassifierReport.Status.ManagedLabels was cleared after label removal.
+		updatedReport := &libsveltosv1beta1.ClassifierReport{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterNamespace, Name: reportName}, updatedReport)).To(Succeed())
+		Expect(updatedReport.Status.ManagedLabels).To(BeEmpty())
 	})
 
 	It("classifyLabels divides labels in managed and unmanaged", func() {

@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -237,38 +236,52 @@ var _ = Describe("Chart manager", func() {
 	It("rebuildRegistrations rebuilds label (keys) registrations", func() {
 		Expect(len(classifier.Spec.ClassifierLabels)).Should(BeNumerically(">=", 2))
 
-		// Mark classifier as manager for one release
-		classifier.Status = libsveltosv1beta1.ClassifierStatus{
-			MachingClusterStatuses: []libsveltosv1beta1.MachingClusterStatus{
-				{
-					ClusterRef: corev1.ObjectReference{Namespace: sveltosCluster.Namespace, Name: sveltosCluster.Name,
-						APIVersion: libsveltosv1beta1.GroupVersion.String(), Kind: libsveltosv1beta1.SveltosClusterKind},
-					ManagedLabels:   []string{classifier.Spec.ClassifierLabels[0].Key},
-					UnManagedLabels: []libsveltosv1beta1.UnManagedLabel{{Key: classifier.Spec.ClassifierLabels[1].Key}},
-				},
+		// Create ClassifierReport for classifier: manages ClassifierLabels[0], unmanaged ClassifierLabels[1]
+		classifierReport := &libsveltosv1beta1.ClassifierReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: sveltosCluster.Namespace,
+			},
+			Spec: libsveltosv1beta1.ClassifierReportSpec{
+				ClusterNamespace: sveltosCluster.Namespace,
+				ClusterName:      sveltosCluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeSveltos,
+				ClassifierName:   classifier.Name,
+			},
+			Status: libsveltosv1beta1.ClassifierReportStatus{
+				ManagedLabels:   []string{classifier.Spec.ClassifierLabels[0].Key},
+				UnManagedLabels: []libsveltosv1beta1.UnManagedLabel{{Key: classifier.Spec.ClassifierLabels[1].Key}},
 			},
 		}
-		Expect(c.Status().Update(context.TODO(), classifier)).To(Succeed())
+		Expect(c.Create(context.TODO(), classifierReport)).To(Succeed())
 
-		// Mark tmpClassifier as manager for classifier.Spec.ClassifierLabels[1]
 		tmpClassifier := &libsveltosv1beta1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: classifier.Name + randomString(),
 			},
 			Spec: classifier.Spec,
-			Status: libsveltosv1beta1.ClassifierStatus{
-				MachingClusterStatuses: []libsveltosv1beta1.MachingClusterStatus{
-					{
-						ClusterRef: corev1.ObjectReference{Namespace: sveltosCluster.Namespace, Name: sveltosCluster.Name,
-							APIVersion: libsveltosv1beta1.GroupVersion.String(), Kind: libsveltosv1beta1.SveltosClusterKind},
-						ManagedLabels:   []string{classifier.Spec.ClassifierLabels[1].Key},
-						UnManagedLabels: []libsveltosv1beta1.UnManagedLabel{{Key: classifier.Spec.ClassifierLabels[0].Key}},
-					},
-				},
-			},
 		}
 		Expect(c.Create(context.TODO(), tmpClassifier)).To(Succeed())
 		defer removeSubscriptions(c, tmpClassifier, sveltosCluster.Namespace, sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos)
+
+		// Create ClassifierReport for tmpClassifier: manages ClassifierLabels[1], unmanaged ClassifierLabels[0]
+		tmpClassifierReport := &libsveltosv1beta1.ClassifierReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: sveltosCluster.Namespace,
+			},
+			Spec: libsveltosv1beta1.ClassifierReportSpec{
+				ClusterNamespace: sveltosCluster.Namespace,
+				ClusterName:      sveltosCluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeSveltos,
+				ClassifierName:   tmpClassifier.Name,
+			},
+			Status: libsveltosv1beta1.ClassifierReportStatus{
+				ManagedLabels:   []string{classifier.Spec.ClassifierLabels[1].Key},
+				UnManagedLabels: []libsveltosv1beta1.UnManagedLabel{{Key: classifier.Spec.ClassifierLabels[0].Key}},
+			},
+		}
+		Expect(c.Create(context.TODO(), tmpClassifierReport)).To(Succeed())
 
 		manager, err := keymanager.GetKeyManagerInstance(context.TODO(), c)
 		Expect(err).To(BeNil())

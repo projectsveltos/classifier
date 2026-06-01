@@ -89,6 +89,8 @@ var _ = Describe("Classifier: deployment", func() {
 			}, timeout, pollingInterval).Should(BeNil())
 		}
 
+		verifyClassfierIsProvisioned(classifier)
+
 		Byf("Deleting classifier instance %s in the management cluster", classifier.Name)
 		currentClassifier := &libsveltosv1beta1.Classifier{}
 		Expect(k8sClient.Get(context.TODO(),

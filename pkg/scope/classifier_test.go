@@ -110,12 +110,12 @@ var _ = Describe("ClassifierScope", func() {
 			Hash:    hash,
 		}
 		scope.SetClusterInfo([]libsveltosv1beta1.ClusterInfo{clusterInfo})
-		Expect(classifier.Status.ClusterInfo).ToNot(BeNil())
-		Expect(len(classifier.Status.ClusterInfo)).To(Equal(1))
-		Expect(classifier.Status.ClusterInfo[0].Cluster.Namespace).To(Equal(clusterNamespace))
-		Expect(classifier.Status.ClusterInfo[0].Cluster.Name).To(Equal(clusterName))
-		Expect(classifier.Status.ClusterInfo[0].Hash).To(Equal(hash))
-		Expect(classifier.Status.ClusterInfo[0].Status).To(Equal(libsveltosv1beta1.SveltosStatusProvisioned))
+		Expect(classifier.Status.ClusterInfo).ToNot(BeNil())                                                  //nolint:staticcheck // deprecated setter test
+		Expect(len(classifier.Status.ClusterInfo)).To(Equal(1))                                               //nolint:staticcheck // deprecated setter test
+		Expect(classifier.Status.ClusterInfo[0].Cluster.Namespace).To(Equal(clusterNamespace))                //nolint:staticcheck // deprecated setter test
+		Expect(classifier.Status.ClusterInfo[0].Cluster.Name).To(Equal(clusterName))                          //nolint:staticcheck // deprecated setter test
+		Expect(classifier.Status.ClusterInfo[0].Hash).To(Equal(hash))                                         //nolint:staticcheck // deprecated setter test
+		Expect(classifier.Status.ClusterInfo[0].Status).To(Equal(libsveltosv1beta1.SveltosStatusProvisioned)) //nolint:staticcheck // deprecated setter test
 	})
 
 	It("SetMatchingClusters sets Classifier.Status.MatchingCluster", func() {
@@ -143,7 +143,7 @@ var _ = Describe("ClassifierScope", func() {
 			},
 		}
 		scope.SetMachingClusterStatuses(machingClusterStatuses)
-		Expect(reflect.DeepEqual(classifier.Status.MachingClusterStatuses, machingClusterStatuses)).To(BeTrue())
+		Expect(reflect.DeepEqual(classifier.Status.MachingClusterStatuses, machingClusterStatuses)).To(BeTrue()) //nolint:staticcheck // deprecated setter test
 	})
 
 })
