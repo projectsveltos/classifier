@@ -80,23 +80,19 @@ func verifyClassfierIsProvisioned(classifier *libsveltosv1beta1.Classifier) {
 	Byf("Verifying classifier %s is provisioned on cluster", classifier.Name)
 	currentCuster, err := getCluster()
 	Expect(err).To(BeNil())
+	clusterType := libsveltosv1beta1.ClusterTypeCapi
+	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+		clusterType = libsveltosv1beta1.ClusterTypeSveltos
+	}
+	reportName := libsveltosv1beta1.GetClassifierReportName(classifier.Name, currentCuster.GetName(), &clusterType)
 	Eventually(func() bool {
-		currentClassifier := &libsveltosv1beta1.Classifier{}
-		err := k8sClient.Get(context.TODO(),
-			types.NamespacedName{Name: classifier.Name}, currentClassifier)
-		if err != nil {
+		report := &libsveltosv1beta1.ClassifierReport{}
+		if err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: currentCuster.GetNamespace(), Name: reportName}, report); err != nil {
 			return false
 		}
-		for i := range currentClassifier.Status.ClusterInfo {
-			if currentClassifier.Status.ClusterInfo[i].Cluster.Namespace == currentCuster.GetNamespace() &&
-				currentClassifier.Status.ClusterInfo[i].Cluster.Name == currentCuster.GetName() &&
-				currentClassifier.Status.ClusterInfo[i].Status == libsveltosv1beta1.SveltosStatusProvisioned {
-
-				return true
-			}
-		}
-
-		return false
+		return report.Status.DeploymentStatus != nil &&
+			*report.Status.DeploymentStatus == libsveltosv1beta1.SveltosStatusProvisioned
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
@@ -126,7 +122,93 @@ func verifyClassifierReport(classifierName string, isMatch bool) {
 		err := k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: classifierReportName},
 			currentClassifierReport)
-		return err == nil && currentClassifierReport.Spec.Match == isMatch
+		if err != nil {
+			return false
+		}
+		if currentClassifierReport.Spec.Match != isMatch {
+			return false
+		}
+		return currentClassifierReport.Status.DeploymentStatus != nil &&
+			*currentClassifierReport.Status.DeploymentStatus == libsveltosv1beta1.SveltosStatusProvisioned
+	}, timeout, pollingInterval).Should(BeTrue())
+}
+
+// verifyClassifierReportManagedLabels checks that ClassifierReport.Status.ManagedLabels
+// contains exactly the label keys from the Classifier spec. This validates the new
+// post-migration storage location for managed-label tracking.
+func verifyClassifierReportManagedLabels(classifier *libsveltosv1beta1.Classifier) {
+	clusterType := libsveltosv1beta1.ClusterTypeCapi
+	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+		clusterType = libsveltosv1beta1.ClusterTypeSveltos
+	}
+	reportName := libsveltosv1beta1.GetClassifierReportName(classifier.Name, kindWorkloadCluster.GetName(), &clusterType)
+	Byf("Verifying ClassifierReport %s has ManagedLabels set", reportName)
+	expected := make(map[string]bool, len(classifier.Spec.ClassifierLabels))
+	for i := range classifier.Spec.ClassifierLabels {
+		expected[classifier.Spec.ClassifierLabels[i].Key] = true
+	}
+	Eventually(func() bool {
+		report := &libsveltosv1beta1.ClassifierReport{}
+		if err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: reportName}, report); err != nil {
+			return false
+		}
+		if len(report.Status.ManagedLabels) != len(expected) {
+			return false
+		}
+		for _, k := range report.Status.ManagedLabels {
+			if !expected[k] {
+				return false
+			}
+		}
+		return true
+	}, timeout, pollingInterval).Should(BeTrue())
+}
+
+// verifyClassifierReportUnManagedLabels checks that ClassifierReport.Status.UnManagedLabels
+// contains exactly the label keys from the Classifier spec. Used to confirm conflict detection.
+func verifyClassifierReportUnManagedLabels(classifier *libsveltosv1beta1.Classifier) {
+	clusterType := libsveltosv1beta1.ClusterTypeCapi
+	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+		clusterType = libsveltosv1beta1.ClusterTypeSveltos
+	}
+	reportName := libsveltosv1beta1.GetClassifierReportName(classifier.Name, kindWorkloadCluster.GetName(), &clusterType)
+	Byf("Verifying ClassifierReport %s has UnManagedLabels set", reportName)
+	expected := make(map[string]bool, len(classifier.Spec.ClassifierLabels))
+	for i := range classifier.Spec.ClassifierLabels {
+		expected[classifier.Spec.ClassifierLabels[i].Key] = true
+	}
+	Eventually(func() bool {
+		report := &libsveltosv1beta1.ClassifierReport{}
+		if err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: reportName}, report); err != nil {
+			return false
+		}
+		if len(report.Status.UnManagedLabels) != len(expected) {
+			return false
+		}
+		for _, ul := range report.Status.UnManagedLabels {
+			if !expected[ul.Key] {
+				return false
+			}
+		}
+		return true
+	}, timeout, pollingInterval).Should(BeTrue())
+}
+
+// verifyClassifierStatusEmpty confirms that the old Classifier.Status fields
+// (ClusterInfo and MachingClusterStatuses) are not being written to. After the
+// migration these must remain empty — the data lives in ClassifierReport.Status.
+func verifyClassifierStatusEmpty(classifierName string) {
+	Byf("Verifying Classifier %s Status is empty (data lives in ClassifierReport.Status)", classifierName)
+	Eventually(func() bool {
+		classifier := &libsveltosv1beta1.Classifier{}
+		if err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: classifierName}, classifier); err != nil {
+			return false
+		}
+		return len(classifier.Status.ClusterInfo) == 0 && //nolint:staticcheck // deprecated fields must stay empty after migration
+			len(classifier.Status.MachingClusterStatuses) == 0 //nolint:staticcheck // deprecated fields must stay empty after migration
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
@@ -163,13 +245,10 @@ func verifyClusterLabelsAreGone(classifier *libsveltosv1beta1.Classifier) {
 		if err != nil {
 			return false
 		}
-		if currentCuster.GetLabels() == nil {
-			return false
-		}
+		labels := currentCuster.GetLabels()
 		for i := range classifier.Spec.ClassifierLabels {
 			cLabel := classifier.Spec.ClassifierLabels[i]
-			_, ok := currentCuster.GetLabels()[cLabel.Key]
-			if ok {
+			if _, ok := labels[cLabel.Key]; ok {
 				return false
 			}
 		}

@@ -27,8 +27,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -227,6 +229,110 @@ func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *apps
 
 func stringPtr(s string) *string {
 	return &s
+}
+
+// listClassifierReportsForClassifier returns all ClassifierReports labeled for the given classifier.
+func listClassifierReportsForClassifier(ctx context.Context, c client.Client,
+	classifierName string) ([]libsveltosv1beta1.ClassifierReport, error) {
+
+	reportList := &libsveltosv1beta1.ClassifierReportList{}
+	if err := c.List(ctx, reportList, client.MatchingLabels{
+		libsveltosv1beta1.ClassifierlNameLabel: classifierName,
+	}); err != nil {
+		return nil, err
+	}
+	return reportList.Items, nil
+}
+
+// getClassifierReportForCluster returns the ClassifierReport for a (classifier, cluster) pair.
+func getClassifierReportForCluster(ctx context.Context, c client.Client,
+	classifierName string, cluster *corev1.ObjectReference) (*libsveltosv1beta1.ClassifierReport, error) {
+
+	clusterType := clusterproxy.GetClusterType(cluster)
+	reportName := libsveltosv1beta1.GetClassifierReportName(classifierName, cluster.Name, &clusterType)
+	report := &libsveltosv1beta1.ClassifierReport{}
+	if err := c.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: reportName}, report); err != nil {
+		return nil, err
+	}
+	return report, nil
+}
+
+// ensureClassifierReportForCluster creates a ClassifierReport for a cluster if one does not already exist.
+// The report is initialized with Match=false; the agent updates Spec.Match on its next reconcile.
+func ensureClassifierReportForCluster(ctx context.Context, c client.Client,
+	classifierName string, cluster *corev1.ObjectReference) error {
+
+	clusterType := clusterproxy.GetClusterType(cluster)
+	reportName := libsveltosv1beta1.GetClassifierReportName(classifierName, cluster.Name, &clusterType)
+
+	existing := &libsveltosv1beta1.ClassifierReport{}
+	err := c.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: reportName}, existing)
+	if err == nil {
+		return nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	report := &libsveltosv1beta1.ClassifierReport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: cluster.Namespace,
+			Name:      reportName,
+			Labels:    libsveltosv1beta1.GetClassifierReportLabels(classifierName, cluster.Name, &clusterType),
+		},
+		Spec: libsveltosv1beta1.ClassifierReportSpec{
+			ClusterNamespace: cluster.Namespace,
+			ClusterName:      cluster.Name,
+			ClusterType:      clusterType,
+			ClassifierName:   classifierName,
+			Match:            false,
+		},
+	}
+	if createErr := c.Create(ctx, report); createErr != nil && !apierrors.IsAlreadyExists(createErr) {
+		return createErr
+	}
+	return nil
+}
+
+// updateClassifierReportDeploymentStatus patches ClassifierReport.Status with deployment tracking data
+// (hash, deployment status, failure message) from a processClassifier result.
+func updateClassifierReportDeploymentStatus(ctx context.Context, c client.Client,
+	classifierName string, cluster *corev1.ObjectReference,
+	clusterInfo *libsveltosv1beta1.ClusterInfo) error {
+
+	report, err := getClassifierReportForCluster(ctx, c, classifierName, cluster)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	patch := client.MergeFrom(report.DeepCopy())
+	report.Status.Hash = clusterInfo.Hash
+	report.Status.DeploymentStatus = &clusterInfo.Status
+	report.Status.FailureMessage = clusterInfo.FailureMessage
+	return c.Status().Patch(ctx, report, patch)
+}
+
+// updateClassifierReportLabelStatus patches ClassifierReport.Status with label management data.
+// Pass nil slices to clear the tracking when a cluster stops matching.
+func updateClassifierReportLabelStatus(ctx context.Context, c client.Client,
+	classifierName string, cluster *corev1.ObjectReference,
+	managed []string, unmanaged []libsveltosv1beta1.UnManagedLabel) error {
+
+	report, err := getClassifierReportForCluster(ctx, c, classifierName, cluster)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	patch := client.MergeFrom(report.DeepCopy())
+	report.Status.ManagedLabels = managed
+	report.Status.UnManagedLabels = unmanaged
+	return c.Status().Patch(ctx, report, patch)
 }
 
 func sortPatches(patches []libsveltosv1beta1.Patch) {

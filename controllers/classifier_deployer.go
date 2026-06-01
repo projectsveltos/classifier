@@ -120,55 +120,55 @@ func getSveltosAgentNamespace(sveltosNamespace string) string {
 func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierScope *scope.ClassifierScope,
 	f feature, logger logr.Logger) error {
 
-	classifier := classifierScope.Classifier
-
-	logger = logger.WithValues("classifier", classifier.Name)
+	logger = logger.WithValues("classifier", classifierScope.Classifier.Name)
 	logger.V(logs.LogDebug).Info("request to deploy")
+
+	reports, err := listClassifierReportsForClassifier(ctx, r.Client, classifierScope.Classifier.Name)
+	if err != nil {
+		return fmt.Errorf("failed to list ClassifierReports: %w", err)
+	}
 
 	var errorSeen error
 	allProcessed := true
 
-	for i := range classifier.Status.ClusterInfo {
-		c := &classifier.Status.ClusterInfo[i]
+	for i := range reports {
+		report := &reports[i]
+		if report.Spec.ClusterNamespace == "" {
+			continue
+		}
+		// Skip clusters whose removal has already completed.
+		if report.Status.DeploymentStatus != nil &&
+			*report.Status.DeploymentStatus == libsveltosv1beta1.SveltosStatusRemoved {
 
+			continue
+		}
+
+		cluster := getClusterRefFromClassifierReport(report)
 		l := logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s",
-			c.Cluster.Kind, c.Cluster.Namespace, c.Cluster.Name))
+			cluster.Kind, cluster.Namespace, cluster.Name))
 
-		clusterInfo, err := r.processClassifier(ctx, classifierScope, r.ControlPlaneEndpoint, &c.Cluster, f, l)
+		clusterInfo, err := r.processClassifier(ctx, classifierScope, r.ControlPlaneEndpoint, cluster, f, l)
 		if err != nil {
 			errorSeen = err
 		}
 		if clusterInfo != nil {
-			classifier.Status.ClusterInfo[i] = *clusterInfo
+			if updateErr := updateClassifierReportDeploymentStatus(ctx, r.Client,
+				classifierScope.Classifier.Name, cluster, clusterInfo); updateErr != nil {
+				l.V(logs.LogInfo).Error(updateErr, "failed to update ClassifierReport deployment status")
+				errorSeen = updateErr
+			}
 			if clusterInfo.Status != libsveltosv1beta1.SveltosStatusProvisioned {
 				allProcessed = false
 			}
 		}
 	}
 
-	// Filter out entries with Statuslibsveltosv1beta1.SveltosStatusRemoved
-	n := 0
-	for i := range classifier.Status.ClusterInfo {
-		if classifier.Status.ClusterInfo[i].Status != libsveltosv1beta1.SveltosStatusRemoved {
-			classifier.Status.ClusterInfo[n] = classifier.Status.ClusterInfo[i]
-			n++
-		}
-	}
-	// Truncate the slice to the new length
-	classifier.Status.ClusterInfo = classifier.Status.ClusterInfo[:n]
-
-	// Update Classifier Status
-	logger.V(logs.LogDebug).Info("set clusterInfo")
-	classifierScope.SetClusterInfo(classifier.Status.ClusterInfo)
-
 	if errorSeen != nil {
 		return errorSeen
 	}
-
 	if !allProcessed {
 		return fmt.Errorf("request to deploy Classifier is still queued in one ore more clusters")
 	}
-
 	return nil
 }
 
@@ -176,20 +176,23 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 	f feature, logger logr.Logger) error {
 
 	classifier := classifierScope.Classifier
-
 	logger.V(logs.LogDebug).Info("request to undeploy")
 
-	clusters := make([]*corev1.ObjectReference, 0)
-	// Get list of clusters where Classifier needs to be removed
-	for i := range classifier.Status.ClusterInfo {
-		c := &classifier.Status.ClusterInfo[i].Cluster
+	reports, err := listClassifierReportsForClassifier(ctx, r.Client, classifier.Name)
+	if err != nil {
+		return fmt.Errorf("failed to list ClassifierReports: %w", err)
+	}
 
-		// Remove any queued entry to deploy/evaluate
+	clusters := make([]*corev1.ObjectReference, 0)
+	for i := range reports {
+		report := &reports[i]
+		if report.Spec.ClusterNamespace == "" {
+			continue
+		}
+		c := getClusterRefFromClassifierReport(report)
+
 		r.Deployer.CleanupEntries(c.Namespace, c.Name, classifier.Name, f.id, clusterproxy.GetClusterType(c), false)
 
-		// If deploying feature is in progress, wait for it to complete.
-		// Otherwise, if we cleanup feature while same feature is still being provisioned, if two workers process those request in
-		// parallel some resources might be left over.
 		if r.Deployer.IsInProgress(c.Namespace, c.Name, classifier.Name, f.id, clusterproxy.GetClusterType(c), false) {
 			logger.V(logs.LogDebug).Info("provisioning is in progress")
 			return fmt.Errorf("deploying %s still in progress. Wait before cleanup", f.id)
@@ -207,33 +210,27 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 		clusters = append(clusters, c)
 	}
 
-	clusterInfo := make([]libsveltosv1beta1.ClusterInfo, 0)
+	var failedCount int
 	for i := range clusters {
 		c := clusters[i]
 		err := r.removeClassifier(ctx, classifierScope, c, f, logger)
 		if err != nil {
 			failureMessage := err.Error()
-			clusterInfo = append(clusterInfo, libsveltosv1beta1.ClusterInfo{
-				Cluster:        *c,
-				Status:         libsveltosv1beta1.SveltosStatusRemoving,
-				FailureMessage: &failureMessage,
-			})
-		}
-	}
-
-	if len(clusterInfo) != 0 {
-		matchingClusterStatuses := make([]libsveltosv1beta1.MachingClusterStatus, len(clusterInfo))
-		for i := range clusterInfo {
-			matchingClusterStatuses[i] = libsveltosv1beta1.MachingClusterStatus{
-				ClusterRef: clusterInfo[i].Cluster,
+			if updateErr := updateClassifierReportDeploymentStatus(ctx, r.Client, classifier.Name, c,
+				&libsveltosv1beta1.ClusterInfo{
+					Cluster:        *c,
+					Status:         libsveltosv1beta1.SveltosStatusRemoving,
+					FailureMessage: &failureMessage,
+				}); updateErr != nil {
+				logger.V(logs.LogInfo).Error(updateErr, "failed to update ClassifierReport undeploy status")
 			}
+			failedCount++
 		}
-		classifierScope.SetMachingClusterStatuses(matchingClusterStatuses)
-		return fmt.Errorf("still in the process of removing Classifier from %d clusters",
-			len(clusterInfo))
 	}
 
-	classifierScope.SetClusterInfo(clusterInfo)
+	if failedCount > 0 {
+		return fmt.Errorf("still in the process of removing Classifier from %d clusters", failedCount)
+	}
 
 	return nil
 }
@@ -791,23 +788,20 @@ func (r *ClassifierReconciler) convertResultStatus(result deployer.Result) *libs
 	return nil
 }
 
-// getClassifierInClusterHashAndStatus returns the hash of the Classifier that was deployed in a given
-// Cluster (if ever deployed)
-func (r *ClassifierReconciler) getClassifierInClusterHashAndStatus(classifier *libsveltosv1beta1.Classifier,
-	cluster *corev1.ObjectReference) ([]byte, *libsveltosv1beta1.SveltosFeatureStatus) {
+// getClassifierInClusterHashAndStatus returns the hash and deployment status last recorded
+// for the Classifier in the given cluster by reading the ClassifierReport.Status.
+func (r *ClassifierReconciler) getClassifierInClusterHashAndStatus(ctx context.Context,
+	classifierName string, cluster *corev1.ObjectReference,
+) ([]byte, *libsveltosv1beta1.SveltosFeatureStatus, error) {
 
-	for i := range classifier.Status.ClusterInfo {
-		cInfo := &classifier.Status.ClusterInfo[i]
-		if cInfo.Cluster.Namespace == cluster.Namespace &&
-			cInfo.Cluster.Name == cluster.Name &&
-			cInfo.Cluster.APIVersion == cluster.APIVersion &&
-			cInfo.Cluster.Kind == cluster.Kind {
-
-			return cInfo.Hash, &cInfo.Status
+	report, err := getClassifierReportForCluster(ctx, r.Client, classifierName, cluster)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil, nil
 		}
+		return nil, nil, err
 	}
-
-	return nil, nil
+	return report.Status.Hash, report.Status.DeploymentStatus, nil
 }
 
 // isPaused returns true if Sveltos/CAPI Cluster is paused or ClusterSummary has paused annotation.
@@ -1029,7 +1023,12 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 	}
 
 	// Get the Classifier hash when Classifier was last deployed in this cluster (if ever)
-	hash, _ := r.getClassifierInClusterHashAndStatus(classifier, cluster)
+	hash, _, err := r.getClassifierInClusterHashAndStatus(ctx, classifier.Name, cluster)
+	if err != nil {
+		failureMessage := err.Error()
+		clusterInfo.FailureMessage = &failureMessage
+		return clusterInfo, err
+	}
 	isConfigSame := reflect.DeepEqual(hash, currentHash)
 	if !isConfigSame {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("Classifier has changed. Current hash %x. Previous hash %x",
@@ -1061,7 +1060,12 @@ func (r *ClassifierReconciler) proceedProcessingClassifier(ctx context.Context, 
 		Status:         libsveltosv1beta1.SveltosStatusProvisioning,
 	}
 
-	_, currentStatus := r.getClassifierInClusterHashAndStatus(classifier, cluster)
+	_, currentStatus, err := r.getClassifierInClusterHashAndStatus(ctx, classifier.Name, cluster)
+	if err != nil {
+		failureMessage := err.Error()
+		clusterInfo.FailureMessage = &failureMessage
+		return clusterInfo, err
+	}
 
 	var deployerStatus *libsveltosv1beta1.SveltosFeatureStatus
 	var result deployer.Result
@@ -1099,6 +1103,13 @@ func (r *ClassifierReconciler) proceedProcessingClassifier(ctx context.Context, 
 		logger.V(logs.LogDebug).Info("already deployed")
 		clusterInfo.Status = libsveltosv1beta1.SveltosStatusProvisioned
 		clusterInfo.FailureMessage = stringPtr("")
+	} else if isPullMode && isConfigSame {
+		// In pull mode the deployer result may have already been consumed on a prior reconcile
+		// while the agent is still processing the staged ConfigurationGroup. Delegate to the
+		// pull-mode path, which checks whether a ConfigurationGroup already exists and waits
+		// rather than queuing a new deploy that would call DiscardStagedResourcesForDeployment
+		// and wipe the bundle the agent is currently working on.
+		return r.proceedDeployingClassifierInPullMode(ctx, classifier, cluster, f, isConfigSame, currentHash, logger)
 	} else {
 		logger.V(logs.LogDebug).Info("no result is available. queue job and mark status as provisioning")
 		clusterInfo.Status = libsveltosv1beta1.SveltosStatusProvisioning
@@ -1186,6 +1197,12 @@ func (r *ClassifierReconciler) proceedDeployingClassifierInPullMode(ctx context.
 				clusterInfo.FailureMessage = &failureMessage
 				return clusterInfo, err
 			}
+			// Clear the deployer's cached result so that subsequent reconciles use the
+			// "already deployed" path (isConfigSame && currentStatus == Provisioned) rather
+			// than re-entering this function and re-queuing because the ConfigurationBundle
+			// is now gone.
+			r.Deployer.CleanupEntries(cluster.Namespace, cluster.Name, classifier.Name, f.id,
+				clusterproxy.GetClusterType(cluster), false)
 			clusterInfo.Status = libsveltosv1beta1.SveltosStatusProvisioned
 			return clusterInfo, nil
 		case libsveltosv1beta1.FeatureStatusProvisioning:
@@ -1202,6 +1219,13 @@ func (r *ClassifierReconciler) proceedDeployingClassifierInPullMode(ctx context.
 		}
 	} else {
 		clusterInfo.Status = libsveltosv1beta1.SveltosStatusProvisioning
+		if isConfigSame {
+			// The ConfigurationBundle exists with the correct hash; the agent simply hasn't
+			// reported a status yet. Wait — do NOT re-queue a new deploy job, which would
+			// call DiscardStagedResourcesForDeployment and wipe the bundle the agent is
+			// currently working on, causing an infinite treadmill.
+			return clusterInfo, nil
+		}
 	}
 
 	// Getting here means either agent failed to deploy feature or configuration has changed.

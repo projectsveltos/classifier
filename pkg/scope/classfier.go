@@ -92,11 +92,17 @@ func (s *ClassifierScope) ControllerName() string {
 }
 
 // SetMachingClusterStatuses sets the MachingClusterStatuses status.
+//
+// Deprecated: MachingClusterStatuses is deprecated. This setter is kept for the migration
+// init-container path; production controller code no longer calls it.
 func (s *ClassifierScope) SetMachingClusterStatuses(matchingClusters []libsveltosv1beta1.MachingClusterStatus) {
 	s.Classifier.Status.MachingClusterStatuses = matchingClusters
 }
 
 // SetClusterInfo sets the ClusterInfo status field.
+//
+// Deprecated: ClusterInfo is deprecated. This setter is kept for the migration
+// init-container path; production controller code no longer calls it.
 func (s *ClassifierScope) SetClusterInfo(clusterInfo []libsveltosv1beta1.ClusterInfo) {
 	s.Classifier.Status.ClusterInfo = clusterInfo
 }

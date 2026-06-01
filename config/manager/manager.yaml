@@ -31,6 +31,27 @@ spec:
         # versions < 1.19 or on vendors versions which do NOT support this field by default (i.e. Openshift < 4.11 ).
         # seccompProfile:
         #   type: RuntimeDefault
+      initContainers:
+      - name: migrate
+        command:
+        - /manager
+        image: controller:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: IS_INITIALIZATION
+          value: "true"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - "ALL"
+        resources:
+          limits:
+            cpu: 100m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
       containers:
       - command:
         - /manager
@@ -38,7 +59,7 @@ spec:
         - --report-mode=1
         - --v=5
         image: controller:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         name: manager
         ports:
         - containerPort: 8443
@@ -76,6 +97,6 @@ spec:
             memory: 512Mi
           requests:
             cpu: 100m
-            memory: 128Mi
+            memory: 256Mi
       serviceAccountName: classifier-manager
       terminationGracePeriodSeconds: 10

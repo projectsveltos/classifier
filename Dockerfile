@@ -14,12 +14,13 @@ RUN go mod download
 
 # Copy the go source
 COPY main.go main.go
+COPY migration.go migration.go
 COPY controllers/ controllers/
 COPY internal/ internal/
 COPY pkg/ pkg/
 
 # Build
-RUN CGO_ENABLED=0 GOOS=$BUILDOS GOARCH=$TARGETARCH go build -a -o manager main.go
+RUN CGO_ENABLED=0 GOOS=$BUILDOS GOARCH=$TARGETARCH go build -a -o manager .
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details

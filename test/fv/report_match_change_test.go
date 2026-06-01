@@ -105,6 +105,8 @@ var _ = Describe("Classifier: update cluster labels", func() {
 		verifyClassifierReport(classifier.Name, true)
 
 		verifyClusterLabels(classifier)
+		verifyClassifierReportManagedLabels(classifier)
+		verifyClassifierStatusEmpty(classifier.Name)
 
 		Byf("Deleting classifier instance %s in the management cluster", classifier.Name)
 		Expect(k8sClient.Get(context.TODO(),
