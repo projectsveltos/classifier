@@ -130,7 +130,7 @@ var _ = Describe("ClassifierScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		failureMessage := randomString()
-		machingClusterStatuses := []libsveltosv1beta1.MachingClusterStatus{
+		matchingClusterStatuses := []libsveltosv1beta1.MachingClusterStatus{
 			{
 				ClusterRef: corev1.ObjectReference{
 					Namespace: "t-" + randomString(),
@@ -142,8 +142,8 @@ var _ = Describe("ClassifierScope", func() {
 				},
 			},
 		}
-		scope.SetMachingClusterStatuses(machingClusterStatuses)
-		Expect(reflect.DeepEqual(classifier.Status.MachingClusterStatuses, machingClusterStatuses)).To(BeTrue()) //nolint:staticcheck // deprecated setter test
+		scope.SetMatchingClusterStatuses(matchingClusterStatuses)
+		Expect(reflect.DeepEqual(classifier.Status.MachingClusterStatuses, matchingClusterStatuses)).To(BeTrue()) //nolint:staticcheck // deprecated setter test
 	})
 
 })
