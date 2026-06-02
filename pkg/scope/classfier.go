@@ -91,11 +91,11 @@ func (s *ClassifierScope) ControllerName() string {
 	return s.controllerName
 }
 
-// SetMachingClusterStatuses sets the MachingClusterStatuses status.
+// SetMatchingClusterStatuses sets the MachingClusterStatuses status.
 //
 // Deprecated: MachingClusterStatuses is deprecated. This setter is kept for the migration
 // init-container path; production controller code no longer calls it.
-func (s *ClassifierScope) SetMachingClusterStatuses(matchingClusters []libsveltosv1beta1.MachingClusterStatus) {
+func (s *ClassifierScope) SetMatchingClusterStatuses(matchingClusters []libsveltosv1beta1.MachingClusterStatus) {
 	s.Classifier.Status.MachingClusterStatuses = matchingClusters
 }
 
