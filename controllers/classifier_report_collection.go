@@ -63,7 +63,7 @@ func removeAccessRequest(ctx context.Context, c client.Client, logger logr.Logge
 
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
-			accessRequestClassifierLabel: "ok",
+			accessRequestClassifierLabel: accessRequestClassifierLabelValue,
 		},
 	}
 
@@ -483,6 +483,7 @@ func updateClassifierReport(ctx context.Context, c client.Client, cluster *corev
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
+		return err
 	}
 	if !currentClassifier.DeletionTimestamp.IsZero() {
 		return nil

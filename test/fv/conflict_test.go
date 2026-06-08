@@ -58,7 +58,7 @@ var _ = Describe("Classifier: update cluster labels", func() {
 			Eventually(func() error {
 				classifierCRD := &apiextensionsv1.CustomResourceDefinition{}
 				return workloadClient.Get(context.TODO(),
-					types.NamespacedName{Name: "classifiers.lib.projectsveltos.io"}, classifierCRD)
+					types.NamespacedName{Name: classifierCRDName}, classifierCRD)
 			}, timeout, pollingInterval).Should(BeNil())
 
 			Byf("Verifying Classifier instance %s is deployed in the workload cluster", classifier1.Name)

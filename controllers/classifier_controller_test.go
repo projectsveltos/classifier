@@ -237,7 +237,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Classifier:     classifier,
-			ControllerName: "classifier",
+			ControllerName: classifierControllerName,
 		})
 		Expect(err).To(BeNil())
 
@@ -334,7 +334,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Classifier:     classifier,
-			ControllerName: "classifier",
+			ControllerName: classifierControllerName,
 		})
 		Expect(err).To(BeNil())
 
@@ -409,7 +409,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Classifier:     classifier,
-			ControllerName: "classifier",
+			ControllerName: classifierControllerName,
 		})
 		Expect(err).To(BeNil())
 
@@ -493,7 +493,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Classifier:     classifier,
-			ControllerName: "classifier",
+			ControllerName: classifierControllerName,
 		})
 		Expect(err).To(BeNil())
 
@@ -659,7 +659,7 @@ var _ = Describe("Classifier: Reconciler", func() {
 			Namespace:  clusterNamespace,
 			Name:       clusterName,
 			APIVersion: clusterv1.GroupVersion.String(),
-			Kind:       "Cluster",
+			Kind:       clusterKind,
 		}
 
 		managed, unManaged, err := controllers.ClassifyLabels(reconciler, context.TODO(), classifier,

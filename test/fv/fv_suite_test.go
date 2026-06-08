@@ -63,6 +63,9 @@ const (
 const (
 	deplName             = "classifier-manager"
 	managerContainerName = "manager"
+	classifierCRDName    = "classifiers.lib.projectsveltos.io"
+	clusterNameLabelKey  = "cluster-name"
+	managedClusterName   = "clusterapi-workload"
 )
 
 func init() {
@@ -175,7 +178,7 @@ func verifySveltosCluster() {
 	clusterList := &libsveltosv1beta1.SveltosClusterList{}
 	listOptions := []client.ListOption{
 		client.MatchingLabels(
-			map[string]string{"cluster-name": "clusterapi-workload"}, // This label is added by Makefile
+			map[string]string{clusterNameLabelKey: managedClusterName}, // This label is added by Makefile
 		),
 	}
 
@@ -212,7 +215,7 @@ func verifyCAPICluster() {
 	clusterList := &clusterv1.ClusterList{}
 	listOptions := []client.ListOption{
 		client.MatchingLabels(
-			map[string]string{clusterv1.ClusterNameLabel: "clusterapi-workload"},
+			map[string]string{clusterv1.ClusterNameLabel: managedClusterName},
 		),
 	}
 

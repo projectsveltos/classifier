@@ -79,6 +79,14 @@ const (
 const (
 	namespaceKind          = "Namespace"
 	clusterRoleBindingKind = "ClusterRoleBinding"
+	deploymentKind         = "Deployment"
+	appsGroup              = "apps"
+)
+
+const (
+	accessRequestClassifierLabelValue = "ok"
+	applyPatchFieldManager            = "application/apply-patch"
+	deployedBySveltos                 = "true"
 )
 
 const (
@@ -321,7 +329,7 @@ func createAccessRequest(ctx context.Context, c client.Client,
 			accessRequest.Namespace = clusterNamespace
 			accessRequest.Name = getAccessRequestName(clusterName, clusterType)
 			accessRequest.Labels = map[string]string{
-				accessRequestClassifierLabel: "ok",
+				accessRequestClassifierLabel: accessRequestClassifierLabelValue,
 			}
 			accessRequest.Spec = libsveltosv1beta1.AccessRequestSpec{
 				Namespace: clusterNamespace,
@@ -1301,7 +1309,7 @@ func applyCRD(ctx context.Context, clusterNamespace, clusterName string, u *unst
 	}
 
 	options := metav1.ApplyOptions{
-		FieldManager: "application/apply-patch",
+		FieldManager: applyPatchFieldManager,
 		Force:        true,
 	}
 	_, err = dr.Apply(ctx, u.GetName(), u, options)
@@ -1420,7 +1428,7 @@ func getClassifierToDeploy(classifier *libsveltosv1beta1.Classifier) *libsveltos
 		ObjectMeta: metav1.ObjectMeta{
 			Name: classifier.Name,
 			Annotations: map[string]string{
-				libsveltosv1beta1.DeployedBySveltosAnnotation: "true",
+				libsveltosv1beta1.DeployedBySveltosAnnotation: deployedBySveltos,
 			},
 		},
 		Spec: classifier.Spec,
@@ -1456,7 +1464,7 @@ func deployClassifierInstance(ctx context.Context, remoteClient client.Client,
 
 		currentClassifier.Spec = classifier.Spec
 		currentClassifier.Annotations = map[string]string{
-			libsveltosv1beta1.DeployedBySveltosAnnotation: "true",
+			libsveltosv1beta1.DeployedBySveltosAnnotation: deployedBySveltos,
 		}
 		return remoteClient.Update(ctx, currentClassifier)
 	}
@@ -1770,7 +1778,7 @@ func deploySveltosAgentResources(ctx context.Context, clusterNamespace, clusterN
 			}
 			policy.SetLabels(currentLabels)
 
-			if policy.GetKind() == "Deployment" {
+			if policy.GetKind() == deploymentKind {
 				policy, err = addTemplateSpecLabels(policy, lbls)
 				if err != nil {
 					logger.V(logs.LogInfo).Error(err, "failed to set deployment spec.template.labels")
@@ -1878,7 +1886,7 @@ func deploySveltosAgentPatchedResources(ctx context.Context, restConfig *rest.Co
 		}
 
 		options := metav1.ApplyOptions{
-			FieldManager: "application/apply-patch",
+			FieldManager: applyPatchFieldManager,
 			Force:        true,
 		}
 
@@ -2057,8 +2065,8 @@ func getPatchesFromConfigMap(configMap *corev1.ConfigMap, logger logr.Logger,
 
 		if patch.Target == nil {
 			patch.Target = &libsveltosv1beta1.PatchSelector{
-				Kind:  "Deployment",
-				Group: "apps",
+				Kind:  deploymentKind,
+				Group: appsGroup,
 			}
 		}
 
@@ -2128,8 +2136,8 @@ func getSveltosAgentPatchesOld(ctx context.Context, c client.Client,
 		patch := libsveltosv1beta1.Patch{
 			Patch: configMap.Data[k],
 			Target: &libsveltosv1beta1.PatchSelector{
-				Kind:  "Deployment",
-				Group: "apps",
+				Kind:  deploymentKind,
+				Group: appsGroup,
 			},
 		}
 		patches = append(patches, patch)
@@ -2160,8 +2168,8 @@ func getSveltosApplierPatchesOld(ctx context.Context, c client.Client,
 		patch := libsveltosv1beta1.Patch{
 			Patch: configMap.Data[k],
 			Target: &libsveltosv1beta1.PatchSelector{
-				Kind:  "Deployment",
-				Group: "apps",
+				Kind:  deploymentKind,
+				Group: appsGroup,
 			},
 		}
 		patches = append(patches, patch)
