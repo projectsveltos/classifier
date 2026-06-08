@@ -72,6 +72,8 @@ const (
 	upstreamClusterNamePrefix = "upstream-cluster"
 	upstreamMachineNamePrefix = "upstream-machine"
 	clusterKind               = "Cluster"
+	classifierControllerName  = "classifier"
+	classifierLabelVersion    = "version"
 )
 
 const (
@@ -187,7 +189,7 @@ func getClassifierReport(classifierName, clusterNamespace, clusterName string) *
 }
 
 func getClassifierInstance(name string) *libsveltosv1beta1.Classifier {
-	classifierLabels := []libsveltosv1beta1.ClassifierLabel{{Key: "version", Value: "v1.26.3"}}
+	classifierLabels := []libsveltosv1beta1.ClassifierLabel{{Key: classifierLabelVersion, Value: "v1.26.3"}}
 	return &libsveltosv1beta1.Classifier{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -224,7 +226,7 @@ func getClassifierScope(c client.Client, logger logr.Logger,
 		Client:         c,
 		Logger:         logger,
 		Classifier:     classifier,
-		ControllerName: "classifier",
+		ControllerName: classifierControllerName,
 	})
 	Expect(err).To(BeNil())
 	return classifierScope

@@ -37,6 +37,10 @@ import (
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
+const (
+	testKubeVersion124 = "1.24.0"
+)
+
 var _ = Describe("ClassifierTransformations map functions", func() {
 	It("requeueClassifierForCluster returns all existing Classifiers", func() {
 		cluster := &clusterv1.Cluster{
@@ -55,7 +59,7 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 			Spec: libsveltosv1beta1.ClassifierSpec{
 				KubernetesVersionConstraints: []libsveltosv1beta1.KubernetesVersionConstraint{
 					{
-						Version:    "1.24.0",
+						Version:    testKubeVersion124,
 						Comparison: string(libsveltosv1beta1.ComparisonEqual),
 					},
 				},
@@ -72,7 +76,7 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 			Spec: libsveltosv1beta1.ClassifierSpec{
 				KubernetesVersionConstraints: []libsveltosv1beta1.KubernetesVersionConstraint{
 					{
-						Version:    "1.24.0",
+						Version:    testKubeVersion124,
 						Comparison: string(libsveltosv1beta1.ComparisonEqual),
 					},
 				},

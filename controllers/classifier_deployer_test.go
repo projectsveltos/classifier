@@ -45,6 +45,10 @@ import (
 	fakedeployer "github.com/projectsveltos/libsveltos/lib/deployer/fake"
 )
 
+const (
+	classifierCRDName = "classifiers.lib.projectsveltos.io"
+)
+
 var _ = Describe("Classifier Deployer", func() {
 	var logger logr.Logger
 
@@ -106,7 +110,7 @@ var _ = Describe("Classifier Deployer", func() {
 		Eventually(func() error {
 			classifierCRD := &apiextensionsv1.CustomResourceDefinition{}
 			return testEnv.Get(context.TODO(),
-				types.NamespacedName{Name: "classifiers.lib.projectsveltos.io"}, classifierCRD)
+				types.NamespacedName{Name: classifierCRDName}, classifierCRD)
 		}, timeout, pollingInterval).Should(BeNil())
 	})
 
@@ -279,7 +283,7 @@ var _ = Describe("Classifier Deployer", func() {
 		Eventually(func() error {
 			classifierCRD := &apiextensionsv1.CustomResourceDefinition{}
 			return testEnv.Get(context.TODO(),
-				types.NamespacedName{Name: "classifiers.lib.projectsveltos.io"}, classifierCRD)
+				types.NamespacedName{Name: classifierCRDName}, classifierCRD)
 		}, timeout, pollingInterval).Should(BeNil())
 	})
 
@@ -1101,7 +1105,7 @@ func prepareCluster() *clusterv1.Cluster {
 			Name:      "sveltos-agent-version",
 		},
 		Data: map[string]string{
-			"version": version,
+			classifierLabelVersion: version,
 		},
 	}
 	err := testEnv.Create(context.TODO(), cm)

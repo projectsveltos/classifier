@@ -59,7 +59,7 @@ var _ = Describe("Classifier: deployment", func() {
 				listOptions := []client.ListOption{
 					client.MatchingLabels(
 						map[string]string{
-							"cluster-name":      kindWorkloadCluster.GetName(),
+							clusterNameLabelKey: kindWorkloadCluster.GetName(),
 							"cluster-namespace": kindWorkloadCluster.GetNamespace(),
 						},
 					),
@@ -131,7 +131,7 @@ func verifyCRDs(workloadClient client.Client) {
 	Eventually(func() error {
 		classifierCRD := &apiextensionsv1.CustomResourceDefinition{}
 		return workloadClient.Get(context.TODO(),
-			types.NamespacedName{Name: "classifiers.lib.projectsveltos.io"}, classifierCRD)
+			types.NamespacedName{Name: classifierCRDName}, classifierCRD)
 	}, timeout, pollingInterval).Should(BeNil())
 
 	Byf("Verifying ClassifierReport CRD is installed in the workload cluster")

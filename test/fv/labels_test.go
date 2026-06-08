@@ -62,7 +62,7 @@ func verifyFlow(namePrefix string) {
 		Eventually(func() error {
 			classifierCRD := &apiextensionsv1.CustomResourceDefinition{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: "classifiers.lib.projectsveltos.io"}, classifierCRD)
+				types.NamespacedName{Name: classifierCRDName}, classifierCRD)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying Classifier instance is deployed in the workload cluster")

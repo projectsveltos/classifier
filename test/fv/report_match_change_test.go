@@ -29,6 +29,10 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
+const (
+	testKubeVersion125 = "1.25.0"
+)
+
 var _ = Describe("Classifier: update cluster labels", func() {
 	const (
 		namePrefix = "match-"
@@ -40,7 +44,7 @@ var _ = Describe("Classifier: update cluster labels", func() {
 		// Cluster won't be a match for this Cassifier
 		classifier.Spec.KubernetesVersionConstraints = []libsveltosv1beta1.KubernetesVersionConstraint{
 			{
-				Version:    "1.25.0",
+				Version:    testKubeVersion125,
 				Comparison: string(libsveltosv1beta1.ComparisonLessThan),
 			},
 		}
@@ -58,7 +62,7 @@ var _ = Describe("Classifier: update cluster labels", func() {
 			Eventually(func() error {
 				classifierCRD := &apiextensionsv1.CustomResourceDefinition{}
 				return workloadClient.Get(context.TODO(),
-					types.NamespacedName{Name: "classifiers.lib.projectsveltos.io"}, classifierCRD)
+					types.NamespacedName{Name: classifierCRDName}, classifierCRD)
 			}, timeout, pollingInterval).Should(BeNil())
 
 			Byf("Verifying Classifier instance is deployed in the workload cluster")
@@ -96,7 +100,7 @@ var _ = Describe("Classifier: update cluster labels", func() {
 			types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
 		currentClassifier.Spec.KubernetesVersionConstraints = []libsveltosv1beta1.KubernetesVersionConstraint{
 			{
-				Version:    "1.25.0",
+				Version:    testKubeVersion125,
 				Comparison: string(libsveltosv1beta1.ComparisonGreaterThanOrEqualTo),
 			},
 		}

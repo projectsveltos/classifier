@@ -36,18 +36,23 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
+const (
+	testNsOne          = "ns-one"
+	testSveltosCluster = "sveltos-cluster"
+)
+
 var _ = Describe("groupClassifierReportsByCluster", func() {
 	var (
 		sveltosCluster = corev1.ObjectReference{
-			Namespace:  "ns-one",
-			Name:       "sveltos-cluster",
+			Namespace:  testNsOne,
+			Name:       testSveltosCluster,
 			Kind:       libsveltosv1beta1.SveltosClusterKind,
 			APIVersion: libsveltosv1beta1.GroupVersion.String(),
 		}
 		capiCluster = corev1.ObjectReference{
 			Namespace:  "ns-two",
 			Name:       "capi-cluster",
-			Kind:       "Cluster",
+			Kind:       clusterKind,
 			APIVersion: clusterv1.GroupVersion.String(),
 		}
 	)
@@ -68,24 +73,24 @@ var _ = Describe("groupClassifierReportsByCluster", func() {
 	It("groups reports by cluster and filters out non-shard and malformed reports", func() {
 		reports := []libsveltosv1beta1.ClassifierReport{
 			// two reports for sveltosCluster
-			makeReport("ns-one", "sveltos-cluster", "sveltos"),
-			makeReport("ns-one", "sveltos-cluster", "sveltos"),
+			makeReport(testNsOne, testSveltosCluster, "sveltos"),
+			makeReport(testNsOne, testSveltosCluster, "sveltos"),
 			// one report for capiCluster
 			makeReport("ns-two", "capi-cluster", "capi"),
 			// nil labels — excluded
-			{ObjectMeta: metav1.ObjectMeta{Namespace: "ns-one", Name: "no-labels"}},
+			{ObjectMeta: metav1.ObjectMeta{Namespace: testNsOne, Name: "no-labels"}},
 			// missing cluster-name label — excluded
 			{ObjectMeta: metav1.ObjectMeta{
-				Namespace: "ns-one", Name: "missing-name",
+				Namespace: testNsOne, Name: "missing-name",
 				Labels: map[string]string{
 					libsveltosv1beta1.ClassifierReportClusterTypeLabel: "sveltos",
 				},
 			}},
 			// missing cluster-type label — excluded
 			{ObjectMeta: metav1.ObjectMeta{
-				Namespace: "ns-one", Name: "missing-type",
+				Namespace: testNsOne, Name: "missing-type",
 				Labels: map[string]string{
-					libsveltosv1beta1.ClassifierReportClusterNameLabel: "sveltos-cluster",
+					libsveltosv1beta1.ClassifierReportClusterNameLabel: testSveltosCluster,
 				},
 			}},
 			// cluster not in shard — excluded

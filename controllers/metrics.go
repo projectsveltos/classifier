@@ -27,12 +27,17 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
+const (
+	classifierMetricName = "program_classifier_time_seconds"
+	classifierMetricHelp = "Program Classifier on a workload cluster duration distribution"
+)
+
 var (
 	programClassifierDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: getSveltosNamespace(),
-			Name:      "program_classifier_time_seconds",
-			Help:      "Program Classifier on a workload cluster duration distribution",
+			Name:      classifierMetricName,
+			Help:      classifierMetricHelp,
 			Buckets:   []float64{0.1, 0.5, 1, 5, 10, 20, 30},
 		},
 	)
@@ -51,8 +56,8 @@ func newClassifierHistogram(clusterNamespace, clusterName string, clusterType li
 	histogram := prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: clusterInfo,
-			Name:      "program_classifier_time_seconds",
-			Help:      "Program Classifier on a workload cluster duration distribution",
+			Name:      classifierMetricName,
+			Help:      classifierMetricHelp,
 			Buckets:   []float64{0.1, 0.5, 1, 5, 10, 20, 30},
 		},
 	)
