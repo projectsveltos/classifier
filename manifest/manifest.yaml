@@ -155,6 +155,8 @@ spec:
   selector:
     matchLabels:
       control-plane: classifier
+  strategy:
+    type: Recreate
   template:
     metadata:
       annotations:
