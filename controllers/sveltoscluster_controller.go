@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -65,6 +66,7 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Handle deleted SveltosCluster
 	if !sveltosCluster.DeletionTimestamp.IsZero() {
+		clusterproxy.EvictWorkloadIdentityCache(req.Namespace, req.Name)
 		return cleanClusterStaleResources(ctx, r.Client, req.Namespace, req.Name,
 			libsveltosv1beta1.ClusterTypeSveltos, logger)
 	}
