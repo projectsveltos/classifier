@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
 // runMigration lists all Classifier instances and migrates any that still carry
@@ -60,7 +61,7 @@ func runMigration(ctx context.Context, c client.Client, log logr.Logger) error {
 			"clusterInfoCount", len(classifier.Status.ClusterInfo), //nolint:staticcheck // deprecated, migration only
 			"matchingCount", len(classifier.Status.MachingClusterStatuses)) //nolint:staticcheck // deprecated, migration only
 
-		if err := migrateOneClassifier(ctx, c, classifier); err != nil {
+		if err := migrateOneClassifier(ctx, c, classifier, log); err != nil {
 			return fmt.Errorf("migrating classifier %s: %w", classifier.Name, err)
 		}
 
@@ -73,7 +74,7 @@ func runMigration(ctx context.Context, c client.Client, log logr.Logger) error {
 
 // migrateOneClassifier migrates one Classifier instance and clears the deprecated arrays.
 func migrateOneClassifier(ctx context.Context, c client.Client,
-	classifier *libsveltosv1beta1.Classifier) error {
+	classifier *libsveltosv1beta1.Classifier, log logr.Logger) error {
 
 	type clusterData struct {
 		ref              corev1.ObjectReference
@@ -115,6 +116,17 @@ func migrateOneClassifier(ctx context.Context, c client.Client,
 	}
 
 	for _, d := range byCluster {
+		ns := &corev1.Namespace{}
+		if err := c.Get(ctx, types.NamespacedName{Name: d.ref.Namespace}, ns); err != nil {
+			if apierrors.IsNotFound(err) {
+				log.V(logs.LogDebug).Info("skipping stale cluster entry (namespace gone)",
+					"classifier", classifier.Name,
+					"cluster", d.ref.Name,
+					"namespace", d.ref.Namespace)
+				continue
+			}
+			return fmt.Errorf("checking namespace %s: %w", d.ref.Namespace, err)
+		}
 		if err := upsertMigrationClassifierReport(ctx, c, classifier.Name, &d.ref,
 			d.hash, d.deploymentStatus, d.failureMessage,
 			d.managedLabels, d.unmanagedLabels); err != nil {
