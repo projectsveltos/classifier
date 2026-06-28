@@ -129,6 +129,14 @@ var _ = BeforeSuite(func() {
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(ctx, classifierReportCRD)).To(Succeed())
 
+	mgmtClusterClassifierCRD, err := k8s_utils.GetUnstructured(crd.GetManagementClusterClassifierCRDYAML())
+	Expect(err).To(BeNil())
+	Expect(testEnv.Create(ctx, mgmtClusterClassifierCRD)).To(Succeed())
+
+	mgmtClusterClassifierReportCRD, err := k8s_utils.GetUnstructured(crd.GetManagementClusterClassifierReportCRDYAML())
+	Expect(err).To(BeNil())
+	Expect(testEnv.Create(ctx, mgmtClusterClassifierReportCRD)).To(Succeed())
+
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: sveltosNamespace,

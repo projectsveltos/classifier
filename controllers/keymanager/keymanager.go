@@ -354,7 +354,7 @@ func isClassifierAlreadyRegistered(classifiers []string, classifierKey string) b
 
 // rebuildRegistrations rebuilds internal structures to identify Classifiers managing
 // labels and Classifiers currently just registered but not managing.
-// Reads from ClassifierReport.Status (the authoritative post-migration location).
+// Reads from ClassifierReport.Status and ManagementClusterClassifierReport.Status.
 func (m *instance) rebuildRegistrations(ctx context.Context, c client.Client) error {
 	// Lock here
 	m.chartMux.Lock()
@@ -385,6 +385,47 @@ func (m *instance) rebuildRegistrations(ctx context.Context, c client.Client) er
 		}
 		clusterKey := m.getClusterKey(report.Spec.ClusterNamespace, report.Spec.ClusterName, report.Spec.ClusterType)
 		classifierKey := m.getClassifierKey(report.Spec.ClassifierName)
+		unManagedKeys := m.buildSliceOfUnManagedLabels(report.Status.UnManagedLabels)
+		m.addManagedLabelsInCluster(classifierKey, clusterKey, unManagedKeys)
+	}
+
+	// Also rebuild registrations from ManagementClusterClassifierReports.
+	// ManagementClusterClassifier names are stored with the "mgmt:" prefix to avoid
+	// collision with regular Classifier names.
+	if err := m.rebuildMgmtClassifierRegistrations(ctx, c); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// rebuildMgmtClassifierRegistrations reads ManagementClusterClassifierReports and registers
+// each ManagementClusterClassifier's label ownership using the "mgmt:" prefix.
+func (m *instance) rebuildMgmtClassifierRegistrations(ctx context.Context, c client.Client) error {
+	mgmtReportList := &libsveltosv1beta1.ManagementClusterClassifierReportList{}
+	if err := c.List(ctx, mgmtReportList); err != nil {
+		return err
+	}
+
+	// First pass: managed labels (primary managers).
+	for i := range mgmtReportList.Items {
+		report := &mgmtReportList.Items[i]
+		if report.Spec.ClusterNamespace == "" || len(report.Status.ManagedLabels) == 0 {
+			continue
+		}
+		clusterKey := m.getClusterKey(report.Spec.ClusterNamespace, report.Spec.ClusterName, report.Spec.ClusterType)
+		classifierKey := m.getClassifierKey("mgmt:" + report.Spec.ClassifierName)
+		m.addManagedLabelsInCluster(classifierKey, clusterKey, report.Status.ManagedLabels)
+	}
+
+	// Second pass: unmanaged labels (waiting to take over).
+	for i := range mgmtReportList.Items {
+		report := &mgmtReportList.Items[i]
+		if report.Spec.ClusterNamespace == "" || len(report.Status.UnManagedLabels) == 0 {
+			continue
+		}
+		clusterKey := m.getClusterKey(report.Spec.ClusterNamespace, report.Spec.ClusterName, report.Spec.ClusterType)
+		classifierKey := m.getClassifierKey("mgmt:" + report.Spec.ClassifierName)
 		unManagedKeys := m.buildSliceOfUnManagedLabels(report.Status.UnManagedLabels)
 		m.addManagedLabelsInCluster(classifierKey, clusterKey, unManagedKeys)
 	}

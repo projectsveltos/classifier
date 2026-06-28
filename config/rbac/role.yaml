@@ -65,6 +65,7 @@ rules:
   - classifiers
   - configurationbundles
   - configurationgroups
+  - managementclusterclassifiers
   verbs:
   - create
   - delete
@@ -77,6 +78,7 @@ rules:
   - lib.projectsveltos.io
   resources:
   - classifierreports
+  - managementclusterclassifierreports
   verbs:
   - create
   - delete
@@ -89,6 +91,8 @@ rules:
   resources:
   - classifierreports/status
   - classifiers/status
+  - managementclusterclassifierreports/status
+  - managementclusterclassifiers/status
   verbs:
   - get
   - patch
@@ -97,6 +101,7 @@ rules:
   - lib.projectsveltos.io
   resources:
   - classifiers/finalizers
+  - managementclusterclassifiers/finalizers
   verbs:
   - update
 - apiGroups:

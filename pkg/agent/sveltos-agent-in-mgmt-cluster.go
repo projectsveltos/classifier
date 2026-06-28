@@ -62,7 +62,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/sveltos-agent@sha256:b2b23716cad70b4e876bd7f61353c3187976bdd80ae127c4890f46dbfdb5f56c
+        image: docker.io/projectsveltos/sveltos-agent@sha256:4fbd6863da36457a98c2020bc4543e3896849809404cd37f5d148299f1c14e22
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -101,6 +101,8 @@ spec:
             - ALL
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       serviceAccountName: sveltos-agent-manager
       terminationGracePeriodSeconds: 10
 `)

@@ -12,6 +12,11 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  name: classifier-controller-role-extra
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
   name: classifier-manager-role
 rules:
 - apiGroups:
@@ -75,6 +80,7 @@ rules:
   - classifiers
   - configurationbundles
   - configurationgroups
+  - managementclusterclassifiers
   verbs:
   - create
   - delete
@@ -87,6 +93,7 @@ rules:
   - lib.projectsveltos.io
   resources:
   - classifierreports
+  - managementclusterclassifierreports
   verbs:
   - create
   - delete
@@ -99,6 +106,8 @@ rules:
   resources:
   - classifierreports/status
   - classifiers/status
+  - managementclusterclassifierreports/status
+  - managementclusterclassifiers/status
   verbs:
   - get
   - patch
@@ -107,6 +116,7 @@ rules:
   - lib.projectsveltos.io
   resources:
   - classifiers/finalizers
+  - managementclusterclassifiers/finalizers
   verbs:
   - update
 - apiGroups:
@@ -138,6 +148,19 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: classifier-manager-role
+subjects:
+- kind: ServiceAccount
+  name: classifier-manager
+  namespace: projectsveltos
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: classifier-manager-rolebinding-extra
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: classifier-controller-role-extra
 subjects:
 - kind: ServiceAccount
   name: classifier-manager
@@ -254,5 +277,7 @@ spec:
             - ALL
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       serviceAccountName: classifier-manager
       terminationGracePeriodSeconds: 10
