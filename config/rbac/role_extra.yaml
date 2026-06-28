@@ -1,0 +1,20 @@
+---
+# ManagementClusterClassifier evaluates resources on the management cluster
+# to classify managed clusters and apply labels to them.
+# Grant this ClusterRole the verbs (get, list, watch) on whatever API groups
+# and resources your ManagementClusterClassifier instances reference in
+# spec.matchResources. A ClusterRoleBinding tying this role to the classifier
+# ServiceAccount is created automatically when Sveltos is installed.
+# Example: to allow watching ConfigMaps and ScanResult CRs add
+#
+#   rules:
+#   - apiGroups: [""]
+#     resources: ["configmaps"]
+#     verbs: ["get", "list", "watch"]
+#   - apiGroups: ["compliance.example.io"]
+#     resources: ["scanresults"]
+#     verbs: ["get", "list", "watch"]
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: controller-role-extra

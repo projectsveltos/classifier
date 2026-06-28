@@ -90,3 +90,19 @@ var (
 const (
 	Controlplaneendpoint = controlplaneendpoint
 )
+
+// ManagementClusterClassifier exports for unit tests.
+var (
+	DoesMatchLabelFilters      = doesMatchLabelFilters
+	RunClassificationLua       = runClassificationLua
+	ClusterTypeFromKind        = clusterTypeFromKind
+	MgmtClassifierAsClassifier = mgmtClassifierAsClassifier
+	EnsureMgmtClassifierReport = ensureMgmtClassifierReport
+	ClassifierLabelKeys        = classifierLabelKeys
+	FetchResourcesForSelector  = fetchResourcesForSelector
+	ListMgmtClassifierReports  = listMgmtClassifierReports
+	GetMgmtClassifierReport    = getMgmtClassifierReport
+	DeleteMgmtClassifierReport = deleteMgmtClassifierReport
+	ApplyLabelsToCluster       = applyLabelsToCluster
+	RemoveLabelsFromCluster    = removeLabelsFromCluster
+)

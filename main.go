@@ -163,6 +163,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	setupMgmtClassifierReconciler(ctx, mgr)
+
 	startSveltosClusterReconciler(mgr)
 	//+kubebuilder:scaffold:builder
 
@@ -365,6 +367,23 @@ func capiWatchers(ctx context.Context, mgr ctrl.Manager,
 	}
 }
 
+func setupMgmtClassifierReconciler(ctx context.Context, mgr manager.Manager) {
+	if _, err := getMgmtClassifierReconciler(mgr).SetupWithManager(
+		ctx, mgr, ctrl.Log.WithName("managementclusterclassifierreconciler")); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ManagementClusterClassifier")
+		os.Exit(1)
+	}
+}
+
+func getMgmtClassifierReconciler(mgr manager.Manager) *controllers.ManagementClusterClassifierReconciler {
+	return &controllers.ManagementClusterClassifierReconciler{
+		Client:           mgr.GetClient(),
+		Scheme:           mgr.GetScheme(),
+		GVKToClassifiers: make(map[schema.GroupVersionKind]*libsveltosset.Set),
+		Logger:           ctrl.Log.WithName("managementclusterclassifierreconciler"),
+	}
+}
+
 func getClassifierReconciler(mgr manager.Manager) *controllers.ClassifierReconciler {
 	return &controllers.ClassifierReconciler{
 		Client:                mgr.GetClient(),
@@ -413,7 +432,8 @@ func getCtrlOptions(scheme *runtime.Scheme) ctrl.Options {
 				Port: webhookPort,
 			}),
 		Cache: cache.Options{
-			SyncPeriod: &syncPeriod,
+			SyncPeriod:       &syncPeriod,
+			DefaultTransform: cache.TransformStripManagedFields(),
 		},
 	}
 }
