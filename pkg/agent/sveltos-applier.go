@@ -101,7 +101,7 @@ spec:
         - --cluster-type=
         - --secret-with-kubeconfig=
         - --v=5
-        - --version=main
+        - --version=v1.12.0
         command:
         - /manager
         env:
