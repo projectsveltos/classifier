@@ -34,6 +34,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -116,16 +117,16 @@ func migrateOneClassifier(ctx context.Context, c client.Client,
 	}
 
 	for _, d := range byCluster {
-		ns := &corev1.Namespace{}
-		if err := c.Get(ctx, types.NamespacedName{Name: d.ref.Namespace}, ns); err != nil {
-			if apierrors.IsNotFound(err) {
-				log.V(logs.LogDebug).Info("skipping stale cluster entry (namespace gone)",
-					"classifier", classifier.Name,
-					"cluster", d.ref.Name,
-					"namespace", d.ref.Namespace)
-				continue
-			}
-			return fmt.Errorf("checking namespace %s: %w", d.ref.Namespace, err)
+		exists, err := migrationClusterExists(ctx, c, &d.ref)
+		if err != nil {
+			return fmt.Errorf("checking cluster %s/%s: %w", d.ref.Namespace, d.ref.Name, err)
+		}
+		if !exists {
+			log.V(logs.LogDebug).Info("skipping stale cluster entry (cluster gone)",
+				"classifier", classifier.Name,
+				"cluster", d.ref.Name,
+				"namespace", d.ref.Namespace)
+			continue
 		}
 		if err := upsertMigrationClassifierReport(ctx, c, classifier.Name, &d.ref,
 			d.hash, d.deploymentStatus, d.failureMessage,
@@ -193,4 +194,27 @@ func migrationDeriveClusterType(ref *corev1.ObjectReference) libsveltosv1beta1.C
 		return libsveltosv1beta1.ClusterTypeSveltos
 	}
 	return libsveltosv1beta1.ClusterTypeCapi
+}
+
+// migrationClusterExists reports whether the cluster a deprecated status entry refers to
+// still exists. Checking the cluster itself (rather than its namespace) reuses RBAC the
+// controller already has on sveltosclusters/clusters, instead of requiring a new grant on
+// the cluster-scoped namespaces resource.
+func migrationClusterExists(ctx context.Context, c client.Client, ref *corev1.ObjectReference) (bool, error) {
+	key := types.NamespacedName{Namespace: ref.Namespace, Name: ref.Name}
+
+	var obj client.Object
+	if migrationDeriveClusterType(ref) == libsveltosv1beta1.ClusterTypeSveltos {
+		obj = &libsveltosv1beta1.SveltosCluster{}
+	} else {
+		obj = &clusterv1.Cluster{}
+	}
+
+	if err := c.Get(ctx, key, obj); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }

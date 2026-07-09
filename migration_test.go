@@ -35,7 +35,10 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
-const testClassifierName = "default-classifier"
+const (
+	testClassifierName           = "default-classifier"
+	testExistingClusterNamespace = "existing-ns"
+)
 
 func TestMigration(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -61,8 +64,8 @@ var _ = Describe("migrateOneClassifier", func() {
 		return s
 	}
 
-	It("creates ClassifierReport and clears deprecated fields when namespace exists", func() {
-		clusterNamespace := "existing-ns"
+	It("creates ClassifierReport and clears deprecated fields when cluster exists", func() {
+		clusterNamespace := testExistingClusterNamespace
 		clusterName := "my-cluster"
 		classifierName := testClassifierName
 		status := libsveltosv1beta1.SveltosStatusProvisioned
@@ -88,13 +91,15 @@ var _ = Describe("migrateOneClassifier", func() {
 			},
 		}
 
-		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterNamespace}}
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterNamespace, Name: clusterName},
+		}
 
 		scheme := buildScheme()
 		c := fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithStatusSubresource(classifier, &libsveltosv1beta1.ClassifierReport{}).
-			WithObjects(classifier, ns).
+			WithObjects(classifier, sveltosCluster).
 			Build()
 
 		Expect(migrateOneClassifier(ctx, c, classifier, logger)).To(Succeed())
@@ -116,7 +121,51 @@ var _ = Describe("migrateOneClassifier", func() {
 		Expect(updated.Status.MachingClusterStatuses).To(BeNil()) //nolint:staticcheck // deprecated, migration only
 	})
 
-	It("skips stale entry and still clears deprecated fields when namespace is gone", func() {
+	It("creates ClassifierReport when the cluster is a CAPI Cluster", func() {
+		clusterNamespace := testExistingClusterNamespace
+		clusterName := "my-capi-cluster"
+		classifierName := testClassifierName
+		status := libsveltosv1beta1.SveltosStatusProvisioned
+
+		cluster := corev1.ObjectReference{
+			APIVersion: clusterv1.GroupVersion.String(),
+			Kind:       clusterv1.ClusterKind,
+			Namespace:  clusterNamespace,
+			Name:       clusterName,
+		}
+
+		classifier := &libsveltosv1beta1.Classifier{
+			ObjectMeta: metav1.ObjectMeta{Name: classifierName},
+			Status: libsveltosv1beta1.ClassifierStatus{
+				ClusterInfo: []libsveltosv1beta1.ClusterInfo{
+					{
+						Cluster: cluster,
+						Status:  status,
+					},
+				},
+			},
+		}
+
+		capiCluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterNamespace, Name: clusterName},
+		}
+
+		scheme := buildScheme()
+		c := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithStatusSubresource(classifier, &libsveltosv1beta1.ClassifierReport{}).
+			WithObjects(classifier, capiCluster).
+			Build()
+
+		Expect(migrateOneClassifier(ctx, c, classifier, logger)).To(Succeed())
+
+		clusterType := libsveltosv1beta1.ClusterTypeCapi
+		reportName := libsveltosv1beta1.GetClassifierReportName(classifierName, clusterName, &clusterType)
+		report := &libsveltosv1beta1.ClassifierReport{}
+		Expect(c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: reportName}, report)).To(Succeed())
+	})
+
+	It("skips stale entry and still clears deprecated fields when cluster is gone", func() {
 		staleNamespace := "deleted-ns"
 		staleClusterName := "customer-b-shoot-1"
 		classifierName := testClassifierName
@@ -143,7 +192,7 @@ var _ = Describe("migrateOneClassifier", func() {
 			},
 		}
 
-		// Namespace is intentionally NOT created — it was deleted with the cluster.
+		// SveltosCluster is intentionally NOT created — it was deleted.
 		scheme := buildScheme()
 		c := fake.NewClientBuilder().
 			WithScheme(scheme).
