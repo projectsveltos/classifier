@@ -39,29 +39,30 @@ func GroupClassifierReportsByCluster(
 }
 
 var (
-	DeployClassifierCRD                     = deployClassifierCRD
-	DeployClassifierReportCRD               = deployClassifierReportCRD
-	DeployHealthCheckCRD                    = deployHealthCheckCRD
-	DeployHealthCheckReportCRD              = deployHealthCheckReportCRD
-	DeployEventSourceCRD                    = deployEventSourceCRD
-	DeployEventReportCRD                    = deployEventReportCRD
-	DeployReloaderCRD                       = deployReloaderCRD
-	DeployReloaderReportCRD                 = deployReloaderReportCRD
-	DeployDebuggingConfigurationCRD         = deployDebuggingConfigurationCRD
-	DeployClassifierInstance                = deployClassifierInstance
-	DeploySveltosAgentInManagedCluster      = deploySveltosAgentInManagedCluster
-	ClassifierHash                          = classifierHash
-	DeployClassifierInCluster               = deployClassifierInCluster
-	UndeployClassifierFromCluster           = undeployClassifierFromCluster
-	RemoveClassifierReports                 = removeClassifierReports
-	RemoveClusterClassifierReports          = removeClusterClassifierReports
-	CollectClassifierReportsFromCluster     = collectClassifierReportsFromCluster
-	DeploySveltosAgentInManagementCluster   = deploySveltosAgentInManagementCluster
-	RemoveSveltosAgentFromManagementCluster = removeSveltosAgentFromManagementCluster
-	GetSveltosAgentLabels                   = getSveltosAgentLabels
-	GetSveltosAgentNamespace                = getSveltosAgentNamespace
-	GetSveltosAgentPatches                  = getSveltosAgentPatches
-	GetSveltosApplierPatches                = getSveltosApplierPatches
+	DeployClassifierCRD                      = deployClassifierCRD
+	DeployClassifierReportCRD                = deployClassifierReportCRD
+	DeployHealthCheckCRD                     = deployHealthCheckCRD
+	DeployHealthCheckReportCRD               = deployHealthCheckReportCRD
+	DeployEventSourceCRD                     = deployEventSourceCRD
+	DeployEventReportCRD                     = deployEventReportCRD
+	DeployReloaderCRD                        = deployReloaderCRD
+	DeployReloaderReportCRD                  = deployReloaderReportCRD
+	DeployDebuggingConfigurationCRD          = deployDebuggingConfigurationCRD
+	DeployClassifierInstance                 = deployClassifierInstance
+	DeploySveltosAgentInManagedCluster       = deploySveltosAgentInManagedCluster
+	ClassifierHash                           = classifierHash
+	DeployClassifierInCluster                = deployClassifierInCluster
+	UndeployClassifierFromCluster            = undeployClassifierFromCluster
+	RemoveClassifierReports                  = removeClassifierReports
+	RemoveClusterClassifierReports           = removeClusterClassifierReports
+	PruneClassifierReportsForDeletedClusters = pruneClassifierReportsForDeletedClusters
+	CollectClassifierReportsFromCluster      = collectClassifierReportsFromCluster
+	DeploySveltosAgentInManagementCluster    = deploySveltosAgentInManagementCluster
+	RemoveSveltosAgentFromManagementCluster  = removeSveltosAgentFromManagementCluster
+	GetSveltosAgentLabels                    = getSveltosAgentLabels
+	GetSveltosAgentNamespace                 = getSveltosAgentNamespace
+	GetSveltosAgentPatches                   = getSveltosAgentPatches
+	GetSveltosApplierPatches                 = getSveltosApplierPatches
 
 	CreateAccessRequest                        = createAccessRequest
 	GetAccessRequestName                       = getAccessRequestName

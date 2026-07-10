@@ -181,6 +181,54 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(len(classifierReportList.Items)).To(BeZero())
 	})
 
+	It("pruneClassifierReportsForDeletedClusters removes reports only for clusters that no longer exist", func() {
+		clusterType := libsveltosv1beta1.ClusterTypeCapi
+
+		// existingCluster still has a Cluster instance: its ClassifierReport must survive
+		existingClusterNamespace := randomString()
+		existingClusterName := randomString()
+		existingCluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: existingClusterNamespace,
+				Name:      existingClusterName,
+			},
+		}
+		keepClassifierName := randomString()
+		keepReport := getClassifierReport(keepClassifierName, existingClusterNamespace, existingClusterName)
+		keepReport.Labels = libsveltosv1beta1.GetClassifierReportLabels(
+			keepClassifierName, existingClusterName, &clusterType)
+
+		// deletedClusterNamespace/Name has no matching Cluster instance: both its ClassifierReports
+		// (from two different Classifier instances) must be removed, Spec.Match is irrelevant.
+		deletedClusterNamespace := randomString()
+		deletedClusterName := randomString()
+		staleClassifierName1 := randomString()
+		staleReport1 := getClassifierReport(staleClassifierName1, deletedClusterNamespace, deletedClusterName)
+		staleReport1.Labels = libsveltosv1beta1.GetClassifierReportLabels(
+			staleClassifierName1, deletedClusterName, &clusterType)
+		staleClassifierName2 := randomString()
+		staleReport2 := getClassifierReport(staleClassifierName2, deletedClusterNamespace, deletedClusterName)
+		staleReport2.Labels = libsveltosv1beta1.GetClassifierReportLabels(
+			staleClassifierName2, deletedClusterName, &clusterType)
+
+		initObjects := []client.Object{
+			existingCluster,
+			keepReport,
+			staleReport1,
+			staleReport2,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(keepReport, staleReport1, staleReport2).
+			WithObjects(initObjects...).Build()
+
+		Expect(controllers.PruneClassifierReportsForDeletedClusters(context.TODO(), c, logger)).To(Succeed())
+
+		classifierReportList := &libsveltosv1beta1.ClassifierReportList{}
+		Expect(c.List(context.TODO(), classifierReportList)).To(Succeed())
+		Expect(len(classifierReportList.Items)).To(Equal(1))
+		Expect(classifierReportList.Items[0].Name).To(Equal(keepReport.Name))
+	})
+
 	It("collectClassifierReports collects ClassifierReports from clusters", func() {
 		cluster := prepareCluster()
 

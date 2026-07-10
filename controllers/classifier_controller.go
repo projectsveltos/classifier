@@ -383,6 +383,8 @@ func (r *ClassifierReconciler) SetupWithManager(ctx context.Context,
 		go removeStaleClassifierResources(ctx, logger)
 	}
 
+	go removeStaleClassifierReports(ctx, logger)
+
 	return c, nil
 }
 

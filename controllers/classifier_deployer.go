@@ -155,6 +155,19 @@ func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierS
 		l := logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s",
 			cluster.Kind, cluster.Namespace, cluster.Name))
 
+		// Cluster may have been deleted since this ClassifierReport was created. Skip it rather
+		// than treating it as a failure; removeStaleClassifierReports removes the stale report
+		// separately, regardless of the report's Spec.Match value.
+		if _, err := clusterproxy.GetCluster(ctx, r.Client, cluster.Namespace, cluster.Name,
+			clusterproxy.GetClusterType(cluster)); err != nil {
+			if apierrors.IsNotFound(err) {
+				l.V(logs.LogDebug).Info("cluster no longer exists, skipping")
+				continue
+			}
+			errorSeen = err
+			continue
+		}
+
 		clusterInfo, err := r.processClassifier(ctx, classifierScope, r.ControlPlaneEndpoint, cluster, f, l)
 		if err != nil {
 			errorSeen = err
