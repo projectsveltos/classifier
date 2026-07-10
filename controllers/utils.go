@@ -179,6 +179,75 @@ func removeStaleClassifierResources(ctx context.Context, logger logr.Logger) {
 	}
 }
 
+// removeStaleClassifierReports periodically removes ClassifierReports whose referenced cluster
+// no longer exists. This complements the cleanup done in syncAndGetMatchingClusters, which only
+// catches reports with Spec.Match set to true; a report left over with Spec.Match false (or unset)
+// for a since-deleted cluster is otherwise never removed and gets retried by every Classifier
+// reconcile forever.
+func removeStaleClassifierReports(ctx context.Context, logger logr.Logger) {
+	const interval = 5 * time.Minute
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("stopping detection and removal of stale ClassifierReports")
+			return
+		case <-ticker.C:
+			if err := pruneClassifierReportsForDeletedClusters(ctx, getManagementClusterClient(), logger); err != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to prune stale ClassifierReports: %v", err))
+			}
+		}
+	}
+}
+
+// pruneClassifierReportsForDeletedClusters removes every ClassifierReport referencing a cluster
+// that no longer exists, regardless of the report's Spec.Match value.
+func pruneClassifierReportsForDeletedClusters(ctx context.Context, c client.Client, logger logr.Logger) error {
+	classifierReportList := &libsveltosv1beta1.ClassifierReportList{}
+	if err := c.List(ctx, classifierReportList); err != nil {
+		return fmt.Errorf("failed to list ClassifierReports: %w", err)
+	}
+
+	// Multiple ClassifierReports (from different Classifier instances) can reference the same
+	// cluster; check each distinct cluster only once per sweep.
+	checked := make(map[corev1.ObjectReference]bool)
+
+	for i := range classifierReportList.Items {
+		report := &classifierReportList.Items[i]
+		if report.Spec.ClusterNamespace == "" {
+			continue
+		}
+
+		cluster := getClusterRefFromClassifierReport(report)
+		if checked[*cluster] {
+			continue
+		}
+		checked[*cluster] = true
+
+		_, err := clusterproxy.GetCluster(ctx, c, cluster.Namespace, cluster.Name, clusterproxy.GetClusterType(cluster))
+		if err == nil {
+			continue
+		}
+		if !apierrors.IsNotFound(err) {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get cluster %s:%s/%s: %v",
+				cluster.Kind, cluster.Namespace, cluster.Name, err))
+			continue
+		}
+
+		logger.V(logs.LogInfo).Info(fmt.Sprintf(
+			"cluster %s:%s/%s no longer exists, removing its ClassifierReports",
+			cluster.Kind, cluster.Namespace, cluster.Name))
+		if err := removeClusterClassifierReports(ctx, c, cluster.Namespace, cluster.Name,
+			clusterproxy.GetClusterType(cluster), logger); err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to remove stale ClassifierReports: %v", err))
+		}
+	}
+
+	return nil
+}
+
 func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *appsv1.Deployment,
 	logger logr.Logger) (exist bool, clusterName, clusterNamespace string, clusterType libsveltosv1beta1.ClusterType) {
 
