@@ -281,6 +281,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 		logger.V(logs.LogDebug).Error(err, "failed to get matching clusters")
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
+	trackMatchingClusters(classifierScope.Classifier.Name, len(matchingClusters), logger)
 
 	// For clusters that no longer match, remove managed labels and clear internal registrations
 	err = r.cleanUpManagedResources(ctx, classifierScope, matchingClusters, logger)
@@ -296,6 +297,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 		logger.V(logs.LogDebug).Error(err, "failed to update status/registrations for matching clusters")
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
+	trackLabelConflicts(classifierScope.Classifier.Name, countUnManagedLabelClusters(matchingStatuses), logger)
 
 	// Apply the labels to the clusters
 	err = r.updateLabelsOnMatchingClusters(ctx, classifierScope, matchingStatuses, logger)
@@ -968,4 +970,16 @@ func hasUnManagedLabels(statuses []libsveltosv1beta1.MachingClusterStatus) bool 
 		}
 	}
 	return false
+}
+
+// countUnManagedLabelClusters returns the number of clusters in statuses with at least one label
+// conflict.
+func countUnManagedLabelClusters(statuses []libsveltosv1beta1.MachingClusterStatus) int {
+	count := 0
+	for i := range statuses {
+		if len(statuses[i].UnManagedLabels) > 0 {
+			count++
+		}
+	}
+	return count
 }

@@ -116,6 +116,7 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 		_ = setMgmtClassifierFailureMessage(ctx, r.Client, mcc, err.Error())
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
+	trackMgmtClusterMatchingClusters(mcc.Name, len(newClusters), logger)
 
 	km, err := keymanager.GetKeyManagerInstance(ctx, r.Client)
 	if err != nil {
@@ -131,7 +132,7 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
-	hasConflict := false
+	conflictCount := 0
 
 	// Apply labels to newly matched clusters.
 	for key, ref := range newClusters {
@@ -152,7 +153,7 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 			mcc.Spec.ClassifierLabels, km)
 
 		if len(unmanaged) > 0 {
-			hasConflict = true
+			conflictCount++
 		}
 
 		if err := updateMgmtClassifierReportStatus(ctx, r.Client, mcc.Name, ref.Namespace, ref.Name,
@@ -168,6 +169,7 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 			}
 		}
 	}
+	trackMgmtClusterLabelConflicts(mcc.Name, conflictCount, logger)
 
 	// Update failure message: Lua errors plus any recorded conflicts.
 	failMsg := strings.Join(luaFailures, "; ")
@@ -178,7 +180,7 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 	// Sync GVK map and register dynamic watches for spec.matchResources.
 	r.syncGVKWatches(mcc, logger)
 
-	if hasConflict {
+	if conflictCount > 0 {
 		return reconcile.Result{Requeue: true, RequeueAfter: conflictRequeueAfter}, nil
 	}
 
