@@ -177,6 +177,8 @@ func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierS
 				classifierScope.Classifier.Name, cluster, clusterInfo); updateErr != nil {
 				l.V(logs.LogInfo).Error(updateErr, "failed to update ClassifierReport deployment status")
 				errorSeen = updateErr
+			} else {
+				trackClassifierOutcome(classifierScope.Classifier.Name, cluster, clusterInfo, l)
 			}
 			if clusterInfo.Status != libsveltosv1beta1.SveltosStatusProvisioned {
 				allProcessed = false
