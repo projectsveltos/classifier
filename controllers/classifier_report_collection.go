@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clustercache"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
@@ -53,7 +54,7 @@ func getClassifierClient(ctx context.Context, clusterNamespace, clusterName stri
 	// ResourceSummary is a Sveltos resource created in managed clusters.
 	// Sveltos resources are always created using cluster-admin so that admin does not need to be
 	// given such permissions.
-	return clusterproxy.GetKubernetesClient(ctx, getManagementClusterClient(),
+	return clustercache.GetManager().GetKubernetesClient(ctx, getManagementClusterClient(),
 		clusterNamespace, clusterName, "", "", clusterType, logger)
 }
 
@@ -411,6 +412,8 @@ func collectClassifierReportsFromCluster(ctx context.Context, c client.Client,
 	clusterClient, err := getClassifierClient(ctx, cluster.Namespace, cluster.Name,
 		clusterproxy.GetClusterType(cluster), logger)
 	if err != nil {
+		clustercache.GetManager().InvalidateOnAuthError(cluster.Namespace, cluster.Name,
+			clusterproxy.GetClusterType(cluster), err)
 		return err
 	}
 

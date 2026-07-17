@@ -48,6 +48,7 @@ import (
 	"github.com/projectsveltos/classifier/pkg/agent"
 	"github.com/projectsveltos/classifier/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clustercache"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -274,7 +275,7 @@ func classifierHash(classifier *libsveltosv1beta1.Classifier) []byte {
 // Returns an err if Classifier or associated Sveltos/CAPI Cluster are marked for deletion, or if an
 // error occurs while getting resources.
 func getClassifierAndClusterClient(ctx context.Context, clusterNamespace, clusterName, classifierName string,
-	clusterType libsveltosv1beta1.ClusterType, c client.Client, logger logr.Logger,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, c client.Client, logger logr.Logger,
 ) (*libsveltosv1beta1.Classifier, client.Client, error) {
 
 	// Get Classifier that requested this
@@ -302,7 +303,12 @@ func getClassifierAndClusterClient(ctx context.Context, clusterNamespace, cluste
 		return nil, nil, fmt.Errorf("cluster is marked for deletion")
 	}
 
-	clusterClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
+	// In pull mode there is no direct connection to the managed cluster.
+	if isPullMode {
+		return classifier, nil, nil
+	}
+
+	clusterClient, err := clustercache.GetManager().GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
 		"", "", clusterType, logger)
 	if err != nil {
 		return nil, nil, err
@@ -416,9 +422,13 @@ func updateSecretWithAccessManagementKubeconfig(ctx context.Context, c client.Cl
 	clusterNamespace, clusterName, applicant string, clusterType libsveltosv1beta1.ClusterType,
 	kubeconfig []byte, logger logr.Logger) error {
 
+	// This flow (send-reports mode) deploys sveltos-agent with a pushed kubeconfig and is not
+	// used for pull-mode clusters, which already have Sveltos-applier pre-installed.
+	const isPullMode = false
+
 	// Get Classifier that requested this
 	_, remoteClient, err := getClassifierAndClusterClient(ctx, clusterNamespace, clusterName, applicant,
-		clusterType, c, logger)
+		clusterType, isPullMode, c, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get classifier and cluster client")
 		return err
@@ -560,7 +570,7 @@ func deploySveltosAgentWithKubeconfigInCluster(ctx context.Context, c client.Cli
 		return err
 	}
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+	remoteRestConfig, err := clustercache.GetManager().GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 		"", "", clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
@@ -581,9 +591,10 @@ func deploySveltosAgentWithKubeconfigInCluster(ctx context.Context, c client.Cli
 		return err
 	}
 
-	// Get Classifier that requested this
+	// Get Classifier that requested this. This flow (send-reports mode) is not used for
+	// pull-mode clusters, which already have Sveltos-applier pre-installed.
 	classifier, remoteClient, err := getClassifierAndClusterClient(ctx, clusterNamespace, clusterName, applicant, clusterType,
-		c, logger)
+		false, c, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get classifier and cluster client")
 		return err
@@ -649,7 +660,7 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 
 	// Get Classifier that requested this
 	classifier, remoteClient, err := getClassifierAndClusterClient(ctx, clusterNamespace, clusterName, applicant, clusterType,
-		c, logger)
+		isPullMode, c, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get classifier and cluster client")
 		return err
@@ -711,7 +722,7 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 		return undeployClassifierInPullMode(ctx, c, clusterNamespace, clusterName, applicant, logger)
 	}
 
-	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
+	remoteClient, err := clustercache.GetManager().GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
 		"", "", clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to get cluster client")
@@ -1108,6 +1119,9 @@ func (r *ClassifierReconciler) proceedProcessingClassifier(ctx context.Context, 
 		if result.Err != nil {
 			errorMessage := result.Err.Error()
 			clusterInfo.FailureMessage = &errorMessage
+
+			clustercache.GetManager().InvalidateOnAuthError(cluster.Namespace, cluster.Name,
+				clusterproxy.GetClusterType(cluster), result.Err)
 		}
 
 		if *deployerStatus == libsveltosv1beta1.SveltosStatusProvisioned {
@@ -1310,7 +1324,7 @@ func deployCRDInPullMode(ctx context.Context, clusterNamespace, clusterName, cla
 func applyCRD(ctx context.Context, clusterNamespace, clusterName string, u *unstructured.Unstructured,
 	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, getManagementClusterClient(),
+	remoteRestConfig, err := clustercache.GetManager().GetKubernetesRestConfig(ctx, getManagementClusterClient(),
 		clusterNamespace, clusterName, "", "", clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
@@ -1596,7 +1610,7 @@ func createSveltosAgentNamespaceInManagedCluster(ctx context.Context, c client.C
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
 
 	// Create the projectsveltos namespace in the remote client
-	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
+	remoteClient, err := clustercache.GetManager().GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
 		"", "", clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
@@ -1644,7 +1658,7 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 			classifierName, "do-not-send-reports", clusterType, patches, logger)
 	} else {
 		// Use managed cluster restConfig
-		remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+		remoteRestConfig, err := clustercache.GetManager().GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 			"", "", clusterType, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
