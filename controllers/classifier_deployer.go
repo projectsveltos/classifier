@@ -56,6 +56,7 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
 	"github.com/projectsveltos/libsveltos/lib/pullmode"
+	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
 
 type getCurrentHash func(classifier *libsveltosv1beta1.Classifier) []byte
@@ -2070,6 +2071,15 @@ func removeSveltosAgentFromManagementCluster(ctx context.Context,
 		return err
 	} else {
 		manager.RemoveSveltosAgentDeploymentName(clusterNamespace, clusterName, clusterType)
+	}
+
+	// Propagate the error here (unlike the deletes in the loop above): cleanClusterStaleResources
+	// turns this into a requeue, so it gets retried via the reconciler and the periodic sweep
+	// instead of leaving the version ConfigMap behind for good.
+	if err := sveltos_upgrade.DeleteSveltosAgentVersion(ctx, getManagementClusterClient(), getSveltosNamespace(),
+		clusterNamespace, clusterName, clusterType, true, logger); err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to delete sveltos-agent version configMap: %v", err))
+		return err
 	}
 
 	return nil
