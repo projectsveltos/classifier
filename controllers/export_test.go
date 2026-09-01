@@ -63,6 +63,7 @@ var (
 	GetSveltosAgentLabels                             = getSveltosAgentLabels
 	GetSveltosAgentNamespace                          = getSveltosAgentNamespace
 	GetSveltosAgentPatches                            = getSveltosAgentPatches
+	GetAgentWatchNamespaces                           = getAgentWatchNamespaces
 	GetSveltosApplierPatches                          = getSveltosApplierPatches
 
 	CreateAccessRequest                        = createAccessRequest

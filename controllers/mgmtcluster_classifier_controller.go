@@ -141,7 +141,8 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 			continue
 		}
 
-		if err := ensureMgmtClassifierReport(ctx, r.Client, mcc.Name, ref.Namespace, ref.Name, clusterType); err != nil {
+		report, err := ensureMgmtClassifierReport(ctx, r.Client, mcc.Name, ref.Namespace, ref.Name, clusterType)
+		if err != nil {
 			logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to ensure report for cluster %s", key))
 			continue
 		}
@@ -156,8 +157,7 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 			conflictCount++
 		}
 
-		if err := updateMgmtClassifierReportStatus(ctx, r.Client, mcc.Name, ref.Namespace, ref.Name,
-			clusterType, managed, unmanaged); err != nil {
+		if err := updateMgmtClassifierReportStatus(ctx, r.Client, report, managed, unmanaged); err != nil {
 			logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to update report status for cluster %s", key))
 		}
 

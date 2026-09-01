@@ -48,7 +48,10 @@ import (
 )
 
 const (
-	classifierCRDName = "classifiers.lib.projectsveltos.io"
+	classifierCRDName            = "classifiers.lib.projectsveltos.io"
+	agentWatchNamespacesAnnotKey = "agent.projectsveltos.io/watch-namespaces"
+	watchNamespaceNs1            = "ns1"
+	watchNamespaceNs2            = "ns2"
 )
 
 var _ = Describe("Classifier Deployer", func() {
@@ -476,16 +479,22 @@ var _ = Describe("Classifier Deployer", func() {
 	})
 
 	It("deploySveltosAgent deploys sveltos agent", func() {
+		watchNamespaces := []string{watchNamespaceNs1, watchNamespaceNs2}
 		Expect(controllers.DeploySveltosAgentInManagedCluster(ctx, testEnv.Config, randomString(), randomString(),
-			randomString(), "do-not-send-reports", libsveltosv1beta1.ClusterTypeCapi, nil, false, logger)).To(Succeed())
+			randomString(), "do-not-send-reports", libsveltosv1beta1.ClusterTypeCapi, nil, false,
+			watchNamespaces, logger)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
+		currentSveltosAgent := &appsv1.Deployment{}
 		Eventually(func() error {
-			currentSveltosAgent := &appsv1.Deployment{}
 			return testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: sveltosNamespace, Name: "sveltos-agent-manager"},
 				currentSveltosAgent)
 		}, timeout, pollingInterval).Should(BeNil())
+
+		Expect(currentSveltosAgent.Spec.Template.Spec.Containers).ToNot(BeEmpty())
+		Expect(currentSveltosAgent.Spec.Template.Spec.Containers[0].Args).To(
+			ContainElement("--watch-namespaces=ns1,ns2"))
 	})
 
 	It("createAccessRequest creates AccessRequest instance", func() {
@@ -607,14 +616,17 @@ var _ = Describe("Classifier Deployer", func() {
 		_, err := keymanager.GetKeyManagerInstance(context.TODO(), testEnv.Client)
 		Expect(err).To(BeNil())
 
+		watchNamespaces := []string{watchNamespaceNs1, watchNamespaceNs2}
 		Expect(controllers.DeploySveltosAgentInManagementCluster(context.TODO(), testEnv.Config,
-			testEnv.Client, clusterNamespace, clusterName, randomString(), "", clusterType, nil, logger)).To(Succeed())
+			testEnv.Client, clusterNamespace, clusterName, randomString(), "", clusterType, nil,
+			watchNamespaces, logger)).To(Succeed())
 
 		expectedLabels := controllers.GetSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
 
 		listOptions := []client.ListOption{
 			client.InNamespace(controllers.GetSveltosAgentNamespace(sveltosNamespace)),
 		}
+		var matchingDeployment *appsv1.Deployment
 		Eventually(func() bool {
 			deployments := &appsv1.DeploymentList{}
 			err := testEnv.List(context.TODO(), deployments, listOptions...)
@@ -629,11 +641,16 @@ var _ = Describe("Classifier Deployer", func() {
 			for i := range deployments.Items {
 				d := &deployments.Items[i]
 				if verifyLabels(d.Labels, expectedLabels) {
+					matchingDeployment = d
 					return true
 				}
 			}
 			return false
 		}, timeout, pollingInterval).Should(BeTrue())
+
+		Expect(matchingDeployment.Spec.Template.Spec.Containers).ToNot(BeEmpty())
+		Expect(matchingDeployment.Spec.Template.Spec.Containers[0].Args).To(
+			ContainElement("--watch-namespaces=ns1,ns2"))
 
 		Expect(sveltos_upgrade.StoreSveltosAgentVersion(context.TODO(), testEnv.Client, sveltosNamespace, "v1.0.0",
 			clusterNamespace, clusterName, clusterType, true, logger)).To(Succeed())
@@ -928,6 +945,69 @@ metadata:
 		controllers.SetSveltosAgentConfigMap("")
 
 		verifyPatches(patches)
+	})
+
+	It("getAgentWatchNamespaces reads and trims the comma-separated namespace list from the annotation", func() {
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      upstreamClusterNamePrefix + randomString(),
+				Annotations: map[string]string{
+					agentWatchNamespacesAnnotKey: " foo ,bar,, baz",
+				},
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster).Build()
+
+		namespaces, err := controllers.GetAgentWatchNamespaces(context.TODO(), c, sveltosCluster.Namespace,
+			sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos, logger)
+		Expect(err).To(BeNil())
+		Expect(namespaces).To(Equal([]string{"foo", "bar", "baz"}))
+	})
+
+	It("getAgentWatchNamespaces returns nil, not an error, when the annotation is absent", func() {
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      upstreamClusterNamePrefix + randomString(),
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster).Build()
+
+		namespaces, err := controllers.GetAgentWatchNamespaces(context.TODO(), c, sveltosCluster.Namespace,
+			sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos, logger)
+		Expect(err).To(BeNil())
+		Expect(namespaces).To(BeNil())
+	})
+
+	It("getAgentWatchNamespaces returns nil, not an error, when the annotation value is empty", func() {
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      upstreamClusterNamePrefix + randomString(),
+				Annotations: map[string]string{
+					agentWatchNamespacesAnnotKey: "",
+				},
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster).Build()
+
+		namespaces, err := controllers.GetAgentWatchNamespaces(context.TODO(), c, sveltosCluster.Namespace,
+			sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos, logger)
+		Expect(err).To(BeNil())
+		Expect(namespaces).To(BeNil())
+	})
+
+	It("getAgentWatchNamespaces returns nil, not an error, when the Cluster does not exist", func() {
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		namespaces, err := controllers.GetAgentWatchNamespaces(context.TODO(), c, randomString(),
+			upstreamClusterNamePrefix+randomString(), libsveltosv1beta1.ClusterTypeSveltos, logger)
+		Expect(err).To(BeNil())
+		Expect(namespaces).To(BeNil())
 	})
 
 	It("getSveltosApplierPatches reads post render patches from per cluster ConfigMap", func() {

@@ -330,19 +330,23 @@ func getMgmtClassifierReport(ctx context.Context, c client.Client,
 	return report, nil
 }
 
-// ensureMgmtClassifierReport creates the report if it does not yet exist. Idempotent.
+// ensureMgmtClassifierReport creates the report if it does not yet exist, and returns it either
+// way. Idempotent. Callers that need to act on the report right after (e.g. patch its status)
+// should use the returned object rather than reading it back through the cache: a Get immediately
+// following this Create is not guaranteed to observe it, since r.Client is cache-backed and the
+// informer may not have processed the write yet.
 func ensureMgmtClassifierReport(ctx context.Context, c client.Client,
 	classifierName, clusterNamespace, clusterName string,
-	clusterType libsveltosv1beta1.ClusterType) error {
+	clusterType libsveltosv1beta1.ClusterType) (*libsveltosv1beta1.ManagementClusterClassifierReport, error) {
 
 	name := libsveltosv1beta1.GetManagementClusterClassifierReportName(classifierName, clusterName, &clusterType)
 	existing := &libsveltosv1beta1.ManagementClusterClassifierReport{}
 	err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: name}, existing)
 	if err == nil {
-		return nil
+		return existing, nil
 	}
 	if !apierrors.IsNotFound(err) {
-		return err
+		return nil, err
 	}
 
 	report := &libsveltosv1beta1.ManagementClusterClassifierReport{
@@ -359,10 +363,18 @@ func ensureMgmtClassifierReport(ctx context.Context, c client.Client,
 			ClusterType:      clusterType,
 		},
 	}
-	if createErr := c.Create(ctx, report); createErr != nil && !apierrors.IsAlreadyExists(createErr) {
-		return createErr
+	if createErr := c.Create(ctx, report); createErr != nil {
+		if !apierrors.IsAlreadyExists(createErr) {
+			return nil, createErr
+		}
+		// Lost a create race with another reconcile. Fetch what's actually there instead of
+		// returning our own copy, which was never persisted and has no resourceVersion.
+		if getErr := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: name}, existing); getErr != nil {
+			return nil, getErr
+		}
+		return existing, nil
 	}
-	return nil
+	return report, nil
 }
 
 // deleteMgmtClassifierReport deletes the report for the given pair if it exists.
@@ -380,25 +392,18 @@ func deleteMgmtClassifierReport(ctx context.Context, c client.Client,
 	return c.Delete(ctx, report)
 }
 
-// updateMgmtClassifierReportStatus patches the report status with the current label ownership state.
+// updateMgmtClassifierReportStatus patches the report status with the current label ownership
+// state. Takes the report object directly (from ensureMgmtClassifierReport) rather than looking
+// it up again, to avoid a cache-read-after-write race on a report that may have just been created
+// in the same reconcile.
 func updateMgmtClassifierReportStatus(ctx context.Context, c client.Client,
-	classifierName, clusterNamespace, clusterName string,
-	clusterType libsveltosv1beta1.ClusterType,
+	report *libsveltosv1beta1.ManagementClusterClassifierReport,
 	managed []string, unmanaged []libsveltosv1beta1.UnManagedLabel) error {
 
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		report, err := getMgmtClassifierReport(ctx, c, classifierName, clusterNamespace, clusterName, clusterType)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil
-			}
-			return err
-		}
-		patch := client.MergeFrom(report.DeepCopy())
-		report.Status.ManagedLabels = managed
-		report.Status.UnManagedLabels = unmanaged
-		return c.Status().Patch(ctx, report, patch)
-	})
+	patch := client.MergeFrom(report.DeepCopy())
+	report.Status.ManagedLabels = managed
+	report.Status.UnManagedLabels = unmanaged
+	return c.Status().Patch(ctx, report, patch)
 }
 
 // applyLabelsToCluster adds classifierLabels to the cluster.

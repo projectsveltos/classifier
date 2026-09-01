@@ -121,6 +121,13 @@ const (
 	// * **Strategic Merge Patch**
 	// * **JSON Patch (RFC6902)**
 	sveltosApplierOverrideAnnotation = "sveltosapplier.projectsveltos.io/config-override-ref"
+
+	// This optional annotation restricts sveltos-agent's namespace-scoped watch mode (agentless
+	// mode only, requires a Sveltos Enterprise license granting NamespaceScopedAgents -- see
+	// sveltos-agent's own VerifyNamespaceScopeLicense) to the comma-separated namespaces it
+	// names. Same annotation key addon-controller's drift-detection-manager deploy path already
+	// uses, so one annotation on the Cluster/SveltosCluster controls both agents.
+	agentWatchNamespacesAnnotation = "agent.projectsveltos.io/watch-namespaces"
 )
 
 func getSveltosAgentNamespace(sveltosNamespace string) string {
@@ -584,10 +591,15 @@ func deploySveltosAgentWithKubeconfigInCluster(ctx context.Context, c client.Cli
 		return err
 	}
 
+	watchNamespaces, err := getAgentWatchNamespaces(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	if err != nil {
+		return err
+	}
+
 	logger.V(logs.LogDebug).Info("Deploying sveltos agent")
 	// Deploy SveltosAgent
 	err = deploySveltosAgentInManagedCluster(ctx, remoteRestConfig, clusterNamespace, clusterName, applicant,
-		"send-reports", clusterType, patches, false, logger)
+		"send-reports", clusterType, patches, false, watchNamespaces, logger)
 	if err != nil {
 		return err
 	}
@@ -986,6 +998,23 @@ func (r *ClassifierReconciler) getCurrentHash(ctx context.Context, classifierSco
 		h.Write(patchBytes)
 
 		// currentHash is now the hash of (classifier + patches)
+		currentHash = h.Sum(nil)
+	}
+
+	watchNamespaces, err := getAgentWatchNamespaces(ctx, r.Client, cluster.Namespace, cluster.Name,
+		clusterproxy.GetClusterType(cluster), logger)
+	if err != nil {
+		return nil, err
+	}
+	if len(watchNamespaces) > 0 {
+		// Without this, a change to agentWatchNamespacesAnnotation on the Cluster/SveltosCluster
+		// still requeues the Classifier (predicates.ClusterPredicate/SveltosClusterPredicates
+		// already diff annotations wholesale), but processClassifier's isConfigSame check would
+		// find this hash unchanged and skip the redeploy that would actually apply the new value
+		// -- see getAgentWatchNamespaces' doc comment.
+		h := sha256.New()
+		h.Write(currentHash)
+		h.Write([]byte(strings.Join(watchNamespaces, ",")))
 		currentHash = h.Sum(nil)
 	}
 
@@ -1566,7 +1595,7 @@ func deployReloaderReportCRD(ctx context.Context, clusterNamespace, clusterName,
 }
 
 func prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode string,
-	clusterType libsveltosv1beta1.ClusterType) string {
+	clusterType libsveltosv1beta1.ClusterType, watchNamespaces []string) string {
 
 	if mode != "do-not-send-reports" {
 		agentYAML = strings.ReplaceAll(agentYAML, "do-not-send-reports", "send-reports")
@@ -1575,6 +1604,7 @@ func prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode stri
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-namespace=", fmt.Sprintf("cluster-namespace=%s", clusterNamespace))
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-name=", fmt.Sprintf("cluster-name=%s", clusterName))
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-type=", fmt.Sprintf("cluster-type=%s", clusterType))
+	agentYAML = strings.ReplaceAll(agentYAML, "watch-namespaces=", fmt.Sprintf("watch-namespaces=%s", strings.Join(watchNamespaces, ",")))
 	agentYAML = strings.ReplaceAll(agentYAML, "v=5", "v=0")
 
 	if getSveltosAgentEnableNATS() {
@@ -1645,10 +1675,15 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 		return err
 	}
 
+	watchNamespaces, err := getAgentWatchNamespaces(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	if err != nil {
+		return err
+	}
+
 	// Deploy SveltosAgent
 	if isPullMode {
 		err = deploySveltosAgentInManagedCluster(ctx, nil, clusterNamespace,
-			clusterName, classifierName, "do-not-send-reports", clusterType, patches, true, logger)
+			clusterName, classifierName, "do-not-send-reports", clusterType, patches, true, watchNamespaces, logger)
 		if err != nil {
 			return err
 		}
@@ -1656,7 +1691,7 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 		// Use management cluster restConfig
 		restConfig := getManagementClusterConfig()
 		return deploySveltosAgentInManagementCluster(ctx, restConfig, c, clusterNamespace, clusterName,
-			classifierName, "do-not-send-reports", clusterType, patches, logger)
+			classifierName, "do-not-send-reports", clusterType, patches, watchNamespaces, logger)
 	} else {
 		// Use managed cluster restConfig
 		remoteRestConfig, err := clustercache.GetManager().GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
@@ -1671,7 +1706,7 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 			return err
 		}
 		err = deploySveltosAgentInManagedCluster(ctx, remoteRestConfig, clusterNamespace,
-			clusterName, classifierName, "do-not-send-reports", clusterType, patches, false, logger)
+			clusterName, classifierName, "do-not-send-reports", clusterType, patches, false, watchNamespaces, logger)
 		if err != nil {
 			return err
 		}
@@ -1686,12 +1721,12 @@ func replaceRegistry(agentYAML, registry string) string {
 
 func deploySveltosAgentInManagedCluster(ctx context.Context, remoteRestConfig *rest.Config,
 	clusterNamespace, clusterName, classifierName, mode string, clusterType libsveltosv1beta1.ClusterType,
-	patches []libsveltosv1beta1.Patch, isPullMode bool, logger logr.Logger) error {
+	patches []libsveltosv1beta1.Patch, isPullMode bool, watchNamespaces []string, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy sveltos-agent in the managed cluster")
 
 	agentYAML := string(agent.GetSveltosAgentYAML())
-	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode, clusterType)
+	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode, clusterType, watchNamespaces)
 
 	return deploySveltosAgentResources(ctx, clusterNamespace, clusterName, classifierName,
 		remoteRestConfig, agentYAML, nil, patches, isPullMode, logger)
@@ -1717,12 +1752,12 @@ func upgradeSveltosApplierInManagedCluster(ctx context.Context, clusterNamespace
 
 func deploySveltosAgentInManagementCluster(ctx context.Context, restConfig *rest.Config, c client.Client,
 	clusterNamespace, clusterName, classifierName, mode string, clusterType libsveltosv1beta1.ClusterType,
-	patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
+	patches []libsveltosv1beta1.Patch, watchNamespaces []string, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy sveltos-agent in the management cluster")
 
 	agentYAML := string(agent.GetSveltosAgentInMgmtClusterYAML())
-	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode, clusterType)
+	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode, clusterType, watchNamespaces)
 
 	// Following labels are added on the objects representing the drift-detection-manager
 	// for this cluster.
@@ -2021,9 +2056,11 @@ func removeSveltosAgentFromManagementCluster(ctx context.Context,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) error {
 
-	// Get YAML containing sveltos-agent resources
+	// Get YAML containing sveltos-agent resources. Only used below to determine the resource
+	// identity to delete, not actually deployed, so the substituted arg values (watchNamespaces
+	// included) don't matter here -- nil is fine.
 	agentYAML := string(agent.GetSveltosAgentInMgmtClusterYAML())
-	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, "", clusterType)
+	agentYAML = prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, "", clusterType, nil)
 
 	// Classifier deploys sveltos-agent resources for each cluster.
 	lbls := getSveltosAgentLabels(clusterNamespace, clusterName, clusterType)
@@ -2270,6 +2307,48 @@ func getSveltosApplierPatches(ctx context.Context, c client.Client,
 	}
 
 	return getSveltosApplierPatchesOld(ctx, c, logger)
+}
+
+// getAgentWatchNamespaces reads agentWatchNamespacesAnnotation off the Cluster/SveltosCluster
+// instance and returns the comma-separated namespace list it names, split and trimmed. Returns
+// nil, nil (not an error) when the Cluster, the annotation, or its value is missing, same
+// contract as getPerClusterPatches. sveltos-agent itself only honors this outside managed-cluster
+// mode (see resolveScopedNamespaces in its own main.go), so callers here don't need to
+// special-case agentless vs. managed-cluster mode: passing the value through unconditionally is
+// harmless when sveltos-agent is deployed in the managed cluster.
+func getAgentWatchNamespaces(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) ([]string, error) {
+
+	cluster, err := clusterproxy.GetCluster(ctx, c, clusterNamespace, clusterName, clusterType)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	annos := cluster.GetAnnotations()
+	if annos == nil {
+		return nil, nil
+	}
+
+	value, ok := annos[agentWatchNamespacesAnnotation]
+	if !ok || value == "" {
+		return nil, nil
+	}
+
+	var namespaces []string
+	for _, ns := range strings.Split(value, ",") {
+		ns = strings.TrimSpace(ns)
+		if ns != "" {
+			namespaces = append(namespaces, ns)
+		}
+	}
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("got watch-namespaces %v from annotation %s",
+		namespaces, agentWatchNamespacesAnnotation))
+	return namespaces, nil
 }
 
 func addTemplateSpecLabels(u *unstructured.Unstructured, lbls map[string]string) (*unstructured.Unstructured, error) {

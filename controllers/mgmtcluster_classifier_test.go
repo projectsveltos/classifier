@@ -201,18 +201,21 @@ end
 				WithStatusSubresource(&libsveltosv1beta1.ManagementClusterClassifierReport{}).
 				Build()
 
-			err := controllers.EnsureMgmtClassifierReport(context.TODO(), fakeClient,
+			report, err := controllers.EnsureMgmtClassifierReport(context.TODO(), fakeClient,
 				classifierName, ns, clusterName, clusterType)
 			Expect(err).ToNot(HaveOccurred())
-
-			reportName := libsveltosv1beta1.GetManagementClusterClassifierReportName(
-				classifierName, clusterName, &clusterType)
-			report := &libsveltosv1beta1.ManagementClusterClassifierReport{}
-			Expect(fakeClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: ns, Name: reportName}, report)).To(Succeed())
 			Expect(report.Spec.ClassifierName).To(Equal(classifierName))
 			Expect(report.Spec.ClusterName).To(Equal(clusterName))
 			Expect(report.Spec.ClusterType).To(Equal(clusterType))
+
+			reportName := libsveltosv1beta1.GetManagementClusterClassifierReportName(
+				classifierName, clusterName, &clusterType)
+			persisted := &libsveltosv1beta1.ManagementClusterClassifierReport{}
+			Expect(fakeClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: ns, Name: reportName}, persisted)).To(Succeed())
+			Expect(persisted.Spec.ClassifierName).To(Equal(classifierName))
+			Expect(persisted.Spec.ClusterName).To(Equal(clusterName))
+			Expect(persisted.Spec.ClusterType).To(Equal(clusterType))
 		})
 
 		It("is idempotent when the report already exists", func() {
@@ -238,9 +241,11 @@ end
 				WithStatusSubresource(&libsveltosv1beta1.ManagementClusterClassifierReport{}).
 				Build()
 
-			err := controllers.EnsureMgmtClassifierReport(context.TODO(), fakeClient,
+			report, err := controllers.EnsureMgmtClassifierReport(context.TODO(), fakeClient,
 				classifierName, ns, clusterName, clusterType)
 			Expect(err).ToNot(HaveOccurred())
+			Expect(report.Name).To(Equal(reportName))
+			Expect(report.Namespace).To(Equal(ns))
 		})
 	})
 
