@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,11 +35,36 @@ import (
 
 	"github.com/projectsveltos/classifier/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clustercache"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
+// buildFakeKubeconfig returns a minimal, syntactically valid kubeconfig pointing at server.
+// clientcmd only needs to parse this, never dial it, so no real cert/token data is needed.
+func buildFakeKubeconfig(server string) []byte {
+	return []byte(fmt.Sprintf(`apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: %s
+    insecure-skip-tls-verify: true
+  name: test
+contexts:
+- context:
+    cluster: test
+    user: test
+  name: test
+current-context: test
+users:
+- name: test
+  user:
+    token: fake-token
+`, server))
+}
+
 const (
 	testKubeVersion124 = "1.24.0"
+	value              = "value"
 )
 
 var _ = Describe("ClassifierTransformations map functions", func() {
@@ -162,5 +188,56 @@ var _ = Describe("ClassifierTransformations map functions", func() {
 		requests := controllers.RequeueClassifierForClassifierReport(reconciler, context.TODO(), report)
 		Expect(requests).To(HaveLen(1))
 		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: classifierName}}))
+	})
+})
+
+var _ = Describe("requeueClassifierForSecret", func() {
+	It("evicts clustercache when a cluster's kubeconfig Secret changes, regardless of AccessRequest labels", func() {
+		// A kubeconfig Secret's content can change (endpoint, credentials) with no auth error
+		// and no cluster deletion - clustercache's other eviction paths never fire for that.
+		// requeueClassifierForSecret otherwise only reacts to AccessRequest-labeled Secrets, so
+		// this must not be gated on that label. See #1954.
+		clusterNamespace := randomString()
+		clusterName := randomString()
+		secretName := clusterName + "-kubeconfig"
+		secretKey := types.NamespacedName{Namespace: clusterNamespace, Name: secretName}
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterNamespace, Name: clusterName},
+		}
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterNamespace, Name: secretName},
+			Data: map[string][]byte{
+				value: buildFakeKubeconfig("https://10.0.0.1:6443"),
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, secret).Build()
+		logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+
+		cacheMgr := clustercache.GetManager()
+		config, err := cacheMgr.GetKubernetesRestConfig(context.TODO(), c, clusterNamespace, clusterName,
+			"", "", libsveltosv1beta1.ClusterTypeCapi, logger)
+		Expect(err).To(BeNil())
+		Expect(config.Host).To(Equal("https://10.0.0.1:6443"))
+
+		// Point the Secret at a different endpoint - no AccessRequest label, no deletion, no
+		// auth error.
+		Expect(c.Get(context.TODO(), secretKey, secret)).To(Succeed())
+		secret.Data[value] = buildFakeKubeconfig("https://10.0.0.2:6443")
+		Expect(c.Update(context.TODO(), secret)).To(Succeed())
+
+		reconciler := &controllers.ClassifierReconciler{
+			Client: c,
+			Scheme: scheme,
+			Mux:    sync.Mutex{},
+			Logger: logger,
+		}
+		controllers.RequeueClassifierForSecret(reconciler, context.TODO(), secret)
+
+		config, err = cacheMgr.GetKubernetesRestConfig(context.TODO(), c, clusterNamespace, clusterName,
+			"", "", libsveltosv1beta1.ClusterTypeCapi, logger)
+		Expect(err).To(BeNil())
+		Expect(config.Host).To(Equal("https://10.0.0.2:6443"))
 	})
 })

@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clustercache"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
@@ -96,6 +97,8 @@ func (r *SveltosClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func cleanClusterStaleResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) (ctrl.Result, error) {
+
+	clustercache.GetManager().RemoveCluster(clusterNamespace, clusterName, clusterType)
 
 	err := removeClusterClassifierReports(ctx, c, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {

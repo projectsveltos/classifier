@@ -76,6 +76,7 @@ var (
 	ProcessClassifier                      = (*ClassifierReconciler).processClassifier
 	RemoveClassifier                       = (*ClassifierReconciler).removeClassifier
 	RequeueClassifierForCluster            = (*ClassifierReconciler).requeueClassifierForCluster
+	RequeueClassifierForSecret             = (*ClassifierReconciler).requeueClassifierForSecret
 	RequeueClassifierForClassifierReport   = (*ClassifierReconciler).requeueClassifierForClassifierReport
 	UpdateMatchingClustersAndRegistrations = (*ClassifierReconciler).updateMatchingClustersAndRegistrations
 	UpdateLabelsOnMatchingClusters         = (*ClassifierReconciler).updateLabelsOnMatchingClusters
@@ -87,7 +88,8 @@ var (
 )
 
 var (
-	CreatFeatureHandlerMaps = creatFeatureHandlerMaps
+	CreatFeatureHandlerMaps    = creatFeatureHandlerMaps
+	CleanClusterStaleResources = cleanClusterStaleResources
 )
 
 const (
