@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clustercache"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -94,6 +95,19 @@ func (r *ClassifierReconciler) requeueClassifierForSecret(
 	)
 
 	logger.V(logs.LogDebug).Info("reacting to Secret change")
+
+	// A Secret change might be a managed cluster's kubeconfig being rotated/pointed at a new
+	// endpoint. clustercache has no other way to learn that (see #1954): evict whatever it may
+	// have cached under this Secret so the next read rebuilds from current content. This must
+	// run regardless of the AccessRequest-specific check below, which only gates whether any
+	// Classifier gets requeued, not whether the kubeconfig cache is still valid.
+	key := corev1.ObjectReference{
+		APIVersion: corev1.SchemeGroupVersion.String(),
+		Kind:       string(libsveltosv1beta1.SecretReferencedResourceKind),
+		Namespace:  secret.Namespace,
+		Name:       secret.Name,
+	}
+	clustercache.GetManager().RemoveSecret(&key)
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
