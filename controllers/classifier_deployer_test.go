@@ -44,6 +44,7 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	fakedeployer "github.com/projectsveltos/libsveltos/lib/deployer/fake"
+	"github.com/projectsveltos/libsveltos/lib/pullmode"
 	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
 
@@ -1223,6 +1224,101 @@ metadata:
 		Expect(patches[0].Target.Kind).To(Equal("Deployment"))
 		Expect(patches[0].Patch).ToNot(BeEmpty())
 		controllers.SetSveltosAgentConfigMap("")
+	})
+
+	It("isAgentHealthy returns true for a cluster not in pull mode", func() {
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster).
+			WithStatusSubresource(sveltosCluster).Build()
+
+		reconciler := &controllers.ClassifierReconciler{
+			Client: c,
+			Scheme: scheme,
+		}
+
+		clusterRef := &corev1.ObjectReference{
+			Namespace:  sveltosCluster.Namespace,
+			Name:       sveltosCluster.Name,
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
+		}
+
+		healthy, err := controllers.IsAgentHealthy(reconciler, context.TODO(), clusterRef, logger)
+		Expect(err).To(BeNil())
+		Expect(healthy).To(BeTrue())
+	})
+
+	It("isAgentHealthy returns false for a pull mode cluster whose agent heartbeat timed out", func() {
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+			Spec: libsveltosv1beta1.SveltosClusterSpec{
+				PullMode: true,
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster).
+			WithStatusSubresource(sveltosCluster).Build()
+
+		heartbeatTimeout := &pullmode.AgentHeartbeatTimeoutError{}
+		failureMessage := heartbeatTimeout.Error()
+		sveltosCluster.Status.FailureMessage = &failureMessage
+		Expect(c.Status().Update(context.TODO(), sveltosCluster)).To(Succeed())
+
+		reconciler := &controllers.ClassifierReconciler{
+			Client: c,
+			Scheme: scheme,
+		}
+
+		clusterRef := &corev1.ObjectReference{
+			Namespace:  sveltosCluster.Namespace,
+			Name:       sveltosCluster.Name,
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
+		}
+
+		healthy, err := controllers.IsAgentHealthy(reconciler, context.TODO(), clusterRef, logger)
+		Expect(err).To(BeNil())
+		Expect(healthy).To(BeFalse())
+	})
+
+	It("isAgentHealthy returns true for a pull mode cluster with a current heartbeat", func() {
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+			Spec: libsveltosv1beta1.SveltosClusterSpec{
+				PullMode: true,
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster).
+			WithStatusSubresource(sveltosCluster).Build()
+
+		reconciler := &controllers.ClassifierReconciler{
+			Client: c,
+			Scheme: scheme,
+		}
+
+		clusterRef := &corev1.ObjectReference{
+			Namespace:  sveltosCluster.Namespace,
+			Name:       sveltosCluster.Name,
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
+		}
+
+		healthy, err := controllers.IsAgentHealthy(reconciler, context.TODO(), clusterRef, logger)
+		Expect(err).To(BeNil())
+		Expect(healthy).To(BeTrue())
 	})
 })
 

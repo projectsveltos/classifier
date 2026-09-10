@@ -948,6 +948,49 @@ func (r *ClassifierReconciler) canProceed(ctx context.Context, classifierScope *
 	return true, nil
 }
 
+// isAgentHealthy returns true if the cluster is NOT in pull mode,
+// OR if it is in pull mode and the heartbeat is current.
+func (r *ClassifierReconciler) isAgentHealthy(ctx context.Context,
+	clusterRef *corev1.ObjectReference, logger logr.Logger) (bool, error) {
+
+	clusterType := clusterproxy.GetClusterType(clusterRef)
+	if clusterType != libsveltosv1beta1.ClusterTypeSveltos {
+		return true, nil
+	}
+
+	isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, r.Client, clusterRef.Namespace,
+		clusterRef.Name, clusterType, logger)
+	if err != nil {
+		msg := fmt.Sprintf("failed to verify if Cluster is in pull mode: %v", err)
+		logger.V(logs.LogDebug).Info(msg)
+		return false, err
+	}
+
+	if !isPullMode {
+		return true, nil
+	}
+
+	sveltosCluster := &libsveltosv1beta1.SveltosCluster{}
+	err = r.Get(ctx,
+		types.NamespacedName{
+			Namespace: clusterRef.Namespace,
+			Name:      clusterRef.Name,
+		}, sveltosCluster)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	// Check if the failure message indicates a heartbeat timeout
+	if pullmode.IsAgentTimeoutError(sveltosCluster) {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 // getCurrentHash gets current hash.
 // It considers Classifier and if mode is ClassifierReportMode == AgentSendReportsNoGateway also
 // the kubeconfig to access management cluster
@@ -1067,6 +1110,19 @@ func (r *ClassifierReconciler) processClassifier(ctx context.Context, classifier
 	} else if !proceed {
 		failureMessage := "cannot proceed deploying. Either cluster is paused or not ready."
 		clusterInfo.FailureMessage = &failureMessage
+		return clusterInfo, nil
+	}
+	isHealthy, err := r.isAgentHealthy(ctx, cluster, logger)
+	if err != nil {
+		failureMessage := err.Error()
+		clusterInfo.FailureMessage = &failureMessage
+		return clusterInfo, err
+	}
+	if !isHealthy {
+		failureMessage := "agent in managed cluster is not healthy."
+		logger.V(logs.LogInfo).Info(failureMessage)
+		clusterInfo.FailureMessage = &failureMessage
+		clusterInfo.Status = libsveltosv1beta1.SveltosStatusFailedNonRetriable
 		return clusterInfo, nil
 	}
 
