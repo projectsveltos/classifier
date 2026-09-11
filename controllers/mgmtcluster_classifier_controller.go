@@ -114,14 +114,14 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to build cluster sets")
 		_ = setMgmtClassifierFailureMessage(ctx, r.Client, mcc, err.Error())
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 	trackMgmtClusterMatchingClusters(mcc.Name, len(newClusters), logger)
 
 	km, err := keymanager.GetKeyManagerInstance(ctx, r.Client)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get keymanager")
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	fakeClassifier := mgmtClassifierAsClassifier(mcc)
@@ -129,7 +129,7 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 	// Remove labels from clusters that are no longer matched and delete their reports.
 	if err := r.removeStaleClusterLabels(ctx, fakeClassifier, mcc.Name, oldClusters, newClusters, logger); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to remove stale cluster labels")
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	conflictCount := 0
@@ -181,7 +181,7 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 	r.syncGVKWatches(mcc, logger)
 
 	if conflictCount > 0 {
-		return reconcile.Result{Requeue: true, RequeueAfter: conflictRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: conflictRequeueAfter}, nil
 	}
 
 	logger.V(logs.LogDebug).Info("Reconcile success")
@@ -197,13 +197,13 @@ func (r *ManagementClusterClassifierReconciler) reconcileDelete(
 	existingReports, err := listMgmtClassifierReports(ctx, r.Client, mcc.Name)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to list reports")
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	km, err := keymanager.GetKeyManagerInstance(ctx, r.Client)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get keymanager")
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	fakeClassifier := mgmtClassifierAsClassifier(mcc)
@@ -229,7 +229,7 @@ func (r *ManagementClusterClassifierReconciler) reconcileDelete(
 				keysToRemove, logger); err != nil {
 				logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to remove labels from cluster %s/%s",
 					report.Spec.ClusterNamespace, report.Spec.ClusterName))
-				return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+				return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 			}
 		}
 
@@ -237,7 +237,7 @@ func (r *ManagementClusterClassifierReconciler) reconcileDelete(
 
 		if err := r.Delete(ctx, report); err != nil && !apierrors.IsNotFound(err) {
 			logger.V(logs.LogInfo).Error(err, "failed to delete report")
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+			return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 		}
 	}
 
