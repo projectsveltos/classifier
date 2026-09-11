@@ -81,7 +81,7 @@ var _ = Describe("migrateOneClassifier", func() {
 		classifier := &libsveltosv1beta1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{Name: classifierName},
 			Status: libsveltosv1beta1.ClassifierStatus{
-				ClusterInfo: []libsveltosv1beta1.ClusterInfo{
+				ClusterInfo: []libsveltosv1beta1.ClusterInfo{ //nolint:staticcheck // deprecated, migration only
 					{
 						Cluster:        cluster,
 						Status:         status,
@@ -137,7 +137,7 @@ var _ = Describe("migrateOneClassifier", func() {
 		classifier := &libsveltosv1beta1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{Name: classifierName},
 			Status: libsveltosv1beta1.ClassifierStatus{
-				ClusterInfo: []libsveltosv1beta1.ClusterInfo{
+				ClusterInfo: []libsveltosv1beta1.ClusterInfo{ //nolint:staticcheck // deprecated, migration only
 					{
 						Cluster: cluster,
 						Status:  status,
@@ -182,7 +182,7 @@ var _ = Describe("migrateOneClassifier", func() {
 		classifier := &libsveltosv1beta1.Classifier{
 			ObjectMeta: metav1.ObjectMeta{Name: classifierName},
 			Status: libsveltosv1beta1.ClassifierStatus{
-				ClusterInfo: []libsveltosv1beta1.ClusterInfo{
+				ClusterInfo: []libsveltosv1beta1.ClusterInfo{ //nolint:staticcheck // deprecated, migration only
 					{
 						Cluster:        cluster,
 						Status:         status,

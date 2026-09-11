@@ -113,7 +113,7 @@ func cleanClusterStaleResources(ctx context.Context, c client.Client,
 	if err != nil {
 		logger.V(logs.LogInfo).Info(
 			fmt.Sprintf("failed to remove sveltos-agent resources from management cluster: %v", err))
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	return reconcile.Result{}, nil

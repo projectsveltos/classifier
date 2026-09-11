@@ -218,21 +218,21 @@ func (r *ClassifierReconciler) reconcileDelete(
 		err = r.undeployClassifier(ctx, classifierScope, f, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to undeploy")
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+			return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 		}
 	}
 
 	err = removeClassifierReports(ctx, r.Client, classifierScope.Classifier, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to remove classifierReports")
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	if r.ClassifierReportMode == CollectFromManagementCluster {
 		err = removeAccessRequest(ctx, r.Client, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to remove accessRequest")
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+			return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 		}
 	}
 
@@ -279,7 +279,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 	matchingClusters, err := r.syncAndGetMatchingClusters(ctx, classifierScope, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to get matching clusters")
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 	trackMatchingClusters(classifierScope.Classifier.Name, len(matchingClusters), logger)
 
@@ -288,14 +288,14 @@ func (r *ClassifierReconciler) reconcileNormal(
 	if err != nil {
 		// Use Error level because this indicates a failure to clean up resources
 		logger.V(logs.LogDebug).Error(err, "failed to clean up labels/registrations for non-matching clusters")
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	// For every currently matching cluster, update label ownership registrations
 	matchingStatuses, err := r.updateMatchingClustersAndRegistrations(ctx, classifierScope, matchingClusters, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to update status/registrations for matching clusters")
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 	trackLabelConflicts(classifierScope.Classifier.Name, countUnManagedLabelClusters(matchingStatuses), logger)
 
@@ -303,29 +303,29 @@ func (r *ClassifierReconciler) reconcileNormal(
 	err = r.updateLabelsOnMatchingClusters(ctx, classifierScope, matchingStatuses, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to apply labels to matching clusters")
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	err = r.ensureClassifierReports(ctx, classifierScope)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to ensure ClassifierReports")
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	if err := r.updateMaps(ctx, classifierScope); err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to update internal maps")
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	f := getHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
 
 	if err := r.deployClassifier(ctx, classifierScope, f, logger); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to deploy")
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	if hasUnManagedLabels(matchingStatuses) {
-		return reconcile.Result{Requeue: true, RequeueAfter: conflictRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: conflictRequeueAfter}, nil
 	}
 
 	logger.V(logs.LogDebug).Info("Reconcile success")
