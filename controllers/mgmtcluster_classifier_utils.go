@@ -97,7 +97,7 @@ func fetchResourcesForSelector(ctx context.Context, c client.Client,
 	for i := range list.Items {
 		u := &list.Items[i]
 
-		if !u.GetDeletionTimestamp().IsZero() {
+		if !rs.IncludeDeletingResources && !u.GetDeletionTimestamp().IsZero() {
 			continue
 		}
 		if rs.Name != "" && u.GetName() != rs.Name {
