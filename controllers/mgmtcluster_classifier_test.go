@@ -28,7 +28,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 
@@ -206,6 +208,37 @@ end
 			Expect(c.Name).To(Equal("mgmt:my-classifier"))
 			Expect(c.Spec.ClassifierLabels).To(HaveLen(1))
 			Expect(c.Spec.ClassifierLabels[0].Key).To(Equal(testLabelEnv))
+		})
+	})
+
+	Context("Reconcile", func() {
+		It("no-ops when ShardKey is set, leaving the ManagementClusterClassifier untouched", func() {
+			mcc := &libsveltosv1beta1.ManagementClusterClassifier{
+				ObjectMeta: metav1.ObjectMeta{Name: randomString()},
+				Spec: libsveltosv1beta1.ManagementClusterClassifierSpec{
+					ClassifierLabels: []libsveltosv1beta1.ClassifierLabel{
+						{Key: testLabelEnv, Value: testValueProd},
+					},
+				},
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(mgmtTestScheme()).
+				WithObjects(mcc).
+				Build()
+
+			reconciler := &controllers.ManagementClusterClassifierReconciler{
+				Client:   fakeClient,
+				ShardKey: "shard1",
+			}
+
+			_, err := reconciler.Reconcile(context.TODO(),
+				ctrl.Request{NamespacedName: types.NamespacedName{Name: mcc.Name}})
+			Expect(err).ToNot(HaveOccurred())
+
+			current := &libsveltosv1beta1.ManagementClusterClassifier{}
+			Expect(fakeClient.Get(context.TODO(), types.NamespacedName{Name: mcc.Name}, current)).To(Succeed())
+			Expect(controllerutil.ContainsFinalizer(current, libsveltosv1beta1.ManagementClusterClassifierFinalizer)).To(BeFalse())
 		})
 	})
 
