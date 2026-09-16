@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -90,6 +91,40 @@ var _ = Describe("ManagementClusterClassifier utils", func() {
 		It("returns true with no filters", func() {
 			u := buildUnstructuredConfigMap("cm", nil)
 			Expect(controllers.DoesMatchLabelFilters(u, nil)).To(BeTrue())
+		})
+	})
+
+	Context("fetchResourcesForSelector", func() {
+		It("excludes a deleting resource unless ResourceSelector.IncludeDeletingResources is set", func() {
+			deleting := buildUnstructuredConfigMap("deleting-cm", map[string]string{testLabelEnv: testValueProd})
+			deleting.SetFinalizers([]string{"projectsveltos.io/test-finalizer"})
+			now := metav1.Now()
+			deleting.SetDeletionTimestamp(&now)
+
+			live := buildUnstructuredConfigMap("live-cm", map[string]string{testLabelEnv: testValueProd})
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(mgmtTestScheme()).
+				WithObjects(deleting, live).
+				Build()
+
+			logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+
+			rs := &libsveltosv1beta1.ResourceSelector{
+				Group:   "",
+				Version: corev1.SchemeGroupVersion.Version,
+				Kind:    "ConfigMap",
+			}
+
+			resources, err := controllers.FetchResourcesForSelector(context.TODO(), fakeClient, rs, logger)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resources).To(HaveLen(1))
+			Expect(resources[0].GetName()).To(Equal(live.GetName()))
+
+			rs.IncludeDeletingResources = true
+			resources, err = controllers.FetchResourcesForSelector(context.TODO(), fakeClient, rs, logger)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resources).To(HaveLen(2))
 		})
 	})
 
