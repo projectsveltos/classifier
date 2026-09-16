@@ -48,7 +48,8 @@ import (
 // no deployment to managed clusters is needed.
 type ManagementClusterClassifierReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	ShardKey string // when set, only the default (unsharded) deployment reconciles
 	// Mux guards GVKToClassifiers and other in-memory state.
 	Mux sync.Mutex
 
@@ -75,6 +76,13 @@ type ManagementClusterClassifierReconciler struct {
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=managementclusterclassifierreports/status,verbs=get;update;patch
 
 func (r *ManagementClusterClassifierReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	if r.ShardKey != "" {
+		// Only the default classifier deployment reconciles ManagementClusterClassifiers.
+		// Unlike Classifier, this resource is evaluated entirely against the management
+		// cluster itself, so sharded deployments have no role to play for it.
+		return reconcile.Result{}, nil
+	}
+
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(logs.LogDebug).Info("Reconciling")
 

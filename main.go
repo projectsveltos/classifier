@@ -379,6 +379,7 @@ func getMgmtClassifierReconciler(mgr manager.Manager) *controllers.ManagementClu
 	return &controllers.ManagementClusterClassifierReconciler{
 		Client:           mgr.GetClient(),
 		Scheme:           mgr.GetScheme(),
+		ShardKey:         shardKey,
 		GVKToClassifiers: make(map[schema.GroupVersionKind]*libsveltosset.Set),
 		Logger:           ctrl.Log.WithName("managementclusterclassifierreconciler"),
 	}
