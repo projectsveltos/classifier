@@ -50,6 +50,7 @@ var (
 	DeployDebuggingConfigurationCRD                   = deployDebuggingConfigurationCRD
 	DeployClassifierInstance                          = deployClassifierInstance
 	DeploySveltosAgentInManagedCluster                = deploySveltosAgentInManagedCluster
+	PrepareSveltosApplierYAML                         = prepareSveltosApplierYAML
 	ClassifierHash                                    = classifierHash
 	DeployClassifierInCluster                         = deployClassifierInCluster
 	UndeployClassifierFromCluster                     = undeployClassifierFromCluster

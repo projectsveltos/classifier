@@ -1682,12 +1682,13 @@ func prepareSveltosAgentYAML(agentYAML, clusterNamespace, clusterName, mode stri
 }
 
 func prepareSveltosApplierYAML(agentYAML, clusterNamespace, clusterName string,
-	clusterType libsveltosv1beta1.ClusterType) string {
+	clusterType libsveltosv1beta1.ClusterType, watchNamespaces []string) string {
 
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-namespace=", fmt.Sprintf("cluster-namespace=%s", clusterNamespace))
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-name=", fmt.Sprintf("cluster-name=%s", clusterName))
 	agentYAML = strings.ReplaceAll(agentYAML, "cluster-type=", fmt.Sprintf("cluster-type=%s", clusterType))
 	agentYAML = strings.ReplaceAll(agentYAML, "secret-with-kubeconfig=", fmt.Sprintf("secret-with-kubeconfig=%s-sveltos-kubeconfig", clusterName))
+	agentYAML = strings.ReplaceAll(agentYAML, "watch-namespaces=", fmt.Sprintf("watch-namespaces=%s", strings.Join(watchNamespaces, ",")))
 
 	registry := getSveltosAgentRegistry()
 	if registry != "" {
@@ -1805,8 +1806,14 @@ func upgradeSveltosApplierInManagedCluster(ctx context.Context, clusterNamespace
 		return err
 	}
 
+	watchNamespaces, err := getAgentWatchNamespaces(ctx, getManagementClusterClient(),
+		clusterNamespace, clusterName, clusterType, logger)
+	if err != nil {
+		return err
+	}
+
 	agentYAML := string(agent.GetSveltosApplierAML())
-	agentYAML = prepareSveltosApplierYAML(agentYAML, clusterNamespace, clusterName, clusterType)
+	agentYAML = prepareSveltosApplierYAML(agentYAML, clusterNamespace, clusterName, clusterType, watchNamespaces)
 
 	return deploySveltosApplierResources(ctx, clusterNamespace, clusterName, classifierName,
 		agentYAML, patches, logger)

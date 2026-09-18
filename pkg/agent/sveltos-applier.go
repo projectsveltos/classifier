@@ -100,6 +100,7 @@ spec:
         - --cluster-name=
         - --cluster-type=
         - --secret-with-kubeconfig=
+        - --watch-namespaces=
         - --v=5
         - --version=main
         command:
@@ -117,7 +118,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/sveltos-applier@sha256:747f74958b935737a023e10871c7b97b81eb2c3c96cebeee5b3d679410de625d
+        image: docker.io/projectsveltos/sveltos-applier@sha256:6bea4f06b8d1d3fa988b018045727c715fce63d3d46b143e6b392aefc062e828
         livenessProbe:
           failureThreshold: 3
           httpGet:

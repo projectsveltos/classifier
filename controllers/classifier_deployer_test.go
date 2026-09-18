@@ -498,6 +498,34 @@ var _ = Describe("Classifier Deployer", func() {
 			ContainElement("--watch-namespaces=ns1,ns2"))
 	})
 
+	It("prepareSveltosApplierYAML relays watch-namespaces into the sveltos-applier manifest", func() {
+		agentYAML := `- --cluster-namespace=
+- --cluster-name=
+- --cluster-type=
+- --secret-with-kubeconfig=
+- --watch-namespaces=`
+
+		clusterNamespace := randomString()
+		clusterName := randomString()
+		watchNamespaces := []string{watchNamespaceNs1, watchNamespaceNs2}
+
+		result := controllers.PrepareSveltosApplierYAML(agentYAML, clusterNamespace, clusterName,
+			libsveltosv1beta1.ClusterTypeCapi, watchNamespaces)
+
+		Expect(result).To(ContainSubstring("--watch-namespaces=ns1,ns2"))
+		Expect(result).To(ContainSubstring(fmt.Sprintf("--cluster-namespace=%s", clusterNamespace)))
+		Expect(result).To(ContainSubstring(fmt.Sprintf("--cluster-name=%s", clusterName)))
+	})
+
+	It("prepareSveltosApplierYAML leaves watch-namespaces empty when no namespaces are configured", func() {
+		agentYAML := `- --watch-namespaces=`
+
+		result := controllers.PrepareSveltosApplierYAML(agentYAML, randomString(), randomString(),
+			libsveltosv1beta1.ClusterTypeCapi, nil)
+
+		Expect(result).To(Equal(agentYAML))
+	})
+
 	It("createAccessRequest creates AccessRequest instance", func() {
 		classifier := getClassifierInstance(randomString())
 
