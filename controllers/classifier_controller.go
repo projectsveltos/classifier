@@ -556,6 +556,7 @@ func (r *ClassifierReconciler) cleanUpManagedResources(ctx context.Context,
 	}
 
 	oldMatchingClusters := make(map[corev1.ObjectReference]bool)
+	oldManagedLabels := make(map[corev1.ObjectReference][]string)
 	for i := range reports {
 		report := &reports[i]
 		if report.Spec.ClusterNamespace == "" {
@@ -564,7 +565,18 @@ func (r *ClassifierReconciler) cleanUpManagedResources(ctx context.Context,
 		if len(report.Status.ManagedLabels) > 0 || len(report.Status.UnManagedLabels) > 0 {
 			cluster := getClusterRefFromClassifierReport(report)
 			oldMatchingClusters[*cluster] = true
+			oldManagedLabels[*cluster] = report.Status.ManagedLabels
 		}
+	}
+
+	// A key can be dropped from spec.classifierLabels while a cluster still matches. Remove it
+	// from that cluster now, while this Classifier still owns the key's registration: once
+	// registerMatchingClusters (called right after this, for every still-matching cluster) drops
+	// stale registrations, CanManageLabel would refuse the removal and the key would be stranded.
+	err = r.removeStaleLabelsFromMatchingClusters(ctx, classifierScope.Classifier,
+		matchingClusters, oldManagedLabels, logger)
+	if err != nil {
+		return fmt.Errorf("failed to remove stale labels from matching clusters: %w", err)
 	}
 
 	err = r.cleanUpNonMatchingClusters(ctx, classifierScope.Classifier,
@@ -574,6 +586,58 @@ func (r *ClassifierReconciler) cleanUpManagedResources(ctx context.Context,
 	}
 
 	return nil
+}
+
+// removeStaleLabelsFromMatchingClusters removes, from each still-matching cluster, any label key
+// this Classifier managed on a previous reconcile (per oldManagedLabels, sourced from
+// ClassifierReport.Status.ManagedLabels) that is no longer present in classifier.Spec.ClassifierLabels.
+// Without this, a key dropped from spec while a cluster keeps matching is never revisited: the next
+// steps in the reconcile only add/update keys currently in spec, and registerMatchingClusters drops
+// this Classifier's ownership of the dropped key, so no later pass could remove it either.
+func (r *ClassifierReconciler) removeStaleLabelsFromMatchingClusters(ctx context.Context,
+	classifier *libsveltosv1beta1.Classifier, matchingClusters map[corev1.ObjectReference]bool,
+	oldManagedLabels map[corev1.ObjectReference][]string, logger logr.Logger) error {
+
+	currentKeys := make(map[string]bool, len(classifier.Spec.ClassifierLabels))
+	for i := range classifier.Spec.ClassifierLabels {
+		currentKeys[classifier.Spec.ClassifierLabels[i].Key] = true
+	}
+
+	var errs []error
+	for c := range matchingClusters {
+		staleKeys := make([]string, 0)
+		for _, key := range oldManagedLabels[c] {
+			if !currentKeys[key] {
+				staleKeys = append(staleKeys, key)
+			}
+		}
+		if len(staleKeys) == 0 {
+			continue
+		}
+
+		clusterType := clusterproxy.GetClusterType(&c)
+		clusterLogger := logger.WithValues("cluster", fmt.Sprintf("%s/%s", c.Namespace, c.Name))
+
+		cluster, err := clusterproxy.GetCluster(ctx, r.Client, c.Namespace, c.Name, clusterType)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				continue // Cluster is gone; cleanUpNonMatchingClusters/next reconcile will handle it
+			}
+			wrappedErr := fmt.Errorf("failed to get cluster %s/%s to remove stale labels: %w", c.Namespace, c.Name, err)
+			clusterLogger.Error(wrappedErr, "lookup failed, skipping stale label removal")
+			errs = append(errs, wrappedErr)
+			continue
+		}
+
+		if err := r.removeLabelsFromCluster(ctx, classifier, cluster, clusterType, staleKeys, clusterLogger); err != nil {
+			wrappedErr := fmt.Errorf("failed to remove stale labels %v from cluster %s/%s: %w",
+				staleKeys, c.Namespace, c.Name, err)
+			clusterLogger.Error(wrappedErr, "stale label removal failed")
+			errs = append(errs, wrappedErr)
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 func (r *ClassifierReconciler) updateClassifierSet(classifierScope *scope.ClassifierScope, hasUnManaged bool) {
@@ -624,12 +688,11 @@ func (r *ClassifierReconciler) updateLabelsOnMatchingClusters(ctx context.Contex
 	return errors.Join(errs...)
 }
 
-// removeLabelsFromCluster removes all labels from the provided cluster that were
-// specifically managed by this Classifier instance. It uses the KeyManager
-// to ensure it only deletes labels it has permission to manage.
+// removeLabelsFromCluster removes, from the provided cluster, every key in keysToConsider that
+// this specific Classifier instance is authorized to manage (per the KeyManager).
 func (r *ClassifierReconciler) removeLabelsFromCluster(ctx context.Context,
 	classifier *libsveltosv1beta1.Classifier, cluster client.Object, clusterType libsveltosv1beta1.ClusterType,
-	logger logr.Logger) error {
+	keysToConsider []string, logger logr.Logger) error {
 
 	manager, err := keymanager.GetKeyManagerInstance(ctx, r.Client)
 	if err != nil {
@@ -643,15 +706,11 @@ func (r *ClassifierReconciler) removeLabelsFromCluster(ctx context.Context,
 	}
 
 	labelsChanged := false
-	for i := range classifier.Spec.ClassifierLabels {
-		label := classifier.Spec.ClassifierLabels[i]
-
+	for _, key := range keysToConsider {
 		// Only remove the label if this specific Classifier is authorized to manage it
-		if manager.CanManageLabel(classifier, cluster.GetNamespace(), cluster.GetName(), label.Key,
-			clusterType) {
-
-			if _, exists := labels[label.Key]; exists {
-				delete(labels, label.Key)
+		if manager.CanManageLabel(classifier, cluster.GetNamespace(), cluster.GetName(), key, clusterType) {
+			if _, exists := labels[key]; exists {
+				delete(labels, key)
 				labelsChanged = true
 			}
 		}
@@ -786,7 +845,7 @@ func (r *ClassifierReconciler) removeLabelsFromClusters(ctx context.Context,
 		clusterLogger.V(logs.LogDebug).Info("removing managed labels from cluster")
 
 		if err := r.removeLabelsFromCluster(ctx, classifierScope.Classifier, cluster,
-			clusterproxy.GetClusterType(ref), clusterLogger); err != nil {
+			clusterproxy.GetClusterType(ref), report.Status.ManagedLabels, clusterLogger); err != nil {
 			clusterLogger.Error(err, "failed to remove labels")
 			errs = append(errs, err)
 		}
@@ -887,8 +946,11 @@ func (r *ClassifierReconciler) cleanUpNonMatchingClusters(ctx context.Context,
 		}
 
 		// 2. Attempt to remove the managed labels
-		// Passing the classifier object as the owner to removeLabelsFromCluster
-		if err := r.removeLabelsFromCluster(ctx, classifier, cluster, clusterType, clusterLogger); err != nil {
+		keysToConsider := make([]string, len(classifier.Spec.ClassifierLabels))
+		for i := range classifier.Spec.ClassifierLabels {
+			keysToConsider[i] = classifier.Spec.ClassifierLabels[i].Key
+		}
+		if err := r.removeLabelsFromCluster(ctx, classifier, cluster, clusterType, keysToConsider, clusterLogger); err != nil {
 			wrappedErr := fmt.Errorf("failed to remove labels from cluster %s/%s: %w", c.Namespace, c.Name, err)
 			clusterLogger.Error(wrappedErr, "label removal failed, skipping registration removal")
 			errs = append(errs, wrappedErr)

@@ -264,6 +264,22 @@ func verifyClusterLabelsAreGone(classifier *libsveltosv1beta1.Classifier) {
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
+// verifyClusterLabelKeyIsGone verifies a single label key is absent from the cluster, regardless
+// of whether that key is still present in classifier.Spec.ClassifierLabels. Unlike
+// verifyClusterLabelsAreGone (which only checks keys currently in spec), this covers a key that
+// was already removed from spec.
+func verifyClusterLabelKeyIsGone(key string) {
+	Byf("Verifying label key %s is removed from cluster", key)
+	Eventually(func() bool {
+		currentCuster, err := getCluster()
+		if err != nil {
+			return false
+		}
+		_, ok := currentCuster.GetLabels()[key]
+		return !ok
+	}, timeout, pollingInterval).Should(BeTrue())
+}
+
 func removeLabels(classifier *libsveltosv1beta1.Classifier) {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentCluster, err := getCluster()
