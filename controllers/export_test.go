@@ -113,3 +113,7 @@ var (
 	ApplyLabelsToCluster       = applyLabelsToCluster
 	RemoveLabelsFromCluster    = removeLabelsFromCluster
 )
+
+var (
+	SortPatches = sortPatches
+)
