@@ -37,6 +37,11 @@ var _ = Describe("Classifier: update cluster labels", func() {
 	It("Cluster labels are updated", Label("FV", "PULLMODE"), func() {
 		verifyFlow(namePrefix)
 	})
+
+	It("A key removed from spec.classifierLabels is removed from a still-matching cluster",
+		Label("FV", "PULLMODE"), func() {
+			verifyDroppedLabelKeyFlow(namePrefix)
+		})
 })
 
 func verifyFlow(namePrefix string) {
@@ -128,4 +133,51 @@ func verifyFlow(namePrefix string) {
 	verifyClusterLabelsAreGone(classifier)
 
 	removeLabels(classifier)
+}
+
+// verifyDroppedLabelKeyFlow covers https://github.com/projectsveltos/classifier/issues/513:
+// a key removed from spec.classifierLabels, while the cluster keeps matching, must be removed
+// from the cluster right away, not left stranded with no owner.
+func verifyDroppedLabelKeyFlow(namePrefix string) {
+	keptKey, keptValue := randomString(), randomString()
+	droppedKey, droppedValue := randomString(), randomString()
+	clusterLabels := map[string]string{keptKey: keptValue, droppedKey: droppedValue}
+	classifier := getClassifier(namePrefix, clusterLabels)
+
+	Byf("Creating classifier instance %s in the management cluster", classifier.Name)
+	Expect(k8sClient.Create(context.TODO(), classifier)).To(Succeed())
+
+	verifyClassfierIsProvisioned(classifier)
+	verifyClassifierReport(classifier.Name, true)
+	verifyClusterLabels(classifier)
+	verifyClassifierReportManagedLabels(classifier)
+
+	Byf("Removing key %s from spec.classifierLabels, leaving the cluster still matching", droppedKey)
+	currentClassifier := &libsveltosv1beta1.Classifier{}
+	Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: classifier.Name},
+		currentClassifier)).To(Succeed())
+	currentClassifier.Spec.ClassifierLabels = []libsveltosv1beta1.ClassifierLabel{
+		{Key: keptKey, Value: keptValue},
+	}
+	Expect(k8sClient.Update(context.TODO(), currentClassifier)).To(Succeed())
+
+	Byf("Verifying cluster is still a match")
+	verifyClassifierReport(classifier.Name, true)
+
+	verifyClusterLabelKeyIsGone(droppedKey)
+	verifyClusterLabels(currentClassifier)
+	verifyClassifierReportManagedLabels(currentClassifier)
+
+	Byf("Deleting classifier instance %s in the management cluster", classifier.Name)
+	Expect(k8sClient.Delete(context.TODO(), currentClassifier)).To(Succeed())
+
+	Byf("Verifying Classifier instance is removed from the management cluster")
+	Eventually(func() bool {
+		instance := &libsveltosv1beta1.Classifier{}
+		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: classifier.Name}, instance)
+		return err != nil && apierrors.IsNotFound(err)
+	}, timeout, pollingInterval).Should(BeTrue())
+
+	verifyClusterLabelsAreGone(currentClassifier)
+	removeLabels(currentClassifier)
 }

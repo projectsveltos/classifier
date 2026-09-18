@@ -87,6 +87,8 @@ var (
 	RemoveAllRegistrations                 = (*ClassifierReconciler).removeAllRegistrations
 	ClassifyLabels                         = (*ClassifierReconciler).classifyLabels
 	CleanUpNonMatchingClusters             = (*ClassifierReconciler).cleanUpNonMatchingClusters
+	RemoveStaleLabelsFromMatchingClusters  = (*ClassifierReconciler).removeStaleLabelsFromMatchingClusters
+	CleanUpManagedResources                = (*ClassifierReconciler).cleanUpManagedResources
 )
 
 var (

@@ -610,6 +610,74 @@ var _ = Describe("Classifier: Reconciler", func() {
 		Expect(updatedReport.Status.ManagedLabels).To(BeEmpty())
 	})
 
+	It("removeStaleLabelsFromMatchingClusters removes a key dropped from spec.classifierLabels while the cluster still matches", func() {
+		keptKey := randomString()
+		keptValue := randomString()
+		droppedKey := randomString()
+		droppedValue := randomString()
+		clusterNamespace := randomString()
+		clusterName := randomString()
+
+		// Simulate that the key was already removed from spec.classifierLabels: only keptKey remains.
+		classifier.Spec.ClassifierLabels = []libsveltosv1beta1.ClassifierLabel{
+			{Key: keptKey, Value: keptValue},
+		}
+
+		cluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterNamespace,
+				Name:      clusterName,
+				Labels: map[string]string{
+					keptKey:    keptValue,
+					droppedKey: droppedValue,
+				},
+			},
+		}
+
+		initObjects := []client.Object{classifier, cluster}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		// Both keys were managed on a previous reconcile, before droppedKey left the spec.
+		manager, err := keymanager.GetKeyManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+		manager.RegisterClassifierForLabels(classifier, clusterNamespace, clusterName, libsveltosv1beta1.ClusterTypeSveltos)
+		classifier.Spec.ClassifierLabels = append(classifier.Spec.ClassifierLabels,
+			libsveltosv1beta1.ClassifierLabel{Key: droppedKey, Value: droppedValue})
+		manager.RegisterClassifierForLabels(classifier, clusterNamespace, clusterName, libsveltosv1beta1.ClusterTypeSveltos)
+		// Restore spec to reflect droppedKey no longer being declared.
+		classifier.Spec.ClassifierLabels = []libsveltosv1beta1.ClassifierLabel{
+			{Key: keptKey, Value: keptValue},
+		}
+
+		reconciler := &controllers.ClassifierReconciler{
+			Client:        c,
+			Scheme:        scheme,
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			Mux:           sync.Mutex{},
+			Logger:        logger,
+		}
+
+		clusterRef := corev1.ObjectReference{
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
+			Namespace:  clusterNamespace,
+			Name:       clusterName,
+		}
+		matchingClusters := map[corev1.ObjectReference]bool{clusterRef: true}
+		oldManagedLabels := map[corev1.ObjectReference][]string{clusterRef: {keptKey, droppedKey}}
+
+		err = controllers.RemoveStaleLabelsFromMatchingClusters(reconciler, context.TODO(), classifier,
+			matchingClusters, oldManagedLabels, logger)
+		Expect(err).ToNot(HaveOccurred())
+
+		currentCluster := &libsveltosv1beta1.SveltosCluster{}
+		Expect(c.Get(context.TODO(),
+			client.ObjectKey{Namespace: clusterNamespace, Name: clusterName}, currentCluster)).To(Succeed())
+		Expect(currentCluster.Labels).ToNot(HaveKey(droppedKey))
+		Expect(currentCluster.Labels).To(HaveKeyWithValue(keptKey, keptValue))
+	})
+
 	It("classifyLabels divides labels in managed and unmanaged", func() {
 		clusterNamespace := randomString()
 		clusterName := randomString()
