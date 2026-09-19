@@ -83,6 +83,9 @@ rules:
   - lib.projectsveltos.io
   resources:
   - classifierreports
+  - eventreports
+  - healthcheckreports
+  - reloaderreports
   verbs:
   - create
   - delete
@@ -90,6 +93,7 @@ rules:
   - list
   - patch
   - update
+  - watch
 - apiGroups:
   - lib.projectsveltos.io
   resources:
@@ -130,20 +134,6 @@ rules:
   verbs:
   - get
   - list
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - eventreports
-  - healthcheckreports
-  - reloaderreports
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - lib.projectsveltos.io
@@ -222,7 +212,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/sveltos-agent@sha256:aaaf3ab1e5798b005d959f5c614c14a1c630691f22d93df69ad6ad56186114a5
+        image: docker.io/projectsveltos/sveltos-agent@sha256:c3636950f22bcb668b28129554309ab602a166c6fab51441ef385cf0aa8034f2
         livenessProbe:
           failureThreshold: 3
           httpGet:
