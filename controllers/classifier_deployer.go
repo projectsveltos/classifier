@@ -1745,6 +1745,10 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 
 	// Deploy SveltosAgent
 	if isPullMode {
+		// Pull mode itself already requires a valid Sveltos license, so watchNamespaces is
+		// relayed unconditionally here: no separate FeatureNamespaceScopedAgents check, unlike
+		// agentless mode where sveltos-agent self-verifies against the management cluster's
+		// license Secret.
 		err = deploySveltosAgentInManagedCluster(ctx, nil, clusterNamespace,
 			clusterName, classifierName, "do-not-send-reports", clusterType, patches, true, watchNamespaces, logger)
 		if err != nil {
