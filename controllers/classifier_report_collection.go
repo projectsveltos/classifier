@@ -485,6 +485,10 @@ func processOneClassifierReport(ctx context.Context, c, clusterClient client.Cli
 		return
 	}
 
+	// AgentFailureMessage is set by sveltos-agent itself, in the managed cluster, when it cannot
+	// refresh cr.Spec.Match; carry it over so the management-cluster copy reflects it too.
+	mgmtClassifierReport.Status.AgentFailureMessage = cr.Status.AgentFailureMessage
+
 	if err := updateClassifierReportStatus(ctx, c, mgmtClassifierReport, logger); err != nil {
 		return
 	}

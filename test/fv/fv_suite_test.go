@@ -152,6 +152,12 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	return []byte{}
 }, func(data []byte) {
+	// SynchronizedBeforeSuite's first function above only runs on process #1; this second
+	// function runs on every parallel process, so it needs its own SetLogger call too,
+	// otherwise any other process's first client.New below warns "log.SetLogger(...) was
+	// never called".
+	ctrl.SetLogger(klog.Background())
+
 	restConfig := ctrl.GetConfigOrDie()
 	// To get rid of the annoying request.go log
 	restConfig.QPS = 100
