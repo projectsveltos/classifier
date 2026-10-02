@@ -191,7 +191,7 @@ spec:
         - --cluster-namespace=
         - --cluster-name=
         - --cluster-type=
-        - --version=main
+        - --version=v1.16.0
         - --current-cluster=managed-cluster
         - --run-mode=do-not-send-reports
         - --discard-managed-fields=true
@@ -212,7 +212,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/sveltos-agent@sha256:2966c5db152c186129b78d66eac943e820400216f3b830166d11f6208e3f5d2c
+        image: docker.io/projectsveltos/sveltos-agent@sha256:879d47e86797a36df50f984ca43b5d75a2da39bb8c36bc8f665d239ea9f29bfc
         livenessProbe:
           failureThreshold: 3
           httpGet:

@@ -102,7 +102,7 @@ spec:
         - --secret-with-kubeconfig=
         - --watch-namespaces=
         - --v=5
-        - --version=main
+        - --version=v1.16.0
         command:
         - /manager
         env:
@@ -118,7 +118,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/sveltos-applier@sha256:942a429b7d7ffbb5b598a26230454b29c9a8b3cf904fef1941594c0e26b04b09
+        image: docker.io/projectsveltos/sveltos-applier@sha256:184195269045fce39e9f4e55591280a849ee373c62672624ce694f87ac70ae87
         livenessProbe:
           failureThreshold: 3
           httpGet:
