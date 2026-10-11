@@ -28,6 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -321,12 +322,14 @@ var _ = Describe("Classifier: Reconciler", func() {
 		// cluster even though cluster is a match
 		manager.RegisterClassifierForLabels(classifier1, clusterNamespace, clusterName, libsveltosv1beta1.ClusterTypeCapi)
 
+		recorder := events.NewFakeRecorder(eventBufferSize)
 		reconciler := &controllers.ClassifierReconciler{
 			Client:        c,
 			Scheme:        scheme,
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Mux:           sync.Mutex{},
+			EventRecorder: recorder,
 			Logger:        logger,
 		}
 
@@ -358,6 +361,13 @@ var _ = Describe("Classifier: Reconciler", func() {
 			updatedReport)).To(Succeed())
 		Expect(updatedReport.Status.ManagedLabels).To(BeEmpty())
 		Expect(updatedReport.Status.UnManagedLabels).To(HaveLen(len(classifier.Spec.ClassifierLabels)))
+
+		// The conflict is also reported as an event, so it is visible without reading ClassifierReport.
+		var recorded string
+		Expect(recorder.Events).To(Receive(&recorded))
+		Expect(recorded).To(HavePrefix("Warning ClassifierLabelConflict cluster " + clusterNamespace + "/" + clusterName))
+		Expect(recorded).To(ContainSubstring("managed by another Classifier"))
+		Expect(recorded).To(ContainSubstring(classifier.Spec.ClassifierLabels[0].Key))
 	})
 
 	It("updateLabelsOnMatchingClusters updates CAPI Cluster labels", func() {

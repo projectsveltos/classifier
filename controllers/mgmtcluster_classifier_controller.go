@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,6 +40,7 @@ import (
 
 	"github.com/projectsveltos/classifier/controllers/keymanager"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/eventreasons"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
@@ -65,6 +67,9 @@ type ManagementClusterClassifierReconciler struct {
 	// watchedGVKs tracks which GVKs already have a watch registered.
 	watchedGVKs    map[schema.GroupVersionKind]bool
 	watchedGVKsMux sync.RWMutex
+
+	// EventRecorder is used to record events on ManagementClusterClassifier instances. No event is recorded when nil.
+	EventRecorder events.EventRecorder
 
 	Logger logr.Logger
 }
@@ -122,6 +127,7 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to build cluster sets")
 		_ = setMgmtClassifierFailureMessage(ctx, r.Client, mcc, err.Error())
+		r.recordReconcileFailure(mcc, "build cluster sets", err)
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 	trackMgmtClusterMatchingClusters(mcc.Name, len(newClusters), logger)
@@ -129,6 +135,7 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 	km, err := keymanager.GetKeyManagerInstance(ctx, r.Client)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get keymanager")
+		r.recordReconcileFailure(mcc, "get keymanager", err)
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
@@ -137,52 +144,21 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 	// Remove labels from clusters that are no longer matched and delete their reports.
 	if err := r.removeStaleClusterLabels(ctx, fakeClassifier, mcc.Name, oldClusters, newClusters, logger); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to remove stale cluster labels")
+		r.recordReconcileFailure(mcc, "remove stale cluster labels", err)
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
-	conflictCount := 0
-
-	// Apply labels to newly matched clusters.
-	for key, ref := range newClusters {
-		clusterType, err := clusterTypeFromKind(ref.Kind)
-		if err != nil {
-			continue
-		}
-
-		report, err := ensureMgmtClassifierReport(ctx, r.Client, mcc.Name, ref.Namespace, ref.Name, clusterType)
-		if err != nil {
-			logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to ensure report for cluster %s", key))
-			continue
-		}
-
-		km.RemoveStaleRegistrations(fakeClassifier, ref.Namespace, ref.Name, clusterType)
-		km.RegisterClassifierForLabels(fakeClassifier, ref.Namespace, ref.Name, clusterType)
-
-		managed, unmanaged := r.classifyMgmtLabels(fakeClassifier, ref.Namespace, ref.Name, clusterType,
-			mcc.Spec.ClassifierLabels, km)
-
-		if len(unmanaged) > 0 {
-			conflictCount++
-		}
-
-		if err := updateMgmtClassifierReportStatus(ctx, r.Client, report, managed, unmanaged); err != nil {
-			logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to update report status for cluster %s", key))
-		}
-
-		labelsToApply := r.filterManagedLabels(mcc.Spec.ClassifierLabels, managed)
-		if err := applyLabelsToCluster(ctx, r.Client, ref.Namespace, ref.Name, clusterType,
-			labelsToApply, logger); err != nil {
-			if !apierrors.IsNotFound(err) {
-				logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to apply labels to cluster %s", key))
-			}
-		}
-	}
+	conflictCount := r.applyLabelsToMatchingClusters(ctx, mcc, fakeClassifier, km, newClusters, logger)
 	trackMgmtClusterLabelConflicts(mcc.Name, conflictCount, logger)
 
 	// Update failure message: Lua errors plus any recorded conflicts.
 	failMsg := strings.Join(luaFailures, "; ")
 	if err := setMgmtClassifierFailureMessage(ctx, r.Client, mcc, failMsg); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to update failure message")
+	}
+	if failMsg != "" {
+		recordWarningf(r.EventRecorder, mcc, eventreasons.ClassifierFailed, eventreasons.ActionEvaluating,
+			"failed to evaluate matching resources: %s", failMsg)
 	}
 
 	// Sync GVK map and register dynamic watches for spec.matchResources.
@@ -194,6 +170,80 @@ func (r *ManagementClusterClassifierReconciler) reconcileNormal(
 
 	logger.V(logs.LogDebug).Info("Reconcile success")
 	return reconcile.Result{}, nil
+}
+
+// mgmtLabelKeyManager is the part of the label key manager used to register the labels of a
+// ManagementClusterClassifier on a cluster and to find out which of them it can manage.
+type mgmtLabelKeyManager interface {
+	RemoveStaleRegistrations(*libsveltosv1beta1.Classifier, string, string, libsveltosv1beta1.ClusterType)
+	RegisterClassifierForLabels(*libsveltosv1beta1.Classifier, string, string, libsveltosv1beta1.ClusterType)
+	CanManageLabel(*libsveltosv1beta1.Classifier, string, string, string, libsveltosv1beta1.ClusterType) bool
+	GetManagerForKey(string, string, string, libsveltosv1beta1.ClusterType) (string, error)
+}
+
+// applyLabelsToMatchingClusters registers the labels of the ManagementClusterClassifier on each matching
+// cluster, updates the report of the cluster and applies the labels the classifier can manage.
+// It returns the number of clusters where at least one label is already managed by another classifier.
+func (r *ManagementClusterClassifierReconciler) applyLabelsToMatchingClusters(
+	ctx context.Context, mcc *libsveltosv1beta1.ManagementClusterClassifier,
+	fakeClassifier *libsveltosv1beta1.Classifier, km mgmtLabelKeyManager,
+	newClusters map[string]clusterRef, logger logr.Logger,
+) int {
+
+	conflictCount := 0
+
+	for key, ref := range newClusters {
+		clusterType, err := clusterTypeFromKind(ref.Kind)
+		if err != nil {
+			continue
+		}
+
+		report, err := ensureMgmtClassifierReport(ctx, r.Client, mcc.Name, ref.Namespace, ref.Name, clusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to ensure report for cluster %s", key))
+			r.recordReconcileFailure(mcc, fmt.Sprintf("ensure report for cluster %s", key), err)
+			continue
+		}
+
+		km.RemoveStaleRegistrations(fakeClassifier, ref.Namespace, ref.Name, clusterType)
+		km.RegisterClassifierForLabels(fakeClassifier, ref.Namespace, ref.Name, clusterType)
+
+		managed, unmanaged := r.classifyMgmtLabels(fakeClassifier, ref.Namespace, ref.Name, clusterType,
+			mcc.Spec.ClassifierLabels, km)
+
+		if len(unmanaged) > 0 {
+			conflictCount++
+			recordWarningf(r.EventRecorder, mcc, eventreasons.ClassifierLabelConflict, eventreasons.ActionReconciling,
+				"cluster %s/%s: label keys %s are managed by another Classifier",
+				ref.Namespace, ref.Name, unmanagedLabelKeys(unmanaged))
+		}
+
+		if err := updateMgmtClassifierReportStatus(ctx, r.Client, report, managed, unmanaged); err != nil {
+			logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to update report status for cluster %s", key))
+			r.recordReconcileFailure(mcc, fmt.Sprintf("update report status for cluster %s", key), err)
+		}
+
+		labelsToApply := r.filterManagedLabels(mcc.Spec.ClassifierLabels, managed)
+		if err := applyLabelsToCluster(ctx, r.Client, ref.Namespace, ref.Name, clusterType,
+			labelsToApply, logger); err != nil {
+			if !apierrors.IsNotFound(err) {
+				logger.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to apply labels to cluster %s", key))
+				r.recordReconcileFailure(mcc, fmt.Sprintf("apply labels to cluster %s", key), err)
+			}
+		}
+	}
+
+	return conflictCount
+}
+
+// recordReconcileFailure records a Warning event on the ManagementClusterClassifier for a reconcile step
+// that failed. Those errors are only logged and the reconciler retries, so without the event the
+// failure is not visible to the user.
+func (r *ManagementClusterClassifierReconciler) recordReconcileFailure(mcc *libsveltosv1beta1.ManagementClusterClassifier,
+	step string, err error) {
+
+	recordWarningf(r.EventRecorder, mcc, eventreasons.ClassifierFailed, eventreasons.ActionReconciling,
+		"failed to %s: %v", step, err)
 }
 
 func (r *ManagementClusterClassifierReconciler) reconcileDelete(

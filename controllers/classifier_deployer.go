@@ -52,6 +52,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
+	"github.com/projectsveltos/libsveltos/lib/eventreasons"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
@@ -188,6 +189,7 @@ func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierS
 				errorSeen = updateErr
 			} else {
 				trackClassifierOutcome(classifierScope.Classifier.Name, cluster, clusterInfo, l)
+				r.recordDeploymentFailure(classifierScope.Classifier, cluster, clusterInfo)
 			}
 			if clusterInfo.Status != libsveltosv1beta1.SveltosStatusProvisioned {
 				allProcessed = false
@@ -202,6 +204,30 @@ func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierS
 		return fmt.Errorf("request to deploy Classifier is still queued in one ore more clusters")
 	}
 	return nil
+}
+
+// recordDeploymentFailure records a Warning event on the Classifier when the deployment in a cluster
+// failed. Only terminal failures are recorded: a deployment that is still in progress, or a cluster
+// that is paused or not ready yet, is an expected state and not something the user must act on.
+func (r *ClassifierReconciler) recordDeploymentFailure(classifier *libsveltosv1beta1.Classifier,
+	cluster *corev1.ObjectReference, clusterInfo *libsveltosv1beta1.ClusterInfo) {
+
+	if clusterInfo.FailureMessage == nil || *clusterInfo.FailureMessage == "" {
+		return
+	}
+
+	switch clusterInfo.Status {
+	case libsveltosv1beta1.SveltosStatusFailed:
+		recordWarningf(r.EventRecorder, classifier, eventreasons.ClassifierFailed, eventreasons.ActionDeploying,
+			"cluster %s/%s: %s", cluster.Namespace, cluster.Name, *clusterInfo.FailureMessage)
+	case libsveltosv1beta1.SveltosStatusFailedNonRetriable:
+		// The only non retriable failure is the agent of a cluster in pull mode not reporting. That is a
+		// problem of the cluster, not of this Classifier: it is not reported here, once per Classifier, but
+		// once per cluster by sveltoscluster-manager.
+	case libsveltosv1beta1.SveltosStatusProvisioning, libsveltosv1beta1.SveltosStatusProvisioned,
+		libsveltosv1beta1.SveltosStatusRemoving, libsveltosv1beta1.SveltosStatusRemoved:
+		// Not a failure: nothing to report
+	}
 }
 
 func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifierScope *scope.ClassifierScope,
