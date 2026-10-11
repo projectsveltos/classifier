@@ -89,6 +89,13 @@ var (
 	CleanUpNonMatchingClusters             = (*ClassifierReconciler).cleanUpNonMatchingClusters
 	RemoveStaleLabelsFromMatchingClusters  = (*ClassifierReconciler).removeStaleLabelsFromMatchingClusters
 	CleanUpManagedResources                = (*ClassifierReconciler).cleanUpManagedResources
+	RecordDeploymentFailure                = (*ClassifierReconciler).recordDeploymentFailure
+	RecordReconcileFailure                 = (*ClassifierReconciler).recordReconcileFailure
+)
+
+var (
+	RecordWarningf     = recordWarningf
+	UnmanagedLabelKeys = unmanagedLabelKeys
 )
 
 var (

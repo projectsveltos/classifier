@@ -381,6 +381,7 @@ func getMgmtClassifierReconciler(mgr manager.Manager) *controllers.ManagementClu
 		Scheme:           mgr.GetScheme(),
 		ShardKey:         shardKey,
 		GVKToClassifiers: make(map[schema.GroupVersionKind]*libsveltosset.Set),
+		EventRecorder:    mgr.GetEventRecorder("event-recorder"),
 		Logger:           ctrl.Log.WithName("managementclusterclassifierreconciler"),
 	}
 }
@@ -398,6 +399,7 @@ func getClassifierReconciler(mgr manager.Manager) *controllers.ClassifierReconci
 		ClassifierReportMode:  reportMode,
 		ControlPlaneEndpoint:  managementClusterControlPlaneEndpoint,
 		Mux:                   sync.Mutex{},
+		EventRecorder:         mgr.GetEventRecorder("event-recorder"),
 		Logger:                ctrl.Log.WithName("classifierreconiler"),
 	}
 }

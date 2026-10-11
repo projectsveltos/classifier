@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -42,6 +43,7 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
+	"github.com/projectsveltos/libsveltos/lib/eventreasons"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	predicates "github.com/projectsveltos/libsveltos/lib/predicates"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
@@ -115,6 +117,9 @@ type ClassifierReconciler struct {
 	// List of current existing Classifiers
 	AllClassifierSet libsveltosset.Set
 
+	// EventRecorder is used to record events on Classifier instances. No event is recorded when nil.
+	EventRecorder events.EventRecorder
+
 	Logger logr.Logger
 }
 
@@ -133,6 +138,7 @@ type ClassifierReconciler struct {
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;delete
 //+kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch
+//+kubebuilder:rbac:groups="events.k8s.io",resources=events,verbs=create;update;patch
 
 func (r *ClassifierReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	if r.ShardKey != "" {
@@ -279,6 +285,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 	matchingClusters, err := r.syncAndGetMatchingClusters(ctx, classifierScope, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to get matching clusters")
+		r.recordReconcileFailure(classifierScope.Classifier, "get matching clusters", err)
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 	trackMatchingClusters(classifierScope.Classifier.Name, len(matchingClusters), logger)
@@ -288,6 +295,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 	if err != nil {
 		// Use Error level because this indicates a failure to clean up resources
 		logger.V(logs.LogDebug).Error(err, "failed to clean up labels/registrations for non-matching clusters")
+		r.recordReconcileFailure(classifierScope.Classifier, "clean up labels and registrations for clusters no longer matching", err)
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
@@ -295,6 +303,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 	matchingStatuses, err := r.updateMatchingClustersAndRegistrations(ctx, classifierScope, matchingClusters, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to update status/registrations for matching clusters")
+		r.recordReconcileFailure(classifierScope.Classifier, "update status and registrations for matching clusters", err)
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 	trackLabelConflicts(classifierScope.Classifier.Name, countUnManagedLabelClusters(matchingStatuses), logger)
@@ -303,23 +312,28 @@ func (r *ClassifierReconciler) reconcileNormal(
 	err = r.updateLabelsOnMatchingClusters(ctx, classifierScope, matchingStatuses, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to apply labels to matching clusters")
+		r.recordReconcileFailure(classifierScope.Classifier, "apply labels to matching clusters", err)
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	err = r.ensureClassifierReports(ctx, classifierScope)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to ensure ClassifierReports")
+		r.recordReconcileFailure(classifierScope.Classifier, "ensure ClassifierReports", err)
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	if err := r.updateMaps(ctx, classifierScope); err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to update internal maps")
+		r.recordReconcileFailure(classifierScope.Classifier, "update internal maps", err)
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	f := getHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
 
 	if err := r.deployClassifier(ctx, classifierScope, f, logger); err != nil {
+		// No event here: the error is also returned while the deployment is still in progress.
+		// Terminal failures are recorded per cluster, in deployClassifier.
 		logger.V(logs.LogInfo).Error(err, "failed to deploy")
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
@@ -330,6 +344,14 @@ func (r *ClassifierReconciler) reconcileNormal(
 
 	logger.V(logs.LogDebug).Info("Reconcile success")
 	return reconcile.Result{}, nil
+}
+
+// recordReconcileFailure records a Warning event on the Classifier for a reconcile step that failed.
+// Those errors are only logged at debug level and the reconciler retries, so without the event
+// the failure is not visible to the user.
+func (r *ClassifierReconciler) recordReconcileFailure(classifier *libsveltosv1beta1.Classifier, step string, err error) {
+	recordWarningf(r.EventRecorder, classifier, eventreasons.ClassifierFailed, eventreasons.ActionReconciling,
+		"failed to %s: %v", step, err)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -525,6 +547,9 @@ func (r *ClassifierReconciler) updateMatchingClustersAndRegistrations(ctx contex
 
 		if len(unmanaged) > 0 {
 			hasUnmanaged = true
+			recordWarningf(r.EventRecorder, classifierScope.Classifier, eventreasons.ClassifierLabelConflict,
+				eventreasons.ActionReconciling, "cluster %s/%s: label keys %s are managed by another Classifier",
+				c.Namespace, c.Name, unmanagedLabelKeys(unmanaged))
 		}
 
 		if err := updateClassifierReportLabelStatus(ctx, r.Client, classifierScope.Classifier.Name,
