@@ -30,7 +30,7 @@ Classifier currently supports the following classification criteria:
 1. Kubernetes version
 2. Kubernetes resources
 
-For instance, this Classifier instance will match any cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.27.1"
+For instance, this Classifier instance will match any cluster whose Kubernetes version is greater than or equal to "v1.24.0" and strictly less than "v1.27.3"
 
 ```
 apiVersion: lib.projectsveltos.io/v1beta1
@@ -45,7 +45,7 @@ spec:
   - comparison: GreaterThanOrEqualTo
     version: 1.24.0
   - comparison: LessThan
-    version: 1.27.1
+    version: 1.27.3
 ```
 
 When a cluster is a match for a Classifier instances, all classifierLabels will be automatically added to the Cluster instance.
@@ -59,8 +59,8 @@ Refer to [examples](./examples/) for more complex examples.
 ## A simple use case: upgrade helm charts automatically when Kubernetes cluster is upgraded
 Suppose you are managing several Kubernetes clusters with different versions.
 And you want to deploy:
-1. OPA Gatekeeper version 3.10.0 in any Kubernetes cluster whose version is >= v1.27.1
-2. OPA Gatekeeper version 3.9.0 in any Kubernetes cluster whose version is >= v1.24.0 && < v1.27.1
+1. OPA Gatekeeper version 3.10.0 in any Kubernetes cluster whose version is >= v1.27.3
+2. OPA Gatekeeper version 3.9.0 in any Kubernetes cluster whose version is >= v1.24.0 && < v1.27.3
 
 You can create following ClusterProfiles and Classifiers in the management cluster:
 ```
@@ -116,7 +116,7 @@ spec:
     value: v3-10
   kubernetesVersionConstraints:
   - comparison: GreaterThanOrEqualTo
-    version: 1.27.1
+    version: 1.27.3
 ```
 
 ```
@@ -132,7 +132,7 @@ spec:
   - comparison: GreaterThanOrEqualTo
     version: 1.24.0
   - comparison: LessThan
-    version: 1.27.1
+    version: 1.27.3
 ```
 
 With the above configuration:
