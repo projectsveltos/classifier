@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -333,6 +334,71 @@ var _ = Describe("Classifier Deployer", func() {
 				*currentClassifierReport.Status.Phase == libsveltosv1beta1.ReportProcessed
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
+
+	It("processClassifierReportsForClusterInAgentlessMode skips a cluster in pull mode without an agent version ConfigMap",
+		func() {
+			// The agent of a cluster in pull mode runs in the managed cluster: no agent version ConfigMap
+			// is created in the management cluster for it, so that check must not be done. sveltos-applier
+			// copies the ClassifierReports to the management cluster, and they are marked Processed when the
+			// Classifier is reconciled (updateClassifierReportLabelStatus), not by collection.
+			sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: randomString(),
+					Name:      randomString(),
+				},
+				Spec: libsveltosv1beta1.SveltosClusterSpec{
+					PullMode: true,
+				},
+			}
+
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: sveltosCluster.Namespace}}
+			Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+			Expect(testEnv.Create(context.TODO(), sveltosCluster)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, sveltosCluster)).To(Succeed())
+
+			sveltosCluster.Status.Ready = true
+			Expect(testEnv.Status().Update(context.TODO(), sveltosCluster)).To(Succeed())
+
+			classifierName := randomString()
+			clusterType := libsveltosv1beta1.ClusterTypeSveltos
+			classifierReport := &libsveltosv1beta1.ClassifierReport{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: sveltosCluster.Namespace,
+					Name:      libsveltosv1beta1.GetClassifierReportName(classifierName, sveltosCluster.Name, &clusterType),
+					Labels:    libsveltosv1beta1.GetClassifierReportLabels(classifierName, sveltosCluster.Name, &clusterType),
+				},
+				Spec: libsveltosv1beta1.ClassifierReportSpec{
+					ClusterNamespace: sveltosCluster.Namespace,
+					ClusterName:      sveltosCluster.Name,
+					ClassifierName:   classifierName,
+					ClusterType:      clusterType,
+					Match:            true,
+				},
+			}
+			Expect(testEnv.Create(context.TODO(), classifierReport)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, classifierReport)).To(Succeed())
+
+			sveltosClusterRef := &corev1.ObjectReference{
+				Namespace:  sveltosCluster.Namespace,
+				Name:       sveltosCluster.Name,
+				Kind:       libsveltosv1beta1.SveltosClusterKind,
+				APIVersion: libsveltosv1beta1.GroupVersion.String(),
+			}
+
+			Expect(controllers.ProcessClassifierReportsForClusterInAgentlessMode(context.TODO(), testEnv.Client,
+				sveltosClusterRef, []*libsveltosv1beta1.ClassifierReport{classifierReport}, version, logger)).To(Succeed())
+
+			// testEnv.Client is cached: Consistently, not a single Get, so a Phase set by processing
+			// cannot be missed because the cache has not caught up yet.
+			Consistently(func() bool {
+				current := &libsveltosv1beta1.ClassifierReport{}
+				err := testEnv.Get(context.TODO(),
+					types.NamespacedName{Namespace: classifierReport.Namespace, Name: classifierReport.Name}, current)
+				return err == nil && current.Status.Phase == nil
+			}, 10*time.Second, time.Second).Should(BeTrue())
+		})
 })
 
 func validateClassifierReports(classifierName string, cluster *clusterv1.Cluster, clusterType *libsveltosv1beta1.ClusterType) {
