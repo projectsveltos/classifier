@@ -248,6 +248,14 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 		if report.Spec.ClusterNamespace == "" {
 			continue
 		}
+		// Skip clusters whose removal has already completed. The result of a removal is consumed when read, so
+		// the ClassifierReport is what remembers the removal is done: without it, a cluster done in an earlier
+		// pass would be removed again, and the removal would never complete in all the clusters at once.
+		if report.Status.DeploymentStatus != nil &&
+			*report.Status.DeploymentStatus == libsveltosv1beta1.SveltosStatusRemoved {
+
+			continue
+		}
 		c := getClusterRefFromClassifierReport(report)
 
 		r.Deployer.CleanupEntries(c.Namespace, c.Name, classifier.Name, f.id, clusterproxy.GetClusterType(c), false)
@@ -272,7 +280,7 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 	var failedCount int
 	for i := range clusters {
 		c := clusters[i]
-		err := r.removeClassifier(ctx, classifierScope, c, f, logger)
+		removed, err := r.removeClassifier(ctx, classifierScope, c, f, logger)
 		if err != nil {
 			failureMessage := err.Error()
 			if updateErr := updateClassifierReportDeploymentStatus(ctx, r.Client, classifier.Name, c,
@@ -284,6 +292,18 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 				logger.V(logs.LogInfo).Error(updateErr, "failed to update ClassifierReport undeploy status")
 			}
 			failedCount++
+			continue
+		}
+
+		if removed {
+			if updateErr := updateClassifierReportDeploymentStatus(ctx, r.Client, classifier.Name, c,
+				&libsveltosv1beta1.ClusterInfo{
+					Cluster: *c,
+					Status:  libsveltosv1beta1.SveltosStatusRemoved,
+				}); updateErr != nil {
+				logger.V(logs.LogInfo).Error(updateErr, "failed to record Classifier removal in ClassifierReport")
+				failedCount++
+			}
 		}
 	}
 
@@ -931,20 +951,22 @@ func (r *ClassifierReconciler) isPaused(ctx context.Context, cluster *corev1.Obj
 	return annotations.HasPaused(classifier), nil
 }
 
-// removeClassifier removes Classifier instance from cluster
+// removeClassifier removes Classifier instance from cluster.
+// It returns true when the instance has been removed. It returns false with no error when there is nothing
+// to wait for but nothing was removed either (the cluster is paused).
 func (r *ClassifierReconciler) removeClassifier(ctx context.Context, classifierScope *scope.ClassifierScope,
 	cluster *corev1.ObjectReference, f feature, logger logr.Logger,
-) error {
+) (bool, error) {
 
 	classifier := classifierScope.Classifier
 
 	paused, err := r.isPaused(ctx, cluster, classifierScope.Classifier)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if paused {
 		logger.V(logs.LogDebug).Info("cluster is paused. Do nothing.")
-		return nil
+		return false, nil
 	}
 
 	// If deploying feature is in progress, wait for it to complete.
@@ -952,7 +974,7 @@ func (r *ClassifierReconciler) removeClassifier(ctx context.Context, classifierS
 	// parallel some resources might end stale.
 	if r.Deployer.IsInProgress(cluster.Namespace, cluster.Name, classifier.Name, f.id, clusterproxy.GetClusterType(cluster), false) {
 		logger.V(logs.LogDebug).Info("deploy is in progress")
-		return fmt.Errorf("deploy of %s in cluster still in progress. Wait before redeploying", f.id)
+		return false, fmt.Errorf("deploy of %s in cluster still in progress. Wait before redeploying", f.id)
 	}
 
 	result := r.Deployer.GetResult(ctx, cluster.Namespace, cluster.Name, classifier.Name, f.id, clusterproxy.GetClusterType(cluster), true)
@@ -960,10 +982,10 @@ func (r *ClassifierReconciler) removeClassifier(ctx context.Context, classifierS
 
 	if status != nil {
 		if *status == libsveltosv1beta1.SveltosStatusProvisioning {
-			return fmt.Errorf("feature is still being removed")
+			return false, fmt.Errorf("feature is still being removed")
 		}
 		if *status == libsveltosv1beta1.SveltosStatusRemoved {
-			return nil
+			return true, nil
 		}
 	} else {
 		logger.V(logs.LogDebug).Info("no result is available")
@@ -972,10 +994,10 @@ func (r *ClassifierReconciler) removeClassifier(ctx context.Context, classifierS
 	logger.V(logs.LogDebug).Info("queueing request to un-deploy")
 	if err := r.Deployer.Deploy(ctx, cluster.Namespace, cluster.Name, classifier.Name, f.id, clusterproxy.GetClusterType(cluster),
 		true, undeployClassifierFromCluster, programDuration, deployer.Options{}); err != nil {
-		return err
+		return false, err
 	}
 
-	return fmt.Errorf("cleanup request is queued")
+	return false, fmt.Errorf("cleanup request is queued")
 }
 
 // canProceed returns true if cluster is ready to be programmed and it is not paused.
