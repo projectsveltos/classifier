@@ -397,8 +397,9 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
 
 		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
-		err := controllers.RemoveClassifier(classifierReconciler, context.TODO(), classifierScope,
+		removed, err := controllers.RemoveClassifier(classifierReconciler, context.TODO(), classifierScope,
 			getClusterRef(cluster), f, logger)
+		Expect(removed).To(BeFalse())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("cleanup request is queued"))
 
@@ -519,6 +520,74 @@ var _ = Describe("Classifier Deployer", func() {
 		key := deployer.GetKey(cluster.Namespace, cluster.Name,
 			classifier.Name, libsveltosv1beta1.FeatureClassifier, libsveltosv1beta1.ClusterTypeCapi, true)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
+	})
+
+	It("undeployClassifier does not queue a job for a cluster whose ClassifierReport says the Classifier was removed", func() {
+		dep := fakedeployer.GetClient(context.TODO(), logger, testEnv.Client)
+		Expect(dep.RegisterFeatureID(libsveltosv1beta1.FeatureClassifier)).To(Succeed())
+		classifierReconciler := getClassifierReconciler(testEnv.Client, dep)
+
+		classifier := createClassifier(getClassifierInstance(randomString()))
+		cluster := prepareCluster()
+		removed := libsveltosv1beta1.SveltosStatusRemoved
+		report := createClassifierReport(classifier, cluster, &removed)
+
+		classifierScope := getClassifierScope(testEnv.Client, logger, classifier)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
+		Expect(controllers.UndeployClassifier(classifierReconciler, context.TODO(), classifierScope, f, logger)).To(Succeed())
+
+		key := deployer.GetKey(cluster.Namespace, cluster.Name,
+			classifier.Name, libsveltosv1beta1.FeatureClassifier, libsveltosv1beta1.ClusterTypeCapi, true)
+		Expect(dep.IsKeyInProgress(key)).To(BeFalse())
+
+		// The report is left alone: removeClassifierReports deletes it once all the clusters are done
+		currentReport := &libsveltosv1beta1.ClassifierReport{}
+		Expect(testEnv.Get(context.TODO(), client.ObjectKeyFromObject(report), currentReport)).To(Succeed())
+	})
+
+	It("undeployClassifier records in the ClassifierReport the Classifier was removed from the cluster", func() {
+		dep := &removedDeployer{DeployerInterface: fakedeployer.GetClient(context.TODO(), logger, testEnv.Client)}
+		classifierReconciler := getClassifierReconciler(testEnv.Client, dep)
+
+		classifier := createClassifier(getClassifierInstance(randomString()))
+		cluster := prepareCluster()
+		report := createClassifierReport(classifier, cluster, nil)
+
+		classifierScope := getClassifierScope(testEnv.Client, logger, classifier)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
+		Expect(controllers.UndeployClassifier(classifierReconciler, context.TODO(), classifierScope, f, logger)).To(Succeed())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() bool {
+			currentReport := &libsveltosv1beta1.ClassifierReport{}
+			err := testEnv.Get(context.TODO(), client.ObjectKeyFromObject(report), currentReport)
+			if err != nil {
+				return false
+			}
+			return currentReport.Status.DeploymentStatus != nil &&
+				*currentReport.Status.DeploymentStatus == libsveltosv1beta1.SveltosStatusRemoved
+		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("undeployClassifier does not record the Classifier as removed from a paused cluster", func() {
+		dep := &removedDeployer{DeployerInterface: fakedeployer.GetClient(context.TODO(), logger, testEnv.Client)}
+		classifierReconciler := getClassifierReconciler(testEnv.Client, dep)
+
+		classifier := getClassifierInstance(randomString())
+		classifier.Annotations = map[string]string{clusterv1.PausedAnnotation: ""}
+		classifier = createClassifier(classifier)
+		cluster := prepareCluster()
+		report := createClassifierReport(classifier, cluster, nil)
+
+		classifierScope := getClassifierScope(testEnv.Client, logger, classifier)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
+		Expect(controllers.UndeployClassifier(classifierReconciler, context.TODO(), classifierScope, f, logger)).To(Succeed())
+
+		Consistently(func() bool {
+			currentReport := &libsveltosv1beta1.ClassifierReport{}
+			Expect(testEnv.Get(context.TODO(), client.ObjectKeyFromObject(report), currentReport)).To(Succeed())
+			return currentReport.Status.DeploymentStatus == nil
+		}, 3*time.Second, time.Second).Should(BeTrue())
 	})
 
 	It("deploySveltosAgent deploys sveltos agent", func() {
@@ -1541,4 +1610,63 @@ func removeFinalizersAndDeleteClassifier(name string) {
 	classifier.Finalizers = nil
 	Expect(testEnv.Update(context.TODO(), classifier)).To(Succeed())
 	Expect(client.IgnoreNotFound(testEnv.Delete(context.TODO(), classifier))).To(Succeed())
+}
+
+// removedDeployer is a fake deployer which reports every cleanup request as completed
+type removedDeployer struct {
+	deployer.DeployerInterface
+}
+
+func (d *removedDeployer) GetResult(_ context.Context, _, _, _, _ string, _ libsveltosv1beta1.ClusterType,
+	_ bool) deployer.Result {
+
+	return deployer.Result{ResultStatus: deployer.Removed}
+}
+
+// createClassifier creates the Classifier and returns it as the controller reads it
+func createClassifier(classifier *libsveltosv1beta1.Classifier) *libsveltosv1beta1.Classifier {
+	Expect(testEnv.Create(context.TODO(), classifier)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
+
+	currentClassifier := &libsveltosv1beta1.Classifier{}
+	Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: classifier.Name}, currentClassifier)).To(Succeed())
+	return currentClassifier
+}
+
+// createClassifierReport creates the ClassifierReport of the Classifier for the cluster, with the deployment
+// status given, and waits for it to be in the cache
+func createClassifierReport(classifier *libsveltosv1beta1.Classifier, cluster *clusterv1.Cluster,
+	deploymentStatus *libsveltosv1beta1.SveltosFeatureStatus) *libsveltosv1beta1.ClassifierReport {
+
+	clusterType := libsveltosv1beta1.ClusterTypeCapi
+	report := &libsveltosv1beta1.ClassifierReport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: cluster.Namespace,
+			Name:      libsveltosv1beta1.GetClassifierReportName(classifier.Name, cluster.Name, &clusterType),
+			Labels:    libsveltosv1beta1.GetClassifierReportLabels(classifier.Name, cluster.Name, &clusterType),
+		},
+		Spec: libsveltosv1beta1.ClassifierReportSpec{
+			ClusterNamespace: cluster.Namespace,
+			ClusterName:      cluster.Name,
+			ClusterType:      clusterType,
+			ClassifierName:   classifier.Name,
+		},
+	}
+	Expect(testEnv.Create(context.TODO(), report)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, report)).To(Succeed())
+
+	if deploymentStatus != nil {
+		Expect(testEnv.Get(context.TODO(), client.ObjectKeyFromObject(report), report)).To(Succeed())
+		report.Status.DeploymentStatus = deploymentStatus
+		Expect(testEnv.Status().Update(context.TODO(), report)).To(Succeed())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() bool {
+			currentReport := &libsveltosv1beta1.ClassifierReport{}
+			err := testEnv.Get(context.TODO(), client.ObjectKeyFromObject(report), currentReport)
+			return err == nil && currentReport.Status.DeploymentStatus != nil
+		}, timeout, pollingInterval).Should(BeTrue())
+	}
+
+	return report
 }
