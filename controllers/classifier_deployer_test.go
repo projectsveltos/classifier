@@ -590,6 +590,43 @@ var _ = Describe("Classifier Deployer", func() {
 		}, 3*time.Second, time.Second).Should(BeTrue())
 	})
 
+	It("undeployClassifier does not queue a job for a push mode cluster when sveltos-agent runs in the management cluster",
+		func() {
+			sveltosCluster, classifier, c := prepareAgentlessUndeploy(false)
+			dep := fakedeployer.GetClient(context.TODO(), logger, c)
+			Expect(dep.RegisterFeatureID(libsveltosv1beta1.FeatureClassifier)).To(Succeed())
+			classifierReconciler := getClassifierReconciler(c, dep)
+			classifierReconciler.AgentInMgmtCluster = true
+
+			classifierScope := getClassifierScope(c, logger, classifier)
+			f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
+			Expect(controllers.UndeployClassifier(classifierReconciler, context.TODO(), classifierScope, f,
+				logger)).To(Succeed())
+
+			key := deployer.GetKey(sveltosCluster.Namespace, sveltosCluster.Name,
+				classifier.Name, libsveltosv1beta1.FeatureClassifier, libsveltosv1beta1.ClusterTypeSveltos, true)
+			Expect(dep.IsKeyInProgress(key)).To(BeFalse())
+		})
+
+	It("undeployClassifier queues a job for a pull mode cluster when sveltos-agent runs in the management cluster",
+		func() {
+			sveltosCluster, classifier, c := prepareAgentlessUndeploy(true)
+			dep := fakedeployer.GetClient(context.TODO(), logger, c)
+			Expect(dep.RegisterFeatureID(libsveltosv1beta1.FeatureClassifier)).To(Succeed())
+			classifierReconciler := getClassifierReconciler(c, dep)
+			classifierReconciler.AgentInMgmtCluster = true
+
+			classifierScope := getClassifierScope(c, logger, classifier)
+			f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
+			err := controllers.UndeployClassifier(classifierReconciler, context.TODO(), classifierScope, f, logger)
+			Expect(err).ToNot(BeNil())
+			Expect(err.Error()).To(Equal("still in the process of removing Classifier from 1 clusters"))
+
+			key := deployer.GetKey(sveltosCluster.Namespace, sveltosCluster.Name,
+				classifier.Name, libsveltosv1beta1.FeatureClassifier, libsveltosv1beta1.ClusterTypeSveltos, true)
+			Expect(dep.IsKeyInProgress(key)).To(BeTrue())
+		})
+
 	It("deploySveltosAgent deploys sveltos agent", func() {
 		watchNamespaces := []string{watchNamespaceNs1, watchNamespaceNs2}
 		Expect(controllers.DeploySveltosAgentInManagedCluster(ctx, testEnv.Config, randomString(), randomString(),
@@ -1669,4 +1706,42 @@ func createClassifierReport(classifier *libsveltosv1beta1.Classifier, cluster *c
 	}
 
 	return report
+}
+
+// prepareAgentlessUndeploy returns a SveltosCluster (in pull mode if pullMode is true), a Classifier and a fake client
+// containing both, plus the ClassifierReport tying the Classifier to the cluster.
+func prepareAgentlessUndeploy(pullMode bool) (*libsveltosv1beta1.SveltosCluster, *libsveltosv1beta1.Classifier,
+	client.Client) {
+
+	sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: randomString(),
+			Name:      randomString(),
+		},
+		Spec: libsveltosv1beta1.SveltosClusterSpec{
+			PullMode: pullMode,
+		},
+	}
+
+	classifier := getClassifierInstance(randomString())
+
+	clusterType := libsveltosv1beta1.ClusterTypeSveltos
+	report := &libsveltosv1beta1.ClassifierReport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: sveltosCluster.Namespace,
+			Name:      libsveltosv1beta1.GetClassifierReportName(classifier.Name, sveltosCluster.Name, &clusterType),
+			Labels:    libsveltosv1beta1.GetClassifierReportLabels(classifier.Name, sveltosCluster.Name, &clusterType),
+		},
+		Spec: libsveltosv1beta1.ClassifierReportSpec{
+			ClusterNamespace: sveltosCluster.Namespace,
+			ClusterName:      sveltosCluster.Name,
+			ClusterType:      clusterType,
+			ClassifierName:   classifier.Name,
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster, classifier, report).
+		WithStatusSubresource(sveltosCluster, classifier, report).Build()
+
+	return sveltosCluster, classifier, c
 }
