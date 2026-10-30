@@ -274,6 +274,15 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 			logger.V(logs.LogInfo).Error(err, "failed to get cluster")
 			return err
 		}
+
+		hasInstance, err := r.hasClassifierInstance(ctx, c, logger)
+		if err != nil {
+			return err
+		}
+		if !hasInstance {
+			logger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s/%s has no Classifier instance", c.Namespace, c.Name))
+			continue
+		}
 		clusters = append(clusters, c)
 	}
 
@@ -312,6 +321,19 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 	}
 
 	return nil
+}
+
+// hasClassifierInstance returns true if a Classifier instance is deployed to the cluster. When sveltos-agent runs in
+// the management cluster, instances are deployed only to clusters in pull mode.
+func (r *ClassifierReconciler) hasClassifierInstance(ctx context.Context, cluster *corev1.ObjectReference,
+	logger logr.Logger) (bool, error) {
+
+	if !r.AgentInMgmtCluster {
+		return true, nil
+	}
+
+	return clusterproxy.IsClusterInPullMode(ctx, r.Client, cluster.Namespace, cluster.Name,
+		clusterproxy.GetClusterType(cluster), logger)
 }
 
 // classifierHash returns the Classifier hash
