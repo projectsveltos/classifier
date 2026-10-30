@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -38,6 +39,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/projectsveltos/classifier/controllers"
 	"github.com/projectsveltos/classifier/controllers/keymanager"
@@ -405,12 +407,14 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 	})
 
-	It("undeployClassifierFromCluster removes Classifier from Cluster", func() {
+	It("undeployClassifierFromCluster does not remove the Classifier when the cluster is the management cluster", func() {
 		dep := fakedeployer.GetClient(context.TODO(), logger, testEnv.Client)
 		Expect(dep.RegisterFeatureID(libsveltosv1beta1.FeatureClassifier)).To(Succeed())
 
 		classifier := getClassifierInstance(randomString())
+		classifier.Finalizers = []string{libsveltosv1beta1.ClassifierFinalizer}
 
+		// prepareCluster registers testEnv, the cluster the Classifier is created in, as the managed cluster
 		cluster := prepareCluster()
 		Expect(testEnv.Create(context.TODO(), classifier)).To(Succeed())
 
@@ -421,13 +425,51 @@ var _ = Describe("Classifier Deployer", func() {
 			deployer.Options{}, logger)
 		Expect(err).To(BeNil())
 
-		// Eventual loop so testEnv Cache is synced
+		verifyClassifierIsUntouched(classifier.Name)
+		removeFinalizersAndDeleteClassifier(classifier.Name)
+	})
+
+	It("removeClassifierInstance leaves the Classifier alone when the instance is the Classifier itself", func() {
+		classifier := getClassifierInstance(randomString())
+		classifier.Finalizers = []string{libsveltosv1beta1.ClassifierFinalizer}
+		Expect(testEnv.Create(context.TODO(), classifier)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
+
+		// Management cluster and managed cluster are the same cluster, so the instance is the Classifier
+		Expect(controllers.RemoveClassifierInstance(context.TODO(), testEnv, testEnv, classifier, logger)).To(Succeed())
+
+		verifyClassifierIsUntouched(classifier.Name)
+		removeFinalizersAndDeleteClassifier(classifier.Name)
+	})
+
+	It("removeClassifierInstance removes the legacy finalizer and deletes the instance of a managed cluster", func() {
+		const agentFinalizer = "sveltos-agent.projectsveltos.io/classifier"
+
+		instance := getClassifierInstance(randomString())
+		instance.Finalizers = []string{libsveltosv1beta1.ClassifierFinalizer, agentFinalizer}
+		Expect(testEnv.Create(context.TODO(), instance)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, instance)).To(Succeed())
+
+		// The Classifier in the management cluster is a different object from the instance in the managed cluster
+		classifier := getClassifierInstance(instance.Name)
+		classifier.UID = types.UID(randomString())
+		managementClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(classifier).Build()
+
+		Expect(controllers.RemoveClassifierInstance(context.TODO(), managementClient, testEnv, instance, logger)).To(Succeed())
+
+		// The finalizer of sveltos-agent is still there, so the instance is terminating
 		Eventually(func() bool {
-			currentClassifier := &libsveltosv1beta1.Classifier{}
-			err = testEnv.Get(context.TODO(), types.NamespacedName{Name: classifier.Name},
-				currentClassifier)
-			return err != nil && apierrors.IsNotFound(err)
+			currentInstance := &libsveltosv1beta1.Classifier{}
+			err := testEnv.Get(context.TODO(), types.NamespacedName{Name: instance.Name}, currentInstance)
+			if err != nil {
+				return false
+			}
+			return !currentInstance.DeletionTimestamp.IsZero() &&
+				!controllerutil.ContainsFinalizer(currentInstance, libsveltosv1beta1.ClassifierFinalizer) &&
+				controllerutil.ContainsFinalizer(currentInstance, agentFinalizer)
 		}, timeout, pollingInterval).Should(BeTrue())
+
+		removeFinalizersAndDeleteClassifier(instance.Name)
 	})
 
 	It("undeployClassifier queues a job to remove classifier from cluster", func() {
@@ -1477,4 +1519,26 @@ func verifyPatches(patches []libsveltosv1beta1.Patch) {
 		}
 	}
 	Expect(found).To(BeTrue())
+}
+
+// verifyClassifierIsUntouched verifies the Classifier is not marked for deletion and still has its finalizer
+func verifyClassifierIsUntouched(name string) {
+	Consistently(func() bool {
+		classifier := &libsveltosv1beta1.Classifier{}
+		err := testEnv.Get(context.TODO(), types.NamespacedName{Name: name}, classifier)
+		if err != nil {
+			return false
+		}
+		return classifier.DeletionTimestamp.IsZero() &&
+			controllerutil.ContainsFinalizer(classifier, libsveltosv1beta1.ClassifierFinalizer)
+	}, 3*time.Second, time.Second).Should(BeTrue())
+}
+
+// removeFinalizersAndDeleteClassifier removes all finalizers and deletes the Classifier, so it does not outlive the test
+func removeFinalizersAndDeleteClassifier(name string) {
+	classifier := &libsveltosv1beta1.Classifier{}
+	Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: name}, classifier)).To(Succeed())
+	classifier.Finalizers = nil
+	Expect(testEnv.Update(context.TODO(), classifier)).To(Succeed())
+	Expect(client.IgnoreNotFound(testEnv.Delete(context.TODO(), classifier))).To(Succeed())
 }

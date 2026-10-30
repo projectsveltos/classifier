@@ -54,6 +54,7 @@ var (
 	ClassifierHash                                    = classifierHash
 	DeployClassifierInCluster                         = deployClassifierInCluster
 	UndeployClassifierFromCluster                     = undeployClassifierFromCluster
+	RemoveClassifierInstance                          = removeClassifierInstance
 	RemoveClassifierReports                           = removeClassifierReports
 	RemoveClusterClassifierReports                    = removeClusterClassifierReports
 	PruneClassifierReportsForDeletedClusters          = pruneClassifierReportsForDeletedClusters

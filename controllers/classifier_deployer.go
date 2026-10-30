@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
 
 	"github.com/projectsveltos/classifier/controllers/keymanager"
@@ -781,8 +782,40 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
+	return removeClassifierInstance(ctx, c, remoteClient, currentClassifier, logger)
+}
+
+// removeClassifierInstance deletes the Classifier instance found in a managed cluster.
+//
+// When the cluster is the management cluster itself (registered as a managed cluster), the instance
+// found is the Classifier being reconciled, not a copy. It must be left alone: removing its
+// finalizer or deleting it from here would bypass the cleanup of all the other clusters.
+func removeClassifierInstance(ctx context.Context, managementClient, remoteClient client.Client,
+	instance *libsveltosv1beta1.Classifier, logger logr.Logger) error {
+
+	classifier := &libsveltosv1beta1.Classifier{}
+	err := managementClient.Get(ctx, types.NamespacedName{Name: instance.Name}, classifier)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err == nil && classifier.UID == instance.UID {
+		logger.V(logs.LogDebug).Info("classifier instance is the classifier itself. Nothing to remove")
+		return nil
+	}
+
+	// Instances deployed by older versions of sveltos-agent carry the finalizer owned by classifier-manager.
+	// sveltos-agent now uses its own finalizer and ignores this one, which would block the removal of the instance.
+	if controllerutil.ContainsFinalizer(instance, libsveltosv1beta1.ClassifierFinalizer) {
+		logger.V(logs.LogDebug).Info("remove legacy finalizer from classifier instance")
+		patch := client.MergeFromWithOptions(instance.DeepCopy(), client.MergeFromWithOptimisticLock{})
+		controllerutil.RemoveFinalizer(instance, libsveltosv1beta1.ClassifierFinalizer)
+		if err := remoteClient.Patch(ctx, instance, patch); err != nil {
+			return err
+		}
+	}
+
 	logger.V(logs.LogDebug).Info("remove classifier instance")
-	return remoteClient.Delete(ctx, currentClassifier)
+	return remoteClient.Delete(ctx, instance)
 }
 
 func undeployClassifierInPullMode(ctx context.Context, c client.Client,
