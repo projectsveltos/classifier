@@ -335,6 +335,74 @@ var _ = Describe("Classifier Deployer", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
+	It("processClassifierReportsForClusterInAgentlessMode does not revert Spec.Match written after the report was listed",
+		func() {
+			cluster := prepareCluster()
+			clusterType := libsveltosv1beta1.ClusterTypeCapi
+
+			classifierName := randomString()
+			classifierReport := &libsveltosv1beta1.ClassifierReport{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: cluster.Namespace,
+					Name:      libsveltosv1beta1.GetClassifierReportName(classifierName, cluster.Name, &clusterType),
+					Labels:    libsveltosv1beta1.GetClassifierReportLabels(classifierName, cluster.Name, &clusterType),
+				},
+				Spec: libsveltosv1beta1.ClassifierReportSpec{
+					ClusterNamespace: cluster.Namespace,
+					ClusterName:      cluster.Name,
+					ClassifierName:   classifierName,
+					ClusterType:      clusterType,
+					Match:            false,
+				},
+			}
+			Expect(testEnv.Create(context.TODO(), classifierReport)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, classifierReport)).To(Succeed())
+
+			agentVersionConfigMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: cluster.Namespace,
+					Name:      fmt.Sprintf("sa-%s-%s", strings.ToLower(string(clusterType)), cluster.Name),
+				},
+				Data: map[string]string{
+					classifierLabelVersion: version,
+				},
+			}
+			Expect(testEnv.Create(context.TODO(), agentVersionConfigMap)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, agentVersionConfigMap)).To(Succeed())
+
+			// The copy listed by the collection still has Match false
+			listedReport := classifierReport.DeepCopy()
+
+			// sveltos-agent finds the cluster is a match after the report was listed
+			currentReport := &libsveltosv1beta1.ClassifierReport{}
+			Expect(testEnv.Get(context.TODO(), client.ObjectKeyFromObject(classifierReport), currentReport)).To(Succeed())
+			currentReport.Spec.Match = true
+			Expect(testEnv.Update(context.TODO(), currentReport)).To(Succeed())
+
+			// Eventual loop so testEnv Cache is synced and processing reads the Match just written
+			Eventually(func() bool {
+				r := &libsveltosv1beta1.ClassifierReport{}
+				err := testEnv.Get(context.TODO(), client.ObjectKeyFromObject(classifierReport), r)
+				return err == nil && r.Spec.Match
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			Expect(controllers.ProcessClassifierReportsForClusterInAgentlessMode(context.TODO(), testEnv.Client,
+				getClusterRef(cluster), []*libsveltosv1beta1.ClassifierReport{listedReport}, version, logger)).To(Succeed())
+
+			// Eventual loop so testEnv Cache is synced
+			Eventually(func() bool {
+				r := &libsveltosv1beta1.ClassifierReport{}
+				err := testEnv.Get(context.TODO(), client.ObjectKeyFromObject(classifierReport), r)
+				return err == nil && r.Status.Phase != nil && *r.Status.Phase == libsveltosv1beta1.ReportProcessed
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			Consistently(func() bool {
+				r := &libsveltosv1beta1.ClassifierReport{}
+				err := testEnv.Get(context.TODO(), client.ObjectKeyFromObject(classifierReport), r)
+				return err == nil && r.Spec.Match
+			}, 3*time.Second, time.Second).Should(BeTrue())
+		})
+
 	It("processClassifierReportsForClusterInAgentlessMode skips a cluster in pull mode without an agent version ConfigMap",
 		func() {
 			// The agent of a cluster in pull mode runs in the managed cluster: no agent version ConfigMap

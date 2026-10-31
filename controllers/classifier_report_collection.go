@@ -337,19 +337,35 @@ func processClassifierReportsForClusterInAgentlessMode(ctx context.Context, c cl
 			continue
 		}
 		l := logger.WithValues("classifierReport", cr.Name)
-		mgmtClassifierReport, err := updateClassifierReport(ctx, c, ref, cr, l)
-		if err != nil {
-			l.V(logs.LogInfo).Error(err, "failed to update ClassifierReport in management cluster")
-			retErr = err
-			continue
-		}
-
-		if err := updateClassifierReportStatus(ctx, c, mgmtClassifierReport, l); err != nil {
+		if err := markClassifierReportProcessed(ctx, c, cr, l); err != nil {
 			retErr = err
 		}
 	}
 
 	return retErr
+}
+
+// markClassifierReportProcessed marks as Processed a ClassifierReport written directly in the management cluster
+// by sveltos-agent.
+//
+// Unlike in a managed cluster, there is no copy to refresh: the listed ClassifierReport and the one in the management
+// cluster are the same object. Spec must not be copied over it, because the listed one can be older than what
+// sveltos-agent wrote since it was listed. Copying it would revert Spec.Match, and nothing would evaluate the
+// Classifier again to set it back.
+func markClassifierReportProcessed(ctx context.Context, c client.Client,
+	listedReport *libsveltosv1beta1.ClassifierReport, logger logr.Logger) error {
+
+	currentReport := &libsveltosv1beta1.ClassifierReport{}
+	err := c.Get(ctx, client.ObjectKeyFromObject(listedReport), currentReport)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		logger.V(logs.LogInfo).Error(err, "failed to get ClassifierReport")
+		return err
+	}
+
+	return updateClassifierReportStatus(ctx, c, currentReport, logger)
 }
 
 func skipCollecting(ctx context.Context, c client.Client, cluster *corev1.ObjectReference,
