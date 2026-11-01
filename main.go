@@ -38,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -53,6 +54,7 @@ import (
 
 	"github.com/projectsveltos/classifier/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -73,6 +75,8 @@ var (
 	managementClusterControlPlaneEndpoint string
 	restConfigQPS                         float32
 	restConfigBurst                       int
+	managedClusterQPS                     float32
+	managedClusterBurst                   int
 	webhookPort                           int
 	syncPeriod                            time.Duration
 	version                               string
@@ -113,9 +117,8 @@ func main() {
 
 	ctrlOptions := getCtrlOptions(scheme)
 
-	restConfig := ctrl.GetConfigOrDie()
-	restConfig.QPS = restConfigQPS
-	restConfig.Burst = restConfigBurst
+	restConfig := getRestConfig()
+	clusterproxy.SetRestConfigLimits(managedClusterQPS, managedClusterBurst)
 
 	mgr, err := ctrl.NewManager(restConfig, ctrlOptions)
 	if err != nil {
@@ -229,15 +232,25 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&enableNatsWatcher, "enable-nats-watcher", false,
 		"Enable NATS.io configuration watcher on sveltos-agents to listen for cloud events. Disabled by default.")
 
-	const defautlRestConfigQPS = 20
+	const defautlRestConfigQPS = 40
 	fs.Float32Var(&restConfigQPS, "kube-api-qps", defautlRestConfigQPS,
-		fmt.Sprintf("Maximum queries per second from the controller client to the Kubernetes API server. Defaults to %d",
-			defautlRestConfigQPS))
+		fmt.Sprintf("Maximum queries per second from the controller client to the management cluster Kubernetes API server. "+
+			"Defaults to %d", defautlRestConfigQPS))
 
-	const defaultRestConfigBurst = 30
+	const defaultRestConfigBurst = 120
 	fs.IntVar(&restConfigBurst, "kube-api-burst", defaultRestConfigBurst,
-		fmt.Sprintf("Maximum number of queries that should be allowed in one burst from the controller client to the Kubernetes API server. Default %d",
-			defaultRestConfigBurst))
+		fmt.Sprintf("Maximum number of queries that should be allowed in one burst from the controller client to the "+
+			"management cluster Kubernetes API server. Default %d", defaultRestConfigBurst))
+
+	const defaultManagedClusterRestConfigQPS = 20
+	fs.Float32Var(&managedClusterQPS, "managed-cluster-kube-api-qps", defaultManagedClusterRestConfigQPS,
+		fmt.Sprintf("Maximum queries per second from the controller client to the Kubernetes API server of each managed cluster. "+
+			"Defaults to %d", defaultManagedClusterRestConfigQPS))
+
+	const defaultManagedClusterRestConfigBurst = 60
+	fs.IntVar(&managedClusterBurst, "managed-cluster-kube-api-burst", defaultManagedClusterRestConfigBurst,
+		fmt.Sprintf("Maximum number of queries that should be allowed in one burst from the controller client to the "+
+			"Kubernetes API server of each managed cluster. Default %d", defaultManagedClusterRestConfigBurst))
 
 	const defaultWebhookPort = 9443
 	fs.IntVar(&webhookPort, "webhook-port", defaultWebhookPort,
@@ -423,6 +436,14 @@ func getDiagnosticsOptions() metricsserver.Options {
 		SecureServing:  true,
 		FilterProvider: filters.WithAuthenticationAndAuthorization,
 	}
+}
+
+// getRestConfig returns the rest.Config for the management cluster, with the configured QPS and burst.
+func getRestConfig() *rest.Config {
+	restConfig := ctrl.GetConfigOrDie()
+	restConfig.QPS = restConfigQPS
+	restConfig.Burst = restConfigBurst
+	return restConfig
 }
 
 func getCtrlOptions(scheme *runtime.Scheme) ctrl.Options {
