@@ -1,0 +1,18 @@
+# Global patch for sveltos-agent used by create-cluster-agentless-grouping: runs the image
+# supporting groups (GROUPING_AGENT_IMAGE). Rendered with envsubst.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sveltos-agent-patches
+  namespace: projectsveltos
+data:
+  image: |
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: ${GROUPING_AGENT_IMAGE}
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment

@@ -69,6 +69,7 @@ var (
 	concurrentReconciles                  int
 	workers                               int
 	agentInMgmtCluster                    bool
+	agentClustersPerInstance              int
 	reportMode                            controllers.ReportMode
 	shardKey                              string
 	tmpReportMode                         int
@@ -191,6 +192,12 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&agentInMgmtCluster, "agent-in-mgmt-cluster", false,
 		"When set, indicates drift-detection-manager needs to be started in the management cluster")
 
+	fs.IntVar(&agentClustersPerInstance, "agent-clusters-per-instance", 1,
+		"Agentless mode only (requires --agent-in-mgmt-cluster). How many clusters one sveltos-agent serves. "+
+			"1 (the default) starts one sveltos-agent per cluster. A higher value groups clusters of the same "+
+			"namespace, and requires a Sveltos Enterprise license granting AgentGrouping "+
+			"(enforced by sveltos-agent).")
+
 	fs.StringVar(&shardKey, "shard-key", "",
 		"If set, and report-mode is set to collect, this deployment will fetch only from clusters matching this shard")
 
@@ -283,10 +290,13 @@ func isInitContainer() bool {
 // Extracted to keep main() within the funlen limit.
 func configureGlobalState(mgr ctrl.Manager, sveltosNamespace string) {
 	controllers.SetManagementClusterAccess(mgr.GetConfig(), mgr.GetClient())
+	// Not served from the cache: used to decide in which group of sveltos-agent a cluster goes
+	controllers.SetManagementClusterAPIReader(mgr.GetAPIReader())
 	controllers.SetSveltosAgentConfigMap(sveltosAgentConfigMap)
 	controllers.SetSveltosApplierConfigMap(sveltosApplierConfigMap)
 	controllers.SetSveltosAgentRegistry(registry)
 	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
+	controllers.SetAgentClustersPerInstance(agentClustersPerInstance)
 	controllers.SetSveltosNamespace(sveltosNamespace)
 }
 

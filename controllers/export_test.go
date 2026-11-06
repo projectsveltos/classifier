@@ -65,6 +65,14 @@ var (
 	GetSveltosAgentLabels                             = getSveltosAgentLabels
 	GetSveltosAgentNamespace                          = getSveltosAgentNamespace
 	GetSveltosAgentPatches                            = getSveltosAgentPatches
+	GetSveltosAgentPatchesForDeployment               = getSveltosAgentPatchesForDeployment
+	DeploySveltosAgentInGroup                         = deploySveltosAgentInGroup
+	DeploySveltosAgentOfCluster                       = deploySveltosAgentOfCluster
+	RemoveClusterFromSveltosAgentGroups               = removeClusterFromSveltosAgentGroups
+	PrepareSveltosAgentGroupYAML                      = prepareSveltosAgentGroupYAML
+	IsSveltosAgentGroupingEnabled                     = isSveltosAgentGroupingEnabled
+	IsSveltosAgentGroupDeployment                     = isSveltosAgentGroupDeployment
+	RemoveStaleGroupMembers                           = removeStaleGroupMembers
 	GetAgentWatchNamespaces                           = getAgentWatchNamespaces
 	GetSveltosApplierPatches                          = getSveltosApplierPatches
 
