@@ -46,7 +46,7 @@ ARCH ?= $(shell go env GOARCH)
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= v1.17.0
+TAG ?= main
 
 ## Tool Binaries
 CONTROLLER_GEN := $(TOOLS_BIN_DIR)/controller-gen
@@ -180,6 +180,23 @@ TMP_FILE ?= test/pullmode-kubeconfig_data.tmp
 TIMEOUT ?= 10m
 NUM_NODES ?= 5
 
+# Used by create-cluster-agentless-grouping / fv-agentless-grouping. GROUPING_AGENT_IMAGE is
+# optional: when empty the sveltos-agent image classifier deploys by default is used, which must
+# support groups (set it to test an image that is not released yet).
+# The license must grant the AgentGrouping feature. It is read from SVELTOS_FV_LICENSE, a full
+# signed sveltos-license Secret manifest (the output of sveltos-license-signer; the same variable
+# the CI job sets from a secret), or else from GROUPING_LICENSE_DATA_FILE and
+# GROUPING_LICENSE_SIGNATURE_FILE, the licenseData and licenseSignature of the license.
+# KUBECONFIG is set to GROUPING_KUBECONFIG for both targets, so the current kubectl context is
+# never used.
+GROUPING_KUBECONFIG ?= $(CURDIR)/test/fv/grouping_kubeconfig
+GROUPING_CLUSTER_A ?= $(WORKLOAD_CLUSTER_NAME)
+GROUPING_CLUSTER_B ?= $(WORKLOAD_CLUSTER_NAME)-2
+GROUPING_CLUSTERS_PER_INSTANCE ?= 2
+GROUPING_AGENT_IMAGE ?=
+GROUPING_LICENSE_DATA_FILE ?=
+GROUPING_LICENSE_SIGNATURE_FILE ?=
+
 .PHONY: kind-test
 kind-test: test create-cluster fv ## Build docker image; start kind cluster; load docker image; install all cluster api components and run fv
 
@@ -207,6 +224,74 @@ fv-agentless: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existin
 	@echo "Waiting for projectsveltos classifier to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/classifier-manager -n projectsveltos --timeout=$(TIMEOUT)
 	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
+
+.PHONY: create-cluster-agentless-grouping
+create-cluster-agentless-grouping: export KUBECONFIG := $(GROUPING_KUBECONFIG)
+create-cluster-agentless-grouping: $(KIND) $(KUBECTL) $(ENVSUBST) $(KUSTOMIZE) ## Create a management kind cluster and two managed kind clusters, Sveltos in agentless mode with several clusters per sveltos-agent
+	@if [ -z "$$SVELTOS_FV_LICENSE" ] && ! { [ -f "$(GROUPING_LICENSE_DATA_FILE)" ] && [ -f "$(GROUPING_LICENSE_SIGNATURE_FILE)" ]; }; then \
+		echo "Either SVELTOS_FV_LICENSE or both GROUPING_LICENSE_DATA_FILE and GROUPING_LICENSE_SIGNATURE_FILE must be set to a license granting AgentGrouping"; \
+		exit 1; \
+	fi
+	rm -f $(GROUPING_KUBECONFIG)
+
+	@echo "Create the management cluster"
+	$(KIND) create cluster --name=$(CONTROL_CLUSTER_NAME) --image=kindest/node:$(K8S_VERSION) --kubeconfig=$(GROUPING_KUBECONFIG)
+	@$(KUBECTL) config current-context | grep -q '^kind-' || (echo "current context is not a kind cluster"; exit 1)
+
+	@echo "Create the two managed clusters"
+	$(KIND) create cluster --name=$(GROUPING_CLUSTER_A) --image=kindest/node:$(K8S_VERSION) --kubeconfig=$(CURDIR)/test/fv/workload_kubeconfig
+	$(KIND) create cluster --name=$(GROUPING_CLUSTER_B) --image=kindest/node:$(K8S_VERSION) --kubeconfig=$(CURDIR)/test/fv/workload2_kubeconfig
+
+	@echo "Start projectsveltos"
+	$(MAKE) deploy-projectsveltos
+
+	@echo "Start classifier in agentless mode, $(GROUPING_CLUSTERS_PER_INSTANCE) clusters per sveltos-agent"
+	$(KUBECTL) apply -f test/sveltos-agent-mgmt_cluster_common_manifest.yaml
+	$(KUBECTL) apply -f manifest/sveltos_agent_rbac.yaml
+	if [ -n "$(GROUPING_AGENT_IMAGE)" ]; then \
+		GROUPING_AGENT_IMAGE=$(GROUPING_AGENT_IMAGE) $(ENVSUBST) < test/agentless-grouping/sveltos-agent-patches.yaml | $(KUBECTL) apply -f -; \
+	fi
+	if [ -n "$$SVELTOS_FV_LICENSE" ]; then \
+		echo "$$SVELTOS_FV_LICENSE" | $(KUBECTL) apply -f -; \
+	else \
+		$(KUBECTL) create secret generic sveltos-license -n projectsveltos \
+			--from-file=licenseData=$(GROUPING_LICENSE_DATA_FILE) --from-file=licenseSignature=$(GROUPING_LICENSE_SIGNATURE_FILE); \
+	fi
+	$(KUBECTL) apply -f manifest/deployment-agentless.yaml
+	$(KUBECTL) patch deployment classifier-manager -n projectsveltos --type json -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--agent-clusters-per-instance=$(GROUPING_CLUSTERS_PER_INSTANCE)"}]'
+	if [ -n "$(GROUPING_AGENT_IMAGE)" ]; then \
+		$(KUBECTL) patch deployment classifier-manager -n projectsveltos --type json -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--sveltos-agent-config=sveltos-agent-patches"}]'; \
+	fi
+	$(KUBECTL) rollout status deployment/classifier-manager -n projectsveltos --timeout=$(TIMEOUT)
+
+	@echo "Register the managed clusters as SveltosClusters"
+	for c in $(GROUPING_CLUSTER_A) $(GROUPING_CLUSTER_B); do \
+		$(KIND) get kubeconfig --internal --name $$c > test/agentless-grouping/$$c-internal-kubeconfig.tmp; \
+		$(KUBECTL) create secret generic $$c-sveltos-kubeconfig -n default \
+			--from-file=kubeconfig=test/agentless-grouping/$$c-internal-kubeconfig.tmp; \
+		rm -f test/agentless-grouping/$$c-internal-kubeconfig.tmp; \
+		CLUSTER_NAME=$$c $(ENVSUBST) < test/agentless-grouping/sveltoscluster.yaml | $(KUBECTL) apply -f -; \
+	done
+	@echo "fv looks for the cluster labeled cluster-name=$(WORKLOAD_CLUSTER_NAME)"
+	$(KUBECTL) label sveltoscluster $(GROUPING_CLUSTER_A) -n default cluster-name=$(WORKLOAD_CLUSTER_NAME)
+	@echo "Only the SveltosCluster manager sets status.ready, and it is not deployed here: classifier only deploys to ready clusters"
+	for c in $(GROUPING_CLUSTER_A) $(GROUPING_CLUSTER_B); do \
+		$(KUBECTL) patch sveltoscluster $$c -n default --subresource=status --type=merge \
+			-p '{"status":{"ready":true,"version":"$(K8S_VERSION)"}}'; \
+	done
+
+.PHONY: fv-agentless-grouping
+fv-agentless-grouping: export KUBECONFIG := $(GROUPING_KUBECONFIG)
+fv-agentless-grouping: $(KUBECTL) $(GINKGO) ## Run the agentless grouping FV test. Run after create-cluster-agentless-grouping.
+	@$(KUBECTL) config current-context | grep -q '^kind-' || (echo "current context is not a kind cluster"; exit 1)
+	cd test/fv; $(GINKGO) --label-filter='AGENTLESS-GROUPING' --v --trace
+
+.PHONY: delete-cluster-agentless-grouping
+delete-cluster-agentless-grouping: $(KIND) ## Delete the clusters created by create-cluster-agentless-grouping
+	$(KIND) delete cluster --name $(CONTROL_CLUSTER_NAME)
+	$(KIND) delete cluster --name $(GROUPING_CLUSTER_A)
+	$(KIND) delete cluster --name $(GROUPING_CLUSTER_B)
+	rm -f $(GROUPING_KUBECONFIG) test/fv/workload_kubeconfig test/fv/workload2_kubeconfig
 
 .PHONY: fv-pullmode
 fv-pullmode: $(GINKGO) ## Run Sveltos Controller tests using existing cluster
