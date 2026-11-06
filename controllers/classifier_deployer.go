@@ -1836,7 +1836,9 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 
 	startInMgmtCluster := startSveltosAgentInMgmtCluster(options)
 
-	patches, err := getSveltosAgentPatches(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	grouped := startInMgmtCluster && !isPullMode && isSveltosAgentGroupingEnabled()
+	patches, err := getSveltosAgentPatchesForDeployment(ctx, c, clusterNamespace, clusterName, clusterType,
+		grouped, logger)
 	if err != nil {
 		return err
 	}
@@ -1860,8 +1862,12 @@ func deploySveltosAgent(ctx context.Context, c client.Client, clusterNamespace, 
 	} else if startInMgmtCluster {
 		// Use management cluster restConfig
 		restConfig := getManagementClusterConfig()
-		return deploySveltosAgentInManagementCluster(ctx, restConfig, c, clusterNamespace, clusterName,
-			classifierName, "do-not-send-reports", clusterType, patches, watchNamespaces, logger)
+		if grouped {
+			return deploySveltosAgentInGroup(ctx, c, restConfig, clusterNamespace, clusterName,
+				classifierName, doNotSendReportsMode, clusterType, watchNamespaces, patches, logger)
+		}
+		return deploySveltosAgentOfCluster(ctx, c, restConfig, clusterNamespace, clusterName,
+			classifierName, doNotSendReportsMode, clusterType, patches, watchNamespaces, logger)
 	} else {
 		// Use managed cluster restConfig
 		remoteRestConfig, err := clustercache.GetManager().GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
@@ -2232,6 +2238,14 @@ func removeSveltosAgentFromManagementCluster(ctx context.Context,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) error {
 
+	// A cluster served by a group leaves it: the group sveltos-agent is removed only when it was
+	// the last cluster of the group. Idempotent: a no-op for a cluster not in any group.
+	err := removeClusterFromSveltosAgentGroups(ctx, getManagementClusterClient(), getManagementClusterConfig(),
+		clusterNamespace, clusterName, clusterType, logger)
+	if err != nil {
+		return err
+	}
+
 	// Get YAML containing sveltos-agent resources. Only used below to determine the resource
 	// identity to delete, not actually deployed, so the substituted arg values (watchNamespaces
 	// included) don't matter here -- nil is fine.
@@ -2454,8 +2468,15 @@ func getSveltosAgentPatches(ctx context.Context, c client.Client,
 		return patches, nil
 	}
 
+	return getGlobalSveltosAgentPatches(ctx, c, logger)
+}
+
+// getGlobalSveltosAgentPatches returns the patches that apply to every sveltos-agent
+func getGlobalSveltosAgentPatches(ctx context.Context, c client.Client,
+	logger logr.Logger) ([]libsveltosv1beta1.Patch, error) {
+
 	configMapName := getSveltosAgentConfigMap()
-	patches, err = getSveltosAgentPatchesNew(ctx, c, getSveltosNamespace(), configMapName, logger)
+	patches, err := getSveltosAgentPatchesNew(ctx, c, getSveltosNamespace(), configMapName, logger)
 	if err == nil {
 		return patches, nil
 	}

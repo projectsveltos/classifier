@@ -166,6 +166,12 @@ func removeStaleClassifierResources(ctx context.Context, logger logr.Logger) {
 			for i := range sveltosAgentDeployments.Items {
 				depl := &sveltosAgentDeployments.Items[i]
 
+				if isSveltosAgentGroupDeployment(depl) {
+					// A group has no cluster labels: its members are checked one by one
+					removeStaleGroupMembers(ctx, c, depl, logger)
+					continue
+				}
+
 				exist, clusterNs, clusterName, clusterType := deplAssociatedClusterExist(ctx, c, depl, logger)
 				if !exist {
 					_, err = cleanClusterStaleResources(ctx, c, clusterNs, clusterName, clusterType, logger)
