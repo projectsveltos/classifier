@@ -84,7 +84,7 @@ spec:
         - --secret-with-kubeconfig=
         - --watch-namespaces=
         - --v=5
-        - --version=v1.17.0
+        - --version=main
         command:
         - /manager
         env:

@@ -25,17 +25,27 @@ import (
 var (
 	managementClusterConfig *rest.Config
 	managementClusterClient client.Client
-	sveltosAgentConfigMap   string
-	sveltosApplierConfigMap string
-	registry                string
-	agentInMgmtCluster      bool
-	enableNatsWatcher       bool
-	sveltosNamespace        string
+	// managementClusterAPIReader reads from the API server, never from a cache
+	managementClusterAPIReader client.Reader
+	sveltosAgentConfigMap      string
+	sveltosApplierConfigMap    string
+	registry                   string
+	agentInMgmtCluster         bool
+	agentClustersPerInstance   int
+	enableNatsWatcher          bool
+	sveltosNamespace           string
 )
 
 func SetManagementClusterAccess(config *rest.Config, c client.Client) {
 	managementClusterConfig = config
 	managementClusterClient = c
+}
+
+// SetManagementClusterAPIReader sets the reader, not served from a cache, used to decide in which
+// sveltos-agent group a cluster is placed. Without it the management cluster client is used.
+func SetManagementClusterAPIReader(reader client.Reader) {
+	managementClusterAPIReader = reader
+	resetSveltosAgentAssigner()
 }
 
 func SetSveltosAgentConfigMap(name string) {
@@ -52,6 +62,12 @@ func SetSveltosAgentRegistry(reg string) {
 
 func SetAgentInMgmtCluster(isInMgmtCluster bool) {
 	agentInMgmtCluster = isInMgmtCluster
+}
+
+// SetAgentClustersPerInstance sets how many clusters one sveltos-agent serves in agentless mode.
+// A value lower than 2 keeps one instance per cluster.
+func SetAgentClustersPerInstance(clustersPerInstance int) {
+	agentClustersPerInstance = clustersPerInstance
 }
 
 func SetSveltosAgentEnableNATS(enable bool) {
@@ -88,6 +104,10 @@ func getSveltosAgentRegistry() string {
 
 func getAgentInMgmtCluster() bool {
 	return agentInMgmtCluster
+}
+
+func getAgentClustersPerInstance() int {
+	return agentClustersPerInstance
 }
 
 func getSveltosAgentEnableNATS() bool {
