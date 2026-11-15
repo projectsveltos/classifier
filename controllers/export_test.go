@@ -52,6 +52,7 @@ var (
 	DeploySveltosAgentInManagedCluster                = deploySveltosAgentInManagedCluster
 	PrepareSveltosApplierYAML                         = prepareSveltosApplierYAML
 	ClassifierHash                                    = classifierHash
+	AddAgentSettingsToHash                            = addAgentSettingsToHash
 	DeployClassifierInCluster                         = deployClassifierInCluster
 	UndeployClassifierFromCluster                     = undeployClassifierFromCluster
 	RemoveClassifierInstance                          = removeClassifierInstance

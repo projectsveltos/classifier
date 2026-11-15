@@ -1164,6 +1164,8 @@ func (r *ClassifierReconciler) getCurrentHash(ctx context.Context, classifierSco
 		currentHash = h.Sum(nil)
 	}
 
+	currentHash = addAgentSettingsToHash(currentHash)
+
 	var kubeconfig []byte
 	if r.ClassifierReportMode == AgentSendReportsNoGateway {
 		h := sha256.New()
@@ -1183,6 +1185,20 @@ func (r *ClassifierReconciler) getCurrentHash(ctx context.Context, classifierSco
 	}
 
 	return currentHash, nil
+}
+
+// addAgentSettingsToHash adds to the hash the classifier-manager settings that shape the
+// sveltos-agent/sveltos-applier YAML (registry, NATS watcher). They are process flags, not part
+// of the Classifier, patches or cluster annotations: without them a restart with a different value
+// leaves the hash unchanged, and processClassifier skips the redeploy.
+// Both are always hashed, so that going back to the default value (empty registry, NATS disabled)
+// is detected as well.
+func addAgentSettingsToHash(currentHash []byte) []byte {
+	h := sha256.New()
+	h.Write(currentHash)
+	h.Write([]byte(getSveltosAgentRegistry()))
+	h.Write([]byte(strconv.FormatBool(getSveltosAgentEnableNATS())))
+	return h.Sum(nil)
 }
 
 // processClassifier detect whether it is needed to deploy Classifier in current passed cluster.
