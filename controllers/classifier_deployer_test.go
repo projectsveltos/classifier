@@ -108,6 +108,33 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(reflect.DeepEqual(currentHash, hash)).To(BeTrue())
 	})
 
+	It("addAgentSettingsToHash changes the hash when the registry or the NATS watcher change", func() {
+		defer controllers.SetSveltosAgentRegistry("")
+		defer controllers.SetSveltosAgentEnableNATS(false)
+
+		baseHash := controllers.ClassifierHash(getClassifierInstance(randomString()))
+
+		controllers.SetSveltosAgentRegistry("")
+		controllers.SetSveltosAgentEnableNATS(false)
+		defaultHash := controllers.AddAgentSettingsToHash(baseHash)
+		Expect(controllers.AddAgentSettingsToHash(baseHash)).To(Equal(defaultHash))
+
+		controllers.SetSveltosAgentRegistry("registry-a.example")
+		registryAHash := controllers.AddAgentSettingsToHash(baseHash)
+		Expect(registryAHash).ToNot(Equal(defaultHash))
+
+		controllers.SetSveltosAgentRegistry("registry-b.example")
+		registryBHash := controllers.AddAgentSettingsToHash(baseHash)
+		Expect(registryBHash).ToNot(Equal(registryAHash))
+
+		// Going back to the default registry is detected as well
+		controllers.SetSveltosAgentRegistry("")
+		Expect(controllers.AddAgentSettingsToHash(baseHash)).To(Equal(defaultHash))
+
+		controllers.SetSveltosAgentEnableNATS(true)
+		Expect(controllers.AddAgentSettingsToHash(baseHash)).ToNot(Equal(defaultHash))
+	})
+
 	It("deployClassifierCRD deploys Classifier CRD", func() {
 		cluster := prepareCluster()
 
@@ -333,7 +360,8 @@ var _ = Describe("Classifier Deployer", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
 
-		hash := controllers.ClassifierHash(classifier)
+		// Same hash getCurrentHash computes when there are no patches, watch namespaces or kubeconfig
+		hash := controllers.AddAgentSettingsToHash(controllers.ClassifierHash(classifier))
 
 		// Create a ClassifierReport for the cluster carrying the current hash and provisioned status
 		// so that processClassifier detects the configuration is already deployed.
