@@ -360,7 +360,8 @@ var _ = Describe("Classifier Deployer", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
 
-		hash := controllers.ClassifierHash(classifier)
+		// Same hash getCurrentHash computes when there are no patches, watch namespaces or kubeconfig
+		hash := controllers.AddAgentSettingsToHash(controllers.ClassifierHash(classifier))
 
 		// Create a ClassifierReport for the cluster carrying the current hash and provisioned status
 		// so that processClassifier detects the configuration is already deployed.
