@@ -116,8 +116,9 @@ var _ = Describe("Classifier Deployer", func() {
 
 		controllers.SetSveltosAgentRegistry("")
 		controllers.SetSveltosAgentEnableNATS(false)
+		// With default values the hash must not change, so an upgrade does not redeploy the agent
 		defaultHash := controllers.AddAgentSettingsToHash(baseHash)
-		Expect(controllers.AddAgentSettingsToHash(baseHash)).To(Equal(defaultHash))
+		Expect(defaultHash).To(Equal(baseHash))
 
 		controllers.SetSveltosAgentRegistry("registry-a.example")
 		registryAHash := controllers.AddAgentSettingsToHash(baseHash)
@@ -133,6 +134,38 @@ var _ = Describe("Classifier Deployer", func() {
 
 		controllers.SetSveltosAgentEnableNATS(true)
 		Expect(controllers.AddAgentSettingsToHash(baseHash)).ToNot(Equal(defaultHash))
+	})
+
+	It("getCurrentHash does not change with default registry and NATS settings", func() {
+		defer controllers.SetSveltosAgentRegistry("")
+		defer controllers.SetSveltosAgentEnableNATS(false)
+
+		dep := fakedeployer.GetClient(context.TODO(), logger, testEnv.Client)
+		Expect(dep.RegisterFeatureID(libsveltosv1beta1.FeatureClassifier)).To(Succeed())
+
+		cluster := prepareCluster()
+
+		classifierReconciler := getClassifierReconciler(testEnv.Client, dep)
+		classifier := getClassifierInstance(randomString())
+		classifierScope := getClassifierScope(testEnv.Client, logger, classifier)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
+
+		// Hash computed before registry and NATS were part of it
+		expectedHash := controllers.ClassifierHash(classifier)
+
+		controllers.SetSveltosAgentRegistry("")
+		controllers.SetSveltosAgentEnableNATS(false)
+		currentHash, err := controllers.GetCurrentHash(classifierReconciler, context.TODO(), classifierScope, "",
+			getClusterRef(cluster), f, logger)
+		Expect(err).To(BeNil())
+		Expect(currentHash).To(Equal(expectedHash))
+
+		// Non default settings do change it
+		controllers.SetSveltosAgentRegistry("registry-a.example")
+		currentHash, err = controllers.GetCurrentHash(classifierReconciler, context.TODO(), classifierScope, "",
+			getClusterRef(cluster), f, logger)
+		Expect(err).To(BeNil())
+		Expect(currentHash).ToNot(Equal(expectedHash))
 	})
 
 	It("deployClassifierCRD deploys Classifier CRD", func() {
@@ -360,8 +393,10 @@ var _ = Describe("Classifier Deployer", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, classifier)).To(Succeed())
 
-		// Same hash getCurrentHash computes when there are no patches, watch namespaces or kubeconfig
-		hash := controllers.AddAgentSettingsToHash(controllers.ClassifierHash(classifier))
+		// With default registry and NATS settings, no patches, watch namespaces or kubeconfig, getCurrentHash
+		// returns the plain classifier hash: the one stored by a classifier-manager version that
+		// did not hash those settings (upgrade case).
+		hash := controllers.ClassifierHash(classifier)
 
 		// Create a ClassifierReport for the cluster carrying the current hash and provisioned status
 		// so that processClassifier detects the configuration is already deployed.

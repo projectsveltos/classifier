@@ -85,6 +85,7 @@ var (
 	GetHandlersForFeature = getHandlersForFeature
 
 	ProcessClassifier                      = (*ClassifierReconciler).processClassifier
+	GetCurrentHash                         = (*ClassifierReconciler).getCurrentHash
 	IsAgentHealthy                         = (*ClassifierReconciler).isAgentHealthy
 	RemoveClassifier                       = (*ClassifierReconciler).removeClassifier
 	RequeueClassifierForCluster            = (*ClassifierReconciler).requeueClassifierForCluster

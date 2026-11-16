@@ -1191,13 +1191,26 @@ func (r *ClassifierReconciler) getCurrentHash(ctx context.Context, classifierSco
 // sveltos-agent/sveltos-applier YAML (registry, NATS watcher). They are process flags, not part
 // of the Classifier, patches or cluster annotations: without them a restart with a different value
 // leaves the hash unchanged, and processClassifier skips the redeploy.
-// Both are always hashed, so that going back to the default value (empty registry, NATS disabled)
-// is detected as well.
+// A setting is hashed only when it differs from its default (registry set, NATS enabled). With
+// default values the hash is returned unchanged, so upgrading classifier-manager does not change
+// the hash and does not redeploy the agent on every cluster. Going back to the default value is
+// still detected, as the hash goes back to the one without the setting.
 func addAgentSettingsToHash(currentHash []byte) []byte {
+	registry := getSveltosAgentRegistry()
+	natsEnabled := getSveltosAgentEnableNATS()
+
+	if registry == "" && !natsEnabled {
+		return currentHash
+	}
+
 	h := sha256.New()
 	h.Write(currentHash)
-	h.Write([]byte(getSveltosAgentRegistry()))
-	h.Write([]byte(strconv.FormatBool(getSveltosAgentEnableNATS())))
+	if registry != "" {
+		h.Write([]byte("registry:" + registry))
+	}
+	if natsEnabled {
+		h.Write([]byte("nats:enabled"))
+	}
 	return h.Sum(nil)
 }
 
