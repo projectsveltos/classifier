@@ -91,6 +91,7 @@ func (r *SveltosClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // cleanClusterStaleResources removes:
+// - any per-cluster metric series
 // - any classifierReport coming from this cluster
 // - if sveltos-agent was deployed in the management cluster, sveltos-agent resources
 // created for this cluster are removed from the management cluster
@@ -99,6 +100,7 @@ func cleanClusterStaleResources(ctx context.Context, c client.Client,
 	logger logr.Logger) (ctrl.Result, error) {
 
 	clustercache.GetManager().RemoveCluster(clusterNamespace, clusterName, clusterType)
+	deleteClusterMetrics(clusterNamespace, clusterName, clusterType, logger)
 
 	err := removeClusterClassifierReports(ctx, c, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {

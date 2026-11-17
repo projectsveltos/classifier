@@ -216,6 +216,25 @@ func trackLastSuccess(clusterNamespace, clusterName string, clusterType libsvelt
 		clusterType, clusterNamespace, clusterName, classifierName, timestamp))
 }
 
+// deleteClusterMetrics drops every per-cluster series for a deleted cluster, so the registry stays
+// bounded by live clusters.
+func deleteClusterMetrics(clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) {
+
+	labels := prometheus.Labels{
+		metricClusterTypeLabel:      string(clusterType),
+		metricClusterNamespaceLabel: clusterNamespace,
+		metricClusterNameLabel:      clusterName,
+	}
+
+	deleted := reconcileDurationHistogram.DeletePartialMatch(labels)
+	deleted += reconcileOutcomeCounter.DeletePartialMatch(labels)
+	deleted += reconcileLastSuccessTimestampGauge.DeletePartialMatch(labels)
+
+	logger.V(logs.LogVerbose).Info(fmt.Sprintf("deleted %d labeled metrics for %s %s/%s",
+		deleted, clusterType, clusterNamespace, clusterName))
+}
+
 // trackMatchingClusters records how many clusters currently match a Classifier's rules.
 func trackMatchingClusters(classifierName string, count int, logger logr.Logger) {
 	matchingClustersGauge.With(prometheus.Labels{
