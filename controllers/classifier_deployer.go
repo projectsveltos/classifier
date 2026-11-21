@@ -552,6 +552,11 @@ func deployCRDs(ctx context.Context, clusterNamespace, clusterName, classifierNa
 		return nil
 	}
 
+	if getSveltosAgentDisabled() {
+		return deployCRDsNotConsumedBySveltosAgent(ctx, clusterNamespace, clusterName, classifierName,
+			clusterType, isPullMode, logger)
+	}
+
 	logger.V(logs.LogDebug).Info("deploy classifier CRD")
 	err := deployClassifierCRD(ctx, clusterNamespace, clusterName, classifierName, clusterType, isPullMode, logger)
 	if err != nil {
@@ -609,6 +614,25 @@ func deployCRDs(ctx context.Context, clusterNamespace, clusterName, classifierNa
 	}
 
 	return nil
+}
+
+// deployCRDsNotConsumedBySveltosAgent deploys the only CRDs needed when sveltos-agent is not deployed:
+// the ones consumed by other components (ResourceSummary by drift-detection-manager,
+// DebuggingConfiguration by all of them). All other CRDs (Classifier, EventSource, HealthCheck,
+// Reloader and their reports) are consumed only by sveltos-agent.
+func deployCRDsNotConsumedBySveltosAgent(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
+
+	logger.V(logs.LogDebug).Info("sveltos-agent is disabled. Deploy only debuggingConfiguration and resourceSummary CRDs")
+
+	err := deployDebuggingConfigurationCRD(ctx, clusterNamespace, clusterName, classifierName, clusterType,
+		isPullMode, logger)
+	if err != nil {
+		return err
+	}
+
+	return deployResourceSummaryCRD(ctx, clusterNamespace, clusterName, classifierName, clusterType,
+		isPullMode, logger)
 }
 
 // deploySveltosAgentWithKubeconfigInCluster does following things in order:
@@ -727,16 +751,19 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
-	logger.V(logs.LogDebug).Info("deploy sveltos-agent: do not send reports mode")
-	err = deploySveltosAgent(ctx, c, clusterNamespace, clusterName, applicant, clusterType,
-		isPullMode, options, logger)
-	if err != nil {
-		return err
+	if !getSveltosAgentDisabled() {
+		logger.V(logs.LogDebug).Info("deploy sveltos-agent: do not send reports mode")
+		err = deploySveltosAgent(ctx, c, clusterNamespace, clusterName, applicant, clusterType,
+			isPullMode, options, logger)
+		if err != nil {
+			return err
+		}
 	}
 
-	if getAgentInMgmtCluster() && !isPullMode {
+	if (getAgentInMgmtCluster() || getSveltosAgentDisabled()) && !isPullMode {
 		// If sveltos-agent is deployed in the management cluster, Classifier instance
-		// does not need to be deployed in the managed cluster. So return here
+		// does not need to be deployed in the managed cluster. If sveltos-agent is disabled,
+		// there is nothing to evaluate the Classifier instance. So return here
 		return nil
 	}
 
@@ -748,10 +775,12 @@ func deployClassifierInCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
-	// Deploy Classifier instance
-	err = deployClassifierInstance(ctx, remoteClient, clusterNamespace, clusterName, classifier, isPullMode, logger)
-	if err != nil {
-		return err
+	// Deploy Classifier instance. When sveltos-agent is disabled, there is nothing to evaluate it.
+	if !getSveltosAgentDisabled() {
+		err = deployClassifierInstance(ctx, remoteClient, clusterNamespace, clusterName, classifier, isPullMode, logger)
+		if err != nil {
+			return err
+		}
 	}
 
 	if isPullMode {
@@ -802,6 +831,12 @@ func undeployClassifierFromCluster(ctx context.Context, c client.Client,
 
 	if isPullMode {
 		return undeployClassifierInPullMode(ctx, c, clusterNamespace, clusterName, applicant, logger)
+	}
+
+	if getSveltosAgentDisabled() {
+		// The Classifier CRD is not deployed in the managed cluster, so there is no instance to remove
+		logger.V(logs.LogDebug).Info("sveltos-agent is disabled. Nothing to undeploy")
+		return nil
 	}
 
 	remoteClient, err := clustercache.GetManager().GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
@@ -1188,18 +1223,19 @@ func (r *ClassifierReconciler) getCurrentHash(ctx context.Context, classifierSco
 }
 
 // addAgentSettingsToHash adds to the hash the classifier-manager settings that shape the
-// sveltos-agent/sveltos-applier YAML (registry, NATS watcher). They are process flags, not part
+// sveltos-agent/sveltos-applier YAML (registry, NATS watcher, agent disabled). They are process flags, not part
 // of the Classifier, patches or cluster annotations: without them a restart with a different value
 // leaves the hash unchanged, and processClassifier skips the redeploy.
-// A setting is hashed only when it differs from its default (registry set, NATS enabled). With
+// A setting is hashed only when it differs from its default (registry set, NATS enabled, agent disabled). With
 // default values the hash is returned unchanged, so upgrading classifier-manager does not change
 // the hash and does not redeploy the agent on every cluster. Going back to the default value is
 // still detected, as the hash goes back to the one without the setting.
 func addAgentSettingsToHash(currentHash []byte) []byte {
 	registry := getSveltosAgentRegistry()
 	natsEnabled := getSveltosAgentEnableNATS()
+	agentDisabled := getSveltosAgentDisabled()
 
-	if registry == "" && !natsEnabled {
+	if registry == "" && !natsEnabled && !agentDisabled {
 		return currentHash
 	}
 
@@ -1210,6 +1246,9 @@ func addAgentSettingsToHash(currentHash []byte) []byte {
 	}
 	if natsEnabled {
 		h.Write([]byte("nats:enabled"))
+	}
+	if agentDisabled {
+		h.Write([]byte("agent:disabled"))
 	}
 	return h.Sum(nil)
 }
@@ -1376,7 +1415,7 @@ func (r *ClassifierReconciler) proceedProcessingClassifier(ctx context.Context, 
 		}
 		var handler deployer.RequestHandler
 		handler = deployClassifierInCluster
-		if r.ClassifierReportMode == AgentSendReportsNoGateway {
+		if r.ClassifierReportMode == AgentSendReportsNoGateway && !getSveltosAgentDisabled() {
 			handler = deploySveltosAgentWithKubeconfigInCluster
 			options.HandlerOptions[controlplaneendpoint] = r.ControlPlaneEndpoint
 		}
@@ -1752,6 +1791,23 @@ func deployDebuggingConfigurationCRD(ctx context.Context, clusterNamespace, clus
 	}
 
 	return applyCRD(ctx, clusterNamespace, clusterName, dcCRD, clusterType, logger)
+}
+
+// deployResourceSummaryCRD deploys ResourceSummary CRD in remote cluster
+func deployResourceSummaryCRD(ctx context.Context, clusterNamespace, clusterName, classifierName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode bool, logger logr.Logger) error {
+
+	rsCRD, err := k8s_utils.GetUnstructured(crd.GetResourceSummaryCRDYAML())
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get ResourceSummary CRD unstructured")
+		return err
+	}
+
+	if isPullMode {
+		return deployCRDInPullMode(ctx, clusterNamespace, clusterName, classifierName, rsCRD, logger)
+	}
+
+	return applyCRD(ctx, clusterNamespace, clusterName, rsCRD, clusterType, logger)
 }
 
 func deployReloaderCRD(ctx context.Context, clusterNamespace, clusterName, classifierName string,

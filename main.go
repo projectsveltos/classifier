@@ -69,6 +69,7 @@ var (
 	concurrentReconciles                  int
 	workers                               int
 	agentInMgmtCluster                    bool
+	disableSveltosAgent                   bool
 	agentClustersPerInstance              int
 	reportMode                            controllers.ReportMode
 	shardKey                              string
@@ -192,6 +193,12 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&agentInMgmtCluster, "agent-in-mgmt-cluster", false,
 		"When set, indicates drift-detection-manager needs to be started in the management cluster")
 
+	fs.BoolVar(&disableSveltosAgent, "disable-sveltos-agent", false,
+		"When set, sveltos-agent is not deployed. Only the CRDs needed by other Sveltos components "+
+			"(DebuggingConfiguration, ResourceSummary) are deployed in the managed clusters. Classifier, "+
+			"EventSource/EventTrigger, HealthCheck/ClusterHealthCheck and ClusterProfile.spec.reloader "+
+			"will not work, as they all rely on sveltos-agent.")
+
 	fs.IntVar(&agentClustersPerInstance, "agent-clusters-per-instance", 1,
 		"Agentless mode only (requires --agent-in-mgmt-cluster). How many clusters one sveltos-agent serves. "+
 			"1 (the default) starts one sveltos-agent per cluster. A higher value groups clusters of the same "+
@@ -296,6 +303,7 @@ func configureGlobalState(mgr ctrl.Manager, sveltosNamespace string) {
 	controllers.SetSveltosApplierConfigMap(sveltosApplierConfigMap)
 	controllers.SetSveltosAgentRegistry(registry)
 	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
+	controllers.SetSveltosAgentDisabled(disableSveltosAgent)
 	controllers.SetAgentClustersPerInstance(agentClustersPerInstance)
 	controllers.SetSveltosNamespace(sveltosNamespace)
 }
