@@ -84,7 +84,7 @@ func fetchResourcesForSelector(ctx context.Context, c client.Client,
 	// Compile per-resource Lua once so we don't re-parse it for every resource.
 	var luaState *lua.LState
 	if rs.Evaluate != "" {
-		luaState = lua.NewState()
+		luaState = sveltoslua.NewSandboxedState()
 		sveltoslua.LoadModulesAndRegisterMethods(luaState)
 		if err := luaState.DoString(rs.Evaluate); err != nil {
 			luaState.Close()
@@ -217,7 +217,7 @@ func isMatchForEvaluateScript(u *unstructured.Unstructured, l *lua.LState, logge
 func runClassificationLua(luaScript string, resources []*unstructured.Unstructured,
 	logger logr.Logger) ([]clusterRef, error) {
 
-	l := lua.NewState()
+	l := sveltoslua.NewSandboxedState()
 	defer l.Close()
 	sveltoslua.LoadModulesAndRegisterMethods(l)
 

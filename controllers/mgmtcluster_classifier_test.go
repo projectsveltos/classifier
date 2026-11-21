@@ -38,9 +38,10 @@ import (
 )
 
 const (
-	testLabelEnv  = "env"
-	testLabelApp  = "app"
-	testValueProd = "prod"
+	testLabelEnv      = "env"
+	testLabelApp      = "app"
+	testValueProd     = "prod"
+	testKindConfigMap = "ConfigMap"
 )
 
 var _ = Describe("ManagementClusterClassifier utils", func() {
@@ -115,7 +116,7 @@ var _ = Describe("ManagementClusterClassifier utils", func() {
 			rs := &libsveltosv1beta1.ResourceSelector{
 				Group:   "",
 				Version: corev1.SchemeGroupVersion.Version,
-				Kind:    "ConfigMap",
+				Kind:    testKindConfigMap,
 			}
 
 			resources, err := controllers.FetchResourcesForSelector(context.TODO(), fakeClient, rs, logger)
@@ -127,6 +128,53 @@ var _ = Describe("ManagementClusterClassifier utils", func() {
 			resources, err = controllers.FetchResourcesForSelector(context.TODO(), fakeClient, rs, logger)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(resources).To(HaveLen(2))
+		})
+	})
+
+	Context("Lua sandbox", func() {
+		const readHostFileScript = `
+function evaluate(resources)
+  local f = io.open("/etc/hosts", "r")
+  return {matching=(f ~= nil), message=""}
+end
+`
+
+		It("fetchResourcesForSelector does not let a per-resource script read host files", func() {
+			u := buildUnstructuredConfigMap("cm", map[string]string{testLabelEnv: testValueProd})
+			fakeClient := fake.NewClientBuilder().WithScheme(mgmtTestScheme()).WithObjects(u).Build()
+
+			rs := &libsveltosv1beta1.ResourceSelector{
+				Version:  corev1.SchemeGroupVersion.Version,
+				Kind:     testKindConfigMap,
+				Evaluate: readHostFileScript,
+			}
+
+			// The script fails for every resource, so none is a match.
+			resources, err := controllers.FetchResourcesForSelector(context.TODO(), fakeClient, rs, testEnv.GetLogger())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resources).To(BeEmpty())
+		})
+
+		It("runClassificationLua does not let classificationLua read host files", func() {
+			script := `
+function evaluate(resources)
+  local f = io.open("/etc/hosts", "r")
+  return {}
+end
+`
+			_, err := controllers.RunClassificationLua(script, nil, testEnv.GetLogger())
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("runClassificationLua does not let classificationLua read the environment", func() {
+			script := `
+function evaluate(resources)
+  local home = os.getenv("HOME")
+  return {}
+end
+`
+			_, err := controllers.RunClassificationLua(script, nil, testEnv.GetLogger())
+			Expect(err).To(HaveOccurred())
 		})
 	})
 
@@ -357,7 +405,7 @@ func buildUnstructuredConfigMap(name string, lbls map[string]string) *unstructur
 	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(cm)
 	Expect(err).ToNot(HaveOccurred())
 	u := &unstructured.Unstructured{Object: obj}
-	u.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("ConfigMap"))
+	u.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind(testKindConfigMap))
 	return u
 }
 
