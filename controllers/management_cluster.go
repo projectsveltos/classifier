@@ -31,6 +31,7 @@ var (
 	sveltosApplierConfigMap    string
 	registry                   string
 	agentInMgmtCluster         bool
+	sveltosAgentDisabled       bool
 	agentClustersPerInstance   int
 	enableNatsWatcher          bool
 	sveltosNamespace           string
@@ -62,6 +63,12 @@ func SetSveltosAgentRegistry(reg string) {
 
 func SetAgentInMgmtCluster(isInMgmtCluster bool) {
 	agentInMgmtCluster = isInMgmtCluster
+}
+
+// SetSveltosAgentDisabled sets whether sveltos-agent must not be deployed. When true, only the CRDs
+// needed by components other than sveltos-agent (DebuggingConfiguration, ResourceSummary) are deployed.
+func SetSveltosAgentDisabled(disabled bool) {
+	sveltosAgentDisabled = disabled
 }
 
 // SetAgentClustersPerInstance sets how many clusters one sveltos-agent serves in agentless mode.
@@ -104,6 +111,10 @@ func getSveltosAgentRegistry() string {
 
 func getAgentInMgmtCluster() bool {
 	return agentInMgmtCluster
+}
+
+func getSveltosAgentDisabled() bool {
+	return sveltosAgentDisabled
 }
 
 func getAgentClustersPerInstance() int {

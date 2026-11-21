@@ -49,6 +49,7 @@ var (
 	DeployReloaderCRD                                 = deployReloaderCRD
 	DeployReloaderReportCRD                           = deployReloaderReportCRD
 	DeployDebuggingConfigurationCRD                   = deployDebuggingConfigurationCRD
+	DeployResourceSummaryCRD                          = deployResourceSummaryCRD
 	DeployClassifierInstance                          = deployClassifierInstance
 	DeploySveltosAgentInManagedCluster                = deploySveltosAgentInManagedCluster
 	PrepareSveltosApplierYAML                         = prepareSveltosApplierYAML

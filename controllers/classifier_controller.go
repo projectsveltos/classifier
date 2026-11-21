@@ -397,7 +397,8 @@ func (r *ClassifierReconciler) SetupWithManager(ctx context.Context,
 	// At this point we don't know yet whether CAPI is present in the cluster.
 	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
 
-	if r.ClassifierReportMode == CollectFromManagementCluster {
+	// With sveltos-agent disabled there are no ClassifierReports to collect
+	if r.ClassifierReportMode == CollectFromManagementCluster && !getSveltosAgentDisabled() {
 		go collectClassifierReports(ctx, mgr.GetClient(), r.ShardKey, r.CapiOnboardAnnotation, getVersion(), mgr.GetLogger())
 	}
 
