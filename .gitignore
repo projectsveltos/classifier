@@ -35,5 +35,3 @@ pkg/agent/sveltos-agent-in-mgmt-cluster.yaml-e
 pkg/agent/sveltos-agent.yaml-e
 
 version.txt
-
-.dockerignore
