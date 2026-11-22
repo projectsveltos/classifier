@@ -452,8 +452,17 @@ docker-build: ## Build docker image with the manager.
 docker-push: ## Push docker image with the manager.
 	docker push $(CONTROLLER_IMG):$(TAG)
 
+.PHONY: check-clean-tree
+check-clean-tree: ## Fail if the working tree is not clean: the Go build info of the image would say +dirty
+	@# CLAUDE.md is untracked on purpose and is excluded from the image by .dockerignore
+	@if [ -n "$$(git status --porcelain -- . ':(exclude)CLAUDE.md')" ]; then \
+		echo "The working tree is not clean, the image would be stamped +dirty. Commit, stash or remove:"; \
+		git status --porcelain -- . ':(exclude)CLAUDE.md'; \
+		exit 1; \
+	fi
+
 .PHONY: docker-buildx
-docker-buildx: ## docker build for multiple arch and push to docker hub
+docker-buildx: check-clean-tree ## docker build for multiple arch and push to docker hub (fails if the working tree is not clean)
 	docker buildx build --push --platform linux/amd64,linux/arm64 --build-arg GIT_VERSION=$(TAG) --build-arg GIT_COMMIT=$(GIT_COMMIT) -t $(CONTROLLER_IMG):$(TAG) .
 
 .PHONY: load-image
