@@ -152,9 +152,6 @@ func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierS
 
 	for i := range reports {
 		report := &reports[i]
-		if report.Spec.ClusterNamespace == "" {
-			continue
-		}
 		// Skip clusters whose removal has already completed.
 		if report.Status.DeploymentStatus != nil &&
 			*report.Status.DeploymentStatus == libsveltosv1beta1.SveltosStatusRemoved {
@@ -162,7 +159,11 @@ func (r *ClassifierReconciler) deployClassifier(ctx context.Context, classifierS
 			continue
 		}
 
-		cluster := getClusterRefFromClassifierReport(report)
+		cluster, err := getClusterRefFromClassifierReport(report)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(err.Error())
+			continue
+		}
 		l := logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s",
 			cluster.Kind, cluster.Namespace, cluster.Name))
 
@@ -245,9 +246,6 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 	clusters := make([]*corev1.ObjectReference, 0)
 	for i := range reports {
 		report := &reports[i]
-		if report.Spec.ClusterNamespace == "" {
-			continue
-		}
 		// Skip clusters whose removal has already completed. The result of a removal is consumed when read, so
 		// the ClassifierReport is what remembers the removal is done: without it, a cluster done in an earlier
 		// pass would be removed again, and the removal would never complete in all the clusters at once.
@@ -256,7 +254,11 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 
 			continue
 		}
-		c := getClusterRefFromClassifierReport(report)
+		c, err := getClusterRefFromClassifierReport(report)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(err.Error())
+			continue
+		}
 
 		r.Deployer.CleanupEntries(c.Namespace, c.Name, classifier.Name, f.id, clusterproxy.GetClusterType(c), false)
 
@@ -265,7 +267,7 @@ func (r *ClassifierReconciler) undeployClassifier(ctx context.Context, classifie
 			return fmt.Errorf("deploying %s still in progress. Wait before cleanup", f.id)
 		}
 
-		_, err := clusterproxy.GetCluster(ctx, r.Client, c.Namespace, c.Name, clusterproxy.GetClusterType(c))
+		_, err = clusterproxy.GetCluster(ctx, r.Client, c.Namespace, c.Name, clusterproxy.GetClusterType(c))
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				logger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s/%s does not exist", c.Namespace, c.Name))

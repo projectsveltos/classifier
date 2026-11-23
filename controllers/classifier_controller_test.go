@@ -801,3 +801,88 @@ var _ = Describe("ClassifierReconciler: requeue methods", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })
+
+var _ = Describe("ClassifierReconciler: syncAndGetMatchingClusters", func() {
+	var logger logr.Logger
+
+	BeforeEach(func() {
+		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+	})
+
+	// matchingClusters runs syncAndGetMatchingClusters for the classifier with the given objects
+	matchingClusters := func(classifier *libsveltosv1beta1.Classifier,
+		objects ...client.Object) map[corev1.ObjectReference]bool {
+
+		initObjects := append([]client.Object{classifier}, objects...)
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ClassifierReconciler{
+			Client:        c,
+			Scheme:        scheme,
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			Mux:           sync.Mutex{},
+			Logger:        logger,
+		}
+
+		classifierScope, err := scope.NewClassifierScope(scope.ClassifierScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Classifier:     classifier,
+			ControllerName: classifierControllerName,
+		})
+		Expect(err).To(BeNil())
+
+		clusters, err := controllers.SyncAndGetMatchingClusters(reconciler, context.TODO(), classifierScope, logger)
+		Expect(err).To(BeNil())
+		return clusters
+	}
+
+	It("selects a cluster when its ClassifierReport is in the cluster namespace", func() {
+		cluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()},
+		}
+		classifier := getClassifierInstance(randomString())
+
+		report := getClassifierReport(classifier.Name, cluster.Namespace, cluster.Name)
+		report.Namespace = cluster.Namespace
+		report.Spec.ClusterType = libsveltosv1beta1.ClusterTypeSveltos
+		report.Spec.Match = true
+
+		clusters := matchingClusters(classifier, cluster, report)
+		Expect(len(clusters)).To(Equal(1))
+	})
+
+	// In pull mode the ClassifierReport is written by the managed cluster, so a cluster must not be
+	// able to select a cluster in another namespace (tenant) by naming it in its report.
+	It("ignores a ClassifierReport naming a cluster in a different namespace", func() {
+		victim := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()},
+		}
+		classifier := getClassifierInstance(randomString())
+
+		report := getClassifierReport(classifier.Name, victim.Namespace, victim.Name)
+		report.Namespace = randomString()
+		report.Spec.ClusterType = libsveltosv1beta1.ClusterTypeSveltos
+		report.Spec.Match = true
+
+		Expect(matchingClusters(classifier, victim, report)).To(BeEmpty())
+	})
+
+	It("ignores a ClassifierReport with an unknown cluster type", func() {
+		cluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()},
+		}
+		classifier := getClassifierInstance(randomString())
+
+		report := getClassifierReport(classifier.Name, cluster.Namespace, cluster.Name)
+		report.Namespace = cluster.Namespace
+		report.Spec.ClusterType = libsveltosv1beta1.ClusterType("Unknown")
+		report.Spec.Match = true
+
+		Expect(func() {
+			Expect(matchingClusters(classifier, cluster, report)).To(BeEmpty())
+		}).ToNot(Panic())
+	})
+})
