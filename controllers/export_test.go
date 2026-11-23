@@ -61,6 +61,8 @@ var (
 	RemoveClassifierReports                           = removeClassifierReports
 	RemoveClusterClassifierReports                    = removeClusterClassifierReports
 	PruneClassifierReportsForDeletedClusters          = pruneClassifierReportsForDeletedClusters
+	IsValidClassifierReport                           = isValidClassifierReport
+	SyncAndGetMatchingClusters                        = (*ClassifierReconciler).syncAndGetMatchingClusters
 	CollectClassifierReportsFromCluster               = collectClassifierReportsFromCluster
 	ProcessClassifierReportsForClusterInAgentlessMode = processClassifierReportsForClusterInAgentlessMode
 	DeploySveltosAgentInManagementCluster             = deploySveltosAgentInManagementCluster

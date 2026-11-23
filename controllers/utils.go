@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
@@ -100,7 +101,42 @@ func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) {
 	}
 }
 
-func getClusterRefFromClassifierReport(report *libsveltosv1beta1.ClassifierReport) *corev1.ObjectReference {
+// isValidClassifierReport returns true only if the cluster a ClassifierReport refers to can be
+// trusted. A report must live in the namespace of the cluster it names and the cluster type must be
+// a known one. In pull mode the report is written by the managed cluster, so Spec cannot be trusted:
+// without this check a managed cluster could name a cluster in another namespace (tenant), or carry
+// an unknown cluster type.
+func isValidClassifierReport(report *libsveltosv1beta1.ClassifierReport) bool {
+	if report.Spec.ClusterNamespace == "" || report.Namespace != report.Spec.ClusterNamespace {
+		return false
+	}
+
+	return report.Spec.ClusterType == libsveltosv1beta1.ClusterTypeCapi ||
+		report.Spec.ClusterType == libsveltosv1beta1.ClusterTypeSveltos
+}
+
+// filterValidClassifierReports returns only the ClassifierReports for which isValidClassifierReport is true.
+func filterValidClassifierReports(reports []libsveltosv1beta1.ClassifierReport,
+	logger logr.Logger) []libsveltosv1beta1.ClassifierReport {
+
+	valid := make([]libsveltosv1beta1.ClassifierReport, 0, len(reports))
+	for i := range reports {
+		if !isValidClassifierReport(&reports[i]) {
+			logger.V(logs.LogDebug).Info(fmt.Sprintf(
+				"ignoring ClassifierReport %s/%s: cluster %s/%s type %q is not valid for this namespace",
+				reports[i].Namespace, reports[i].Name, reports[i].Spec.ClusterNamespace,
+				reports[i].Spec.ClusterName, reports[i].Spec.ClusterType))
+			continue
+		}
+		valid = append(valid, reports[i])
+	}
+
+	return valid
+}
+
+// getClusterRefFromClassifierReport returns the reference of the cluster the report is for.
+// It returns an error if the cluster type is unknown.
+func getClusterRefFromClassifierReport(report *libsveltosv1beta1.ClassifierReport) (*corev1.ObjectReference, error) {
 	cluster := corev1.ObjectReference{
 		Namespace: report.Spec.ClusterNamespace,
 		Name:      report.Spec.ClusterName,
@@ -113,9 +149,10 @@ func getClusterRefFromClassifierReport(report *libsveltosv1beta1.ClassifierRepor
 		cluster.APIVersion = libsveltosv1beta1.GroupVersion.String()
 		cluster.Kind = libsveltosv1beta1.SveltosClusterKind
 	default:
-		panic(1)
+		return nil, fmt.Errorf("ClassifierReport %s/%s has unknown cluster type %q",
+			report.Namespace, report.Name, report.Spec.ClusterType)
 	}
-	return &cluster
+	return &cluster, nil
 }
 
 func SetVersion(v string) {
@@ -216,23 +253,28 @@ func pruneClassifierReportsForDeletedClusters(ctx context.Context, c client.Clie
 		return fmt.Errorf("failed to list ClassifierReports: %w", err)
 	}
 
+	// A report naming a cluster outside its own namespace, or with an unknown cluster type, cannot
+	// be trusted. Skip it: the sweep must not act on the cluster it names.
+	reports := filterValidClassifierReports(classifierReportList.Items, logger)
+
 	// Multiple ClassifierReports (from different Classifier instances) can reference the same
 	// cluster; check each distinct cluster only once per sweep.
 	checked := make(map[corev1.ObjectReference]bool)
 
-	for i := range classifierReportList.Items {
-		report := &classifierReportList.Items[i]
-		if report.Spec.ClusterNamespace == "" {
+	for i := range reports {
+		report := &reports[i]
+
+		cluster, err := getClusterRefFromClassifierReport(report)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(err.Error())
 			continue
 		}
-
-		cluster := getClusterRefFromClassifierReport(report)
 		if checked[*cluster] {
 			continue
 		}
 		checked[*cluster] = true
 
-		_, err := clusterproxy.GetCluster(ctx, c, cluster.Namespace, cluster.Name, clusterproxy.GetClusterType(cluster))
+		_, err = clusterproxy.GetCluster(ctx, c, cluster.Namespace, cluster.Name, clusterproxy.GetClusterType(cluster))
 		if err == nil {
 			continue
 		}
@@ -307,6 +349,7 @@ func stringPtr(s string) *string {
 }
 
 // listClassifierReportsForClassifier returns all ClassifierReports labeled for the given classifier.
+// Reports that fail isValidClassifierReport are left out.
 func listClassifierReportsForClassifier(ctx context.Context, c client.Client,
 	classifierName string) ([]libsveltosv1beta1.ClassifierReport, error) {
 
@@ -316,7 +359,7 @@ func listClassifierReportsForClassifier(ctx context.Context, c client.Client,
 	}); err != nil {
 		return nil, err
 	}
-	return reportList.Items, nil
+	return filterValidClassifierReports(reportList.Items, ctrl.LoggerFrom(ctx)), nil
 }
 
 // getClassifierReportForCluster returns the ClassifierReport for a (classifier, cluster) pair.

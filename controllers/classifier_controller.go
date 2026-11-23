@@ -487,29 +487,22 @@ func (r *ClassifierReconciler) syncAndGetMatchingClusters(ctx context.Context,
 		existingClustersMap[existingClusters[i]] = struct{}{}
 	}
 
-	listOptions := []client.ListOption{
-		client.MatchingLabels{
-			libsveltosv1beta1.ClassifierlNameLabel: classifierScope.Classifier.Name,
-		},
-	}
-
-	classifierReportList := &libsveltosv1beta1.ClassifierReportList{}
-	if err := r.List(ctx, classifierReportList, listOptions...); err != nil {
+	classifierReports, err := listClassifierReportsForClassifier(ctx, r.Client, classifierScope.Classifier.Name)
+	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to list ClassifierReports")
 		return nil, err
 	}
 
 	currentMatchingClusters := make(map[corev1.ObjectReference]bool)
-	for i := range classifierReportList.Items {
-		report := &classifierReportList.Items[i]
-
-		// Only consider reports with ClusterNamespace set
-		if report.Spec.ClusterNamespace == "" {
-			continue
-		}
+	for i := range classifierReports {
+		report := &classifierReports[i]
 
 		if report.Spec.Match {
-			cluster := getClusterRefFromClassifierReport(report)
+			cluster, err := getClusterRefFromClassifierReport(report)
+			if err != nil {
+				logger.V(logs.LogInfo).Info(err.Error())
+				continue
+			}
 			// Only add if it actually exists in the cluster list
 			if _, exists := existingClustersMap[*cluster]; exists {
 				currentMatchingClusters[*cluster] = true
@@ -583,11 +576,12 @@ func (r *ClassifierReconciler) cleanUpManagedResources(ctx context.Context,
 	oldManagedLabels := make(map[corev1.ObjectReference][]string)
 	for i := range reports {
 		report := &reports[i]
-		if report.Spec.ClusterNamespace == "" {
-			continue
-		}
 		if len(report.Status.ManagedLabels) > 0 || len(report.Status.UnManagedLabels) > 0 {
-			cluster := getClusterRefFromClassifierReport(report)
+			cluster, err := getClusterRefFromClassifierReport(report)
+			if err != nil {
+				logger.V(logs.LogInfo).Info(err.Error())
+				continue
+			}
 			oldMatchingClusters[*cluster] = true
 			oldManagedLabels[*cluster] = report.Status.ManagedLabels
 		}
@@ -787,15 +781,16 @@ func (r *ClassifierReconciler) updateMaps(ctx context.Context, classifierScope *
 	currentClusters := &libsveltosset.Set{}
 	for i := range reports {
 		report := &reports[i]
-		if report.Spec.ClusterNamespace == "" {
-			continue
-		}
 		if report.Status.DeploymentStatus != nil &&
 			*report.Status.DeploymentStatus == libsveltosv1beta1.SveltosStatusRemoved {
 
 			continue
 		}
-		cluster := getClusterRefFromClassifierReport(report)
+		cluster, err := getClusterRefFromClassifierReport(report)
+		if err != nil {
+			classifierScope.Logger.V(logs.LogInfo).Info(err.Error())
+			continue
+		}
 		currentClusters.Insert(cluster)
 	}
 
@@ -811,15 +806,16 @@ func (r *ClassifierReconciler) updateMaps(ctx context.Context, classifierScope *
 
 	for i := range reports {
 		report := &reports[i]
-		if report.Spec.ClusterNamespace == "" {
-			continue
-		}
 		if report.Status.DeploymentStatus != nil &&
 			*report.Status.DeploymentStatus == libsveltosv1beta1.SveltosStatusRemoved {
 
 			continue
 		}
-		cluster := getClusterRefFromClassifierReport(report)
+		cluster, err := getClusterRefFromClassifierReport(report)
+		if err != nil {
+			classifierScope.Logger.V(logs.LogInfo).Info(err.Error())
+			continue
+		}
 		r.getClusterMapForEntry(cluster).Insert(classifierInfo)
 	}
 
@@ -845,11 +841,15 @@ func (r *ClassifierReconciler) removeLabelsFromClusters(ctx context.Context,
 	var errs []error
 	for i := range reports {
 		report := &reports[i]
-		if report.Spec.ClusterNamespace == "" || len(report.Status.ManagedLabels) == 0 {
+		if len(report.Status.ManagedLabels) == 0 {
 			continue
 		}
 
-		ref := getClusterRefFromClassifierReport(report)
+		ref, err := getClusterRefFromClassifierReport(report)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(err.Error())
+			continue
+		}
 		cluster, err := clusterproxy.GetCluster(ctx, r.Client, ref.Namespace, ref.Name,
 			clusterproxy.GetClusterType(ref))
 		if err != nil {
@@ -896,10 +896,11 @@ func (r *ClassifierReconciler) removeAllRegistrations(ctx context.Context,
 
 	for i := range reports {
 		report := &reports[i]
-		if report.Spec.ClusterNamespace == "" {
+		c, err := getClusterRefFromClassifierReport(report)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(err.Error())
 			continue
 		}
-		c := getClusterRefFromClassifierReport(report)
 		manager.RemoveAllRegistrations(classifierScope.Classifier, c.Namespace, c.Name, clusterproxy.GetClusterType(c))
 	}
 
