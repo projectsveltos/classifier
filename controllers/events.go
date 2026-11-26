@@ -28,6 +28,41 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/eventreasons"
 )
 
+// The errors returned while a request to deploy or to clean up has been made and has not completed yet. They are
+// not failures: the Classifier is requeued until the request completes.
+const (
+	msgDeployQueued       = "request to deploy queued"
+	msgDeployInProgress   = "deploy is in progress. Wait before cleanup or redeploying"
+	msgCleanupQueued      = "cleanup request is queued"
+	msgCleanupInProgress  = "cleanup is in progress. Wait before redeploying"
+	msgAgentCleanupQueued = "agent cleanup request is queued"
+	msgAgentRemoving      = "agent is removing classifier instance"
+	msgStillProvisioning  = "classifier is still being provisioned"
+	msgStillBeingRemoved  = "feature is still being removed"
+	msgStillQueued        = "request to deploy Classifier is still queued in one ore more clusters"
+)
+
+// isWaiting returns true when err only says a request to deploy or to clean up has not completed yet.
+func isWaiting(err error) bool {
+	switch err.Error() {
+	case msgDeployQueued, msgDeployInProgress, msgCleanupQueued, msgCleanupInProgress, msgAgentCleanupQueued,
+		msgAgentRemoving, msgStillProvisioning, msgStillBeingRemoved, msgStillQueued:
+
+		return true
+	}
+
+	return false
+}
+
+// keepFailure returns the error to report once err has been seen after seen: the last error wins, except
+// that an error which only says a request is still waiting never replaces a failure.
+func keepFailure(seen, err error) error {
+	if seen != nil && isWaiting(err) {
+		return seen
+	}
+	return err
+}
+
 // recordWarningf records a Warning event on regarding. It does nothing when no recorder is set.
 // The note is capped, so an oversized message is not rejected by the API server. Identical events
 // are aggregated by the recorder, so notes must not contain anything that changes between

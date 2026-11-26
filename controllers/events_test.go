@@ -182,3 +182,41 @@ var _ = Describe("ManagementClusterClassifier events", func() {
 		Expect(recorded).To(HavePrefix("Warning ClassifierFailed failed to build cluster sets: "))
 	})
 })
+
+var _ = Describe("errors only saying a request is still waiting", func() {
+	waiting := []string{
+		"request to deploy queued",
+		"cleanup request is queued",
+		"classifier is still being provisioned",
+		"request to deploy Classifier is still queued in one ore more clusters",
+		"agent cleanup request is queued",
+		"agent is removing classifier instance",
+		"feature is still being removed",
+	}
+
+	It("isWaiting is true for a request which has not completed yet", func() {
+		for _, m := range waiting {
+			Expect(controllers.IsWaiting(errors.New(m))).To(BeTrue(), m)
+		}
+	})
+
+	It("isWaiting is false for a failure", func() {
+		Expect(controllers.IsWaiting(errors.New("ConfigMap does-not-exist not found"))).To(BeFalse())
+	})
+
+	It("keepFailure reports the last error when it is a failure", func() {
+		first := errors.New("first failure")
+		last := errors.New("last failure")
+		Expect(controllers.KeepFailure(nil, last)).To(Equal(last))
+		Expect(controllers.KeepFailure(first, last)).To(Equal(last))
+		Expect(controllers.KeepFailure(errors.New(waiting[0]), last)).To(Equal(last))
+	})
+
+	It("keepFailure does not replace an error with one only saying a request is still waiting", func() {
+		failure := errors.New("ConfigMap does-not-exist not found")
+		Expect(controllers.KeepFailure(failure, errors.New(waiting[0]))).To(Equal(failure))
+
+		stillWaiting := errors.New(waiting[1])
+		Expect(controllers.KeepFailure(nil, stillWaiting)).To(Equal(stillWaiting))
+	})
+})

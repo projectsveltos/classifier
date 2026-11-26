@@ -34,6 +34,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -449,6 +450,86 @@ var _ = Describe("Classifier: Reconciler", func() {
 			Expect(ok).To(BeTrue())
 			Expect(v).To(Equal(label.Value))
 		}
+	})
+
+	It("updateLabelsOnMatchingClusters does not update a cluster whose labels are already set", func() {
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+		}
+
+		managedLabels := make([]string, 0)
+		for i := range classifier.Spec.ClassifierLabels {
+			managedLabels = append(managedLabels, classifier.Spec.ClassifierLabels[i].Key)
+		}
+
+		matchingStatuses := []libsveltosv1beta1.MachingClusterStatus{
+			{
+				ClusterRef: corev1.ObjectReference{
+					Namespace:  cluster.Namespace,
+					Name:       cluster.Name,
+					Kind:       clusterKind,
+					APIVersion: clusterv1.GroupVersion.String(),
+				},
+				ManagedLabels: managedLabels,
+			},
+		}
+
+		initObjects := []client.Object{
+			classifier,
+			cluster,
+		}
+
+		clusterUpdates := 0
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Update: func(ctx context.Context, cl client.WithWatch, obj client.Object,
+					opts ...client.UpdateOption) error {
+
+					if _, ok := obj.(*clusterv1.Cluster); ok {
+						clusterUpdates++
+					}
+					return cl.Update(ctx, obj, opts...)
+				},
+			}).Build()
+
+		reconciler := &controllers.ClassifierReconciler{
+			Client:        c,
+			Scheme:        scheme,
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClassifierMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			Mux:           sync.Mutex{},
+			Logger:        logger,
+		}
+
+		classifierScope, err := scope.NewClassifierScope(scope.ClassifierScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Classifier:     classifier,
+			ControllerName: classifierControllerName,
+		})
+		Expect(err).To(BeNil())
+
+		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
+
+		currentMatchingClusters := map[corev1.ObjectReference]bool{
+			{Namespace: cluster.Namespace, Name: cluster.Name, APIVersion: cluster.APIVersion, Kind: cluster.Kind}: true,
+		}
+		Expect(controllers.RegisterMatchingClusters(reconciler, context.TODO(), classifier, currentMatchingClusters,
+			logger)).To(Succeed())
+
+		// The labels are missing: the cluster is updated
+		Expect(controllers.UpdateLabelsOnMatchingClusters(reconciler, context.TODO(), classifierScope,
+			matchingStatuses, logger)).To(Succeed())
+		Expect(clusterUpdates).To(Equal(1))
+
+		// The labels are already set: reconciling again must not update the cluster
+		Expect(controllers.UpdateLabelsOnMatchingClusters(reconciler, context.TODO(), classifierScope,
+			matchingStatuses, logger)).To(Succeed())
+		Expect(clusterUpdates).To(Equal(1))
 	})
 
 	It("removeAllRegistrations removes all label registrations", func() {
