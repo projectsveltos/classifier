@@ -222,7 +222,7 @@ func (r *ClassifierReconciler) reconcileDelete(
 	f := getHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
 	err = r.undeployClassifier(ctx, classifierScope, f, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to undeploy")
+		logRequeueReason(logger, err, "failed to undeploy")
 		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 	}
 
@@ -262,6 +262,17 @@ func (r *ClassifierReconciler) reconcileDelete(
 
 	logger.V(logs.LogDebug).Info("Reconcile delete success")
 	return reconcile.Result{}, nil
+}
+
+// logRequeueReason logs why the Classifier is requeued. A request which has not completed yet is expected
+// and is not logged as an error: with many Classifiers or clusters that floods the log.
+func logRequeueReason(logger logr.Logger, err error, msg string) {
+	if isWaiting(err) {
+		logger.V(logs.LogDebug).Info(msg, "reason", err.Error())
+		return
+	}
+
+	logger.V(logs.LogInfo).Error(err, msg)
 }
 
 func (r *ClassifierReconciler) reconcileNormal(
@@ -332,7 +343,7 @@ func (r *ClassifierReconciler) reconcileNormal(
 	if err := r.deployClassifier(ctx, classifierScope, f, logger); err != nil {
 		// No event here: the error is also returned while the deployment is still in progress.
 		// Terminal failures are recorded per cluster, in deployClassifier.
-		logger.V(logs.LogInfo).Error(err, "failed to deploy")
+		logRequeueReason(logger, err, "failed to deploy")
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
@@ -753,15 +764,19 @@ func (r *ClassifierReconciler) updateLabelsOnCluster(ctx context.Context,
 		return err
 	}
 
+	labels := cluster.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
+	labelsChanged := false
 	for i := range classifierScope.Classifier.Spec.ClassifierLabels {
 		label := classifierScope.Classifier.Spec.ClassifierLabels[i]
 		if manager.CanManageLabel(classifierScope.Classifier, cluster.GetNamespace(), cluster.GetName(), label.Key, clusterType) {
-			labels := cluster.GetLabels()
-			if labels == nil {
-				labels = make(map[string]string)
+			if currentValue, exists := labels[label.Key]; !exists || currentValue != label.Value {
+				labels[label.Key] = label.Value
+				labelsChanged = true
 			}
-			labels[label.Key] = label.Value
-			cluster.SetLabels(labels)
 		} else {
 			l := logger.WithValues("label", label.Key)
 			l.V(logs.LogInfo).Info("cannot manage label")
@@ -769,7 +784,13 @@ func (r *ClassifierReconciler) updateLabelsOnCluster(ctx context.Context,
 		}
 	}
 
-	return r.Update(ctx, cluster)
+	// Only update the cluster if labels were actually modified: this runs on every reconciliation
+	if labelsChanged {
+		cluster.SetLabels(labels)
+		return r.Update(ctx, cluster)
+	}
+
+	return nil
 }
 
 func (r *ClassifierReconciler) updateMaps(ctx context.Context, classifierScope *scope.ClassifierScope) error {

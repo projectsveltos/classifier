@@ -454,6 +454,46 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(clusterInfo.Status).To(Equal(libsveltosv1beta1.SveltosStatusProvisioning))
 	})
 
+	It("processClassifier reports a failure when a ConfigMap with patches referenced by the cluster does not exist", func() {
+		dep := fakedeployer.GetClient(context.TODO(), logger, testEnv.Client)
+		Expect(dep.RegisterFeatureID(libsveltosv1beta1.FeatureClassifier)).To(Succeed())
+
+		classifierReconciler := getClassifierReconciler(testEnv.Client, dep)
+		classifier := getClassifierInstance(randomString())
+		classifierScope := getClassifierScope(testEnv.Client, logger, classifier)
+
+		cluster := prepareCluster()
+
+		missingConfigMapName := randomString()
+		Eventually(func() error {
+			currentCluster := &clusterv1.Cluster{}
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentCluster)
+			if err != nil {
+				return err
+			}
+			currentCluster.Annotations = map[string]string{
+				perClusterPatchAnnotation: missingConfigMapName,
+			}
+			return testEnv.Update(context.TODO(), currentCluster)
+		}, timeout, pollingInterval).Should(Succeed())
+
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureClassifier)
+		var clusterInfo *libsveltosv1beta1.ClusterInfo
+		Eventually(func() bool {
+			var err error
+			clusterInfo, err = controllers.ProcessClassifier(classifierReconciler, context.TODO(), classifierScope, "",
+				getClusterRef(cluster), f, logger)
+			return err != nil && apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		// The failure is returned as a ClusterInfo too, so that it is recorded in the ClassifierReport
+		Expect(clusterInfo).ToNot(BeNil())
+		Expect(clusterInfo.Status).To(Equal(libsveltosv1beta1.SveltosStatusFailed))
+		Expect(clusterInfo.FailureMessage).ToNot(BeNil())
+		Expect(*clusterInfo.FailureMessage).To(ContainSubstring(missingConfigMapName))
+	})
+
 	It("processClassifier detects classifier does not need to be deployed in cluster", func() {
 		dep := fakedeployer.GetClient(context.TODO(),
 			logger, testEnv.Client)

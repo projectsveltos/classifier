@@ -105,7 +105,8 @@ func removeClassifierReports(ctx context.Context, c client.Client, classifier *l
 	for i := range classifierReportList.Items {
 		cr := &classifierReportList.Items[i]
 		err = c.Delete(ctx, cr)
-		if err != nil {
+		// The ClassifierReport may already be gone: removed by another reconciliation
+		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -134,7 +135,8 @@ func removeClusterClassifierReports(ctx context.Context, c client.Client, cluste
 	for i := range classifierReportList.Items {
 		cr := &classifierReportList.Items[i]
 		err = c.Delete(ctx, cr)
-		if err != nil {
+		// The ClassifierReport may already be gone: removed by another reconciliation
+		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}

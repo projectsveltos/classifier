@@ -34,6 +34,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/projectsveltos/classifier/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -145,6 +146,41 @@ var _ = Describe("Classifier Deployer", func() {
 			WithObjects(initObjects...).Build()
 
 		Expect(controllers.RemoveClassifierReports(context.TODO(), c, classifier, logger)).To(Succeed())
+
+		classifierReportList := &libsveltosv1beta1.ClassifierReportList{}
+		Expect(c.List(context.TODO(), classifierReportList)).To(Succeed())
+		Expect(len(classifierReportList.Items)).To(BeZero())
+	})
+
+	It("removeClassifierReports and removeClusterClassifierReports ignore a ClassifierReport which is already gone", func() {
+		clusterType := libsveltosv1beta1.ClusterTypeCapi
+		clusterNamespace := randomString()
+		clusterName := randomString()
+
+		classifierReport := getClassifierReport(classifier.Name, clusterNamespace, clusterName)
+		classifierReport.Labels = libsveltosv1beta1.GetClassifierReportLabels(
+			classifier.Name, clusterName, &clusterType)
+		initObjects := []client.Object{classifierReport}
+
+		// The ClassifierReport is listed and removed by someone else before this reconciliation deletes it
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object,
+					opts ...client.DeleteOption) error {
+
+					_ = cl.Delete(ctx, obj, opts...)
+					return cl.Delete(ctx, obj, opts...)
+				},
+			}).Build()
+
+		Expect(controllers.RemoveClassifierReports(context.TODO(), c, classifier, logger)).To(Succeed())
+
+		recreated := classifierReport.DeepCopy()
+		recreated.ResourceVersion = ""
+		Expect(c.Create(context.TODO(), recreated)).To(Succeed())
+		Expect(controllers.RemoveClusterClassifierReports(context.TODO(), c, clusterNamespace, clusterName,
+			clusterType, logger)).To(Succeed())
 
 		classifierReportList := &libsveltosv1beta1.ClassifierReportList{}
 		Expect(c.List(context.TODO(), classifierReportList)).To(Succeed())

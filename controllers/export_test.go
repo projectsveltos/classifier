@@ -111,6 +111,8 @@ var (
 var (
 	RecordWarningf     = recordWarningf
 	UnmanagedLabelKeys = unmanagedLabelKeys
+	IsWaiting          = isWaiting
+	KeepFailure        = keepFailure
 )
 
 var (
