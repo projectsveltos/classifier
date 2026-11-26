@@ -198,6 +198,7 @@ var _ = Describe("Classifier Deployer", func() {
 		}
 		keepClassifierName := randomString()
 		keepReport := getClassifierReport(keepClassifierName, existingClusterNamespace, existingClusterName)
+		keepReport.Namespace = existingClusterNamespace
 		keepReport.Labels = libsveltosv1beta1.GetClassifierReportLabels(
 			keepClassifierName, existingClusterName, &clusterType)
 
@@ -207,10 +208,12 @@ var _ = Describe("Classifier Deployer", func() {
 		deletedClusterName := randomString()
 		staleClassifierName1 := randomString()
 		staleReport1 := getClassifierReport(staleClassifierName1, deletedClusterNamespace, deletedClusterName)
+		staleReport1.Namespace = deletedClusterNamespace
 		staleReport1.Labels = libsveltosv1beta1.GetClassifierReportLabels(
 			staleClassifierName1, deletedClusterName, &clusterType)
 		staleClassifierName2 := randomString()
 		staleReport2 := getClassifierReport(staleClassifierName2, deletedClusterNamespace, deletedClusterName)
+		staleReport2.Namespace = deletedClusterNamespace
 		staleReport2.Labels = libsveltosv1beta1.GetClassifierReportLabels(
 			staleClassifierName2, deletedClusterName, &clusterType)
 
@@ -230,6 +233,58 @@ var _ = Describe("Classifier Deployer", func() {
 		Expect(c.List(context.TODO(), classifierReportList)).To(Succeed())
 		Expect(len(classifierReportList.Items)).To(Equal(1))
 		Expect(classifierReportList.Items[0].Name).To(Equal(keepReport.Name))
+	})
+
+	It("pruneClassifierReportsForDeletedClusters ignores reports with an unknown cluster type", func() {
+		report := getClassifierReport(randomString(), randomString(), randomString())
+		report.Namespace = report.Spec.ClusterNamespace
+		report.Spec.ClusterType = libsveltosv1beta1.ClusterType("Unknown")
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(report).
+			WithObjects(report).Build()
+
+		Expect(func() {
+			Expect(controllers.PruneClassifierReportsForDeletedClusters(context.TODO(), c, logger)).To(Succeed())
+		}).ToNot(Panic())
+
+		// The report cannot be trusted so the sweep does not act on it
+		currentReport := &libsveltosv1beta1.ClassifierReport{}
+		Expect(c.Get(context.TODO(), client.ObjectKeyFromObject(report), currentReport)).To(Succeed())
+	})
+
+	It("pruneClassifierReportsForDeletedClusters ignores reports naming a cluster in another namespace", func() {
+		reportNamespace := randomString()
+		report := getClassifierReport(randomString(), randomString(), randomString())
+		report.Namespace = reportNamespace
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(report).
+			WithObjects(report).Build()
+
+		Expect(controllers.PruneClassifierReportsForDeletedClusters(context.TODO(), c, logger)).To(Succeed())
+
+		currentReport := &libsveltosv1beta1.ClassifierReport{}
+		Expect(c.Get(context.TODO(), client.ObjectKeyFromObject(report), currentReport)).To(Succeed())
+	})
+
+	It("isValidClassifierReport requires the report to be in its cluster namespace with a known cluster type", func() {
+		clusterNamespace := randomString()
+		report := getClassifierReport(randomString(), clusterNamespace, randomString())
+		report.Namespace = clusterNamespace
+		Expect(controllers.IsValidClassifierReport(report)).To(BeTrue())
+
+		report.Spec.ClusterType = libsveltosv1beta1.ClusterTypeSveltos
+		Expect(controllers.IsValidClassifierReport(report)).To(BeTrue())
+
+		report.Spec.ClusterType = libsveltosv1beta1.ClusterType("Unknown")
+		Expect(controllers.IsValidClassifierReport(report)).To(BeFalse())
+
+		report.Spec.ClusterType = libsveltosv1beta1.ClusterTypeCapi
+		report.Namespace = randomString()
+		Expect(controllers.IsValidClassifierReport(report)).To(BeFalse())
+
+		report.Namespace = clusterNamespace
+		report.Spec.ClusterNamespace = ""
+		Expect(controllers.IsValidClassifierReport(report)).To(BeFalse())
 	})
 
 	It("collectClassifierReports collects ClassifierReports from clusters", func() {
